@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    --background: 100 33% 97%;
+    --background: 100 33% 98.5%; /* #F9FFF8 - Soft Cream White */
     --foreground: 150 10% 15%;
 
     --card: 0 0% 100%;
@@ -15,49 +15,37 @@
     --popover: 0 0% 100%;
     --popover-foreground: 150 10% 15%;
 
-    --primary: 122 46% 33%;
+    --primary: 122 46% 56%; /* #66BB6A - Light Herbal Green */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 138 40% 94%;
+    --secondary: 130 38% 85%; /* #C8E6C9 - Mint Green */
     --secondary-foreground: 122 46% 25%;
 
     --muted: 120 20% 95%;
     --muted-foreground: 150 8% 46%;
 
-    --accent: 28 80% 55%;
+    --accent: 35 100% 65%; /* #FFB74D - Soft Orange */
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 120 15% 90%;
-    --input: 120 15% 90%;
-    --ring: 122 46% 33%;
+    --border: 120 15% 92%;
+    --input: 120 15% 92%;
+    --ring: 122 46% 56%;
 
-    --radius: 0.75rem;
+    --radius: 1rem;
 
-    --sidebar-background: 120 20% 98%;
+    --sidebar-background: 130 30% 98%;
     --sidebar-foreground: 150 10% 25%;
-    --sidebar-primary: 122 46% 33%;
+    --sidebar-primary: 122 46% 56%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 138 40% 94%;
+    --sidebar-accent: 130 38% 85%;
     --sidebar-accent-foreground: 122 46% 25%;
-    --sidebar-border: 120 15% 90%;
-    --sidebar-ring: 122 46% 33%;
+    --sidebar-border: 120 15% 92%;
+    --sidebar-ring: 122 46% 56%;
 
-    /* Custom tokens */
-    --success: 122 46% 40%;
-    --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
-    --info: 200 80% 50%;
-    --info-foreground: 0 0% 100%;
-
-    --hero-gradient: linear-gradient(135deg, hsl(122 46% 33%), hsl(138 50% 45%));
-    --card-shadow: 0 1px 3px 0 hsl(150 10% 15% / 0.06), 0 1px 2px -1px hsl(150 10% 15% / 0.06);
-    --card-shadow-hover: 0 4px 12px 0 hsl(150 10% 15% / 0.1);
-
-    font-family: 'Inter', sans-serif;
+    font-family: 'Nunito', sans-serif;
   }
 
   * {
@@ -66,37 +54,55 @@
 
   body {
     @apply bg-background text-foreground antialiased;
+    font-feature-settings: "ss01", "ss02", "cv01", "cv02";
   }
 
   h1, h2, h3, h4, h5, h6 {
-    font-family: 'Poppins', sans-serif;
+    @apply font-bold tracking-tight;
   }
 }
 
 @layer components {
-  .stat-card {
-    @apply bg-card rounded-xl p-5 border border-border transition-shadow duration-200;
-    box-shadow: var(--card-shadow);
+  .premium-card {
+    @apply bg-card rounded-2xl p-6 border border-border shadow-soft hover:shadow-premium transition-all duration-300;
   }
-  .stat-card:hover {
-    box-shadow: var(--card-shadow-hover);
+  
+  .glass-card {
+    @apply bg-white/70 backdrop-blur-md border border-white/20 rounded-2xl p-6 shadow-soft;
   }
+
+  .green-glow {
+    @apply relative after:absolute after:inset-0 after:rounded-[inherit] after:shadow-glow after:opacity-0 hover:after:opacity-100 after:transition-opacity after:pointer-events-none;
+  }
+
+  .btn-premium {
+    @apply rounded-full px-6 py-2.5 font-bold transition-all duration-300 shadow-soft hover:shadow-premium active:scale-95 flex items-center justify-center gap-2;
+  }
+
   .badge-bronze {
-    @apply bg-amber-100 text-amber-800 text-xs font-medium px-2.5 py-0.5 rounded-full;
+    @apply bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full;
   }
   .badge-silver {
-    @apply bg-gray-200 text-gray-700 text-xs font-medium px-2.5 py-0.5 rounded-full;
+    @apply bg-slate-100 text-slate-600 text-xs font-bold px-3 py-1 rounded-full;
   }
   .badge-gold {
-    @apply bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded-full;
+    @apply bg-amber-100 text-amber-600 text-xs font-bold px-3 py-1 rounded-full;
   }
   .badge-active {
-    @apply bg-emerald-100 text-emerald-700 text-xs font-medium px-2.5 py-0.5 rounded-full;
+    @apply bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full;
   }
   .badge-expiring {
-    @apply bg-orange-100 text-orange-700 text-xs font-medium px-2.5 py-0.5 rounded-full;
+    @apply bg-amber-50 text-amber-600 text-xs font-bold px-3 py-1 rounded-full;
   }
   .badge-expired {
-    @apply bg-red-100 text-red-700 text-xs font-medium px-2.5 py-0.5 rounded-full;
+    @apply bg-red-50 text-red-600 text-xs font-bold px-3 py-1 rounded-full;
   }
+}
+
+.animate-in {
+  animation: fade-in 0.6s ease-out forwards;
+}
+
+.hover-lift {
+  @apply transition-transform duration-300 hover:-translate-y-1;
 }

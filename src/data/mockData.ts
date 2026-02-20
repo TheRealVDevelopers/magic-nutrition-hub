@@ -22,7 +22,8 @@ export interface Member {
 }
 
 export const members: Member[] = [
-  { id: "MNC001", name: "Rajesh Kumar", phone: "9845612345", package: "Gold", startDate: "2025-12-01", expiryDate: "2026-02-28", daysLeft: 8, status: "Active", totalPoints: 185,
+  {
+    id: "MNC001", name: "Rajesh Kumar", phone: "9845612345", package: "Gold", startDate: "2025-12-01", expiryDate: "2026-02-28", daysLeft: 8, status: "Active", totalPoints: 185,
     attendance: [
       { date: "2026-02-20", inTime: "06:30", outTime: "07:45" },
       { date: "2026-02-19", inTime: "06:25", outTime: "07:40" },
@@ -38,44 +39,53 @@ export const members: Member[] = [
       { date: "2026-01-01", activity: "Membership Renewal", points: 20 },
     ],
   },
-  { id: "MNC002", name: "Priya Sharma", phone: "9876543210", package: "Silver", startDate: "2026-01-15", expiryDate: "2026-02-22", daysLeft: 2, status: "Expiring", totalPoints: 120,
+  {
+    id: "MNC002", name: "Priya Sharma", phone: "9876543210", package: "Silver", startDate: "2026-01-15", expiryDate: "2026-02-22", daysLeft: 2, status: "Expiring", totalPoints: 120,
     attendance: [{ date: "2026-02-20", inTime: "07:00", outTime: "08:00" }],
     billingHistory: [{ date: "2026-02-19", billNo: "B1040", amount: 150, items: "Herbal Tea, Aloe Juice" }],
     pointsHistory: [{ date: "2026-02-19", activity: "Ambassador Evening", points: 8 }],
   },
-  { id: "MNC003", name: "Suresh Reddy", phone: "9123456789", package: "Bronze", startDate: "2025-11-01", expiryDate: "2026-02-21", daysLeft: 1, status: "Expiring", totalPoints: 65,
+  {
+    id: "MNC003", name: "Suresh Reddy", phone: "9123456789", package: "Bronze", startDate: "2025-11-01", expiryDate: "2026-02-21", daysLeft: 1, status: "Expiring", totalPoints: 65,
     attendance: [{ date: "2026-02-18", inTime: "08:00", outTime: "09:00" }],
     billingHistory: [{ date: "2026-02-10", billNo: "B1010", amount: 80, items: "Sprouts Bowl" }],
     pointsHistory: [{ date: "2026-02-10", activity: "Physical Club New Guest", points: 5 }],
   },
-  { id: "MNC004", name: "Meena Kumari", phone: "9988776655", package: "Gold", startDate: "2026-01-01", expiryDate: "2026-03-31", daysLeft: 39, status: "Active", totalPoints: 210,
+  {
+    id: "MNC004", name: "Meena Kumari", phone: "9988776655", package: "Gold", startDate: "2026-01-01", expiryDate: "2026-03-31", daysLeft: 39, status: "Active", totalPoints: 210,
     attendance: [{ date: "2026-02-20", inTime: "06:00", outTime: "07:15" }, { date: "2026-02-19", inTime: "06:05", outTime: "07:20" }],
     billingHistory: [{ date: "2026-02-20", billNo: "B1046", amount: 250, items: "Protein Shake, Vitamin Pack" }],
     pointsHistory: [{ date: "2026-02-20", activity: "Star Person", points: 30 }],
   },
-  { id: "MNC005", name: "Anil Deshmukh", phone: "9112233445", package: "Silver", startDate: "2025-10-01", expiryDate: "2026-02-18", daysLeft: -2, status: "Expired", totalPoints: 90,
+  {
+    id: "MNC005", name: "Anil Deshmukh", phone: "9112233445", package: "Silver", startDate: "2025-10-01", expiryDate: "2026-02-18", daysLeft: -2, status: "Expired", totalPoints: 90,
     attendance: [], billingHistory: [], pointsHistory: [],
   },
-  { id: "MNC006", name: "Lakshmi Devi", phone: "9223344556", package: "Gold", startDate: "2026-01-10", expiryDate: "2026-04-10", daysLeft: 49, status: "Active", totalPoints: 155,
+  {
+    id: "MNC006", name: "Lakshmi Devi", phone: "9223344556", package: "Gold", startDate: "2026-01-10", expiryDate: "2026-04-10", daysLeft: 49, status: "Active", totalPoints: 155,
     attendance: [{ date: "2026-02-20", inTime: "07:30", outTime: "08:30" }],
     billingHistory: [{ date: "2026-02-18", billNo: "B1035", amount: 200, items: "Herbal Mix, Shake" }],
     pointsHistory: [{ date: "2026-02-18", activity: "New Membership", points: 25 }],
   },
-  { id: "MNC007", name: "Vikram Singh", phone: "9334455667", package: "Bronze", startDate: "2026-02-01", expiryDate: "2026-02-23", daysLeft: 3, status: "Expiring", totalPoints: 35,
+  {
+    id: "MNC007", name: "Vikram Singh", phone: "9334455667", package: "Bronze", startDate: "2026-02-01", expiryDate: "2026-02-23", daysLeft: 3, status: "Expiring", totalPoints: 35,
     attendance: [{ date: "2026-02-19", inTime: "09:00", outTime: "10:00" }],
     billingHistory: [], pointsHistory: [{ date: "2026-02-01", activity: "5 Day Trial Pack", points: 10 }],
   },
-  { id: "MNC008", name: "Shalini Nair", phone: "9445566778", package: "Silver", startDate: "2026-01-20", expiryDate: "2026-03-20", daysLeft: 28, status: "Active", totalPoints: 95,
+  {
+    id: "MNC008", name: "Shalini Nair", phone: "9445566778", package: "Silver", startDate: "2026-01-20", expiryDate: "2026-03-20", daysLeft: 28, status: "Active", totalPoints: 95,
     attendance: [{ date: "2026-02-20", inTime: "06:45", outTime: "07:55" }],
     billingHistory: [{ date: "2026-02-15", billNo: "B1022", amount: 120, items: "Green Juice" }],
     pointsHistory: [{ date: "2026-02-15", activity: "Volunteering (1 month)", points: 40 }],
   },
-  { id: "MNC009", name: "Deepak Joshi", phone: "9556677889", package: "Gold", startDate: "2025-12-15", expiryDate: "2026-03-15", daysLeft: 23, status: "Active", totalPoints: 175,
+  {
+    id: "MNC009", name: "Deepak Joshi", phone: "9556677889", package: "Gold", startDate: "2025-12-15", expiryDate: "2026-03-15", daysLeft: 23, status: "Active", totalPoints: 175,
     attendance: [{ date: "2026-02-20", inTime: "06:15", outTime: "07:30" }],
     billingHistory: [{ date: "2026-02-20", billNo: "B1047", amount: 300, items: "Supplement Pack, Shake, Sprouts" }],
     pointsHistory: [],
   },
-  { id: "MNC010", name: "Kavitha Rao", phone: "9667788990", package: "Bronze", startDate: "2025-09-01", expiryDate: "2026-02-15", daysLeft: -5, status: "Expired", totalPoints: 45,
+  {
+    id: "MNC010", name: "Kavitha Rao", phone: "9667788990", package: "Bronze", startDate: "2025-09-01", expiryDate: "2026-02-15", daysLeft: -5, status: "Expired", totalPoints: 45,
     attendance: [], billingHistory: [], pointsHistory: [],
   },
 ];
@@ -91,25 +101,29 @@ export interface Volunteer {
 }
 
 export const volunteers: Volunteer[] = [
-  { id: "V001", name: "Anita Gupta", phone: "9778899001", role: "Front Desk", totalDaysWorked: 45, totalHoursThisMonth: 64,
+  {
+    id: "V001", name: "Anita Gupta", phone: "9778899001", role: "Front Desk", totalDaysWorked: 45, totalHoursThisMonth: 64,
     attendance: [
       { date: "2026-02-20", inTime: "06:00", outTime: "10:00", totalHours: 4 },
       { date: "2026-02-19", inTime: "06:00", outTime: "10:00", totalHours: 4 },
       { date: "2026-02-18", inTime: "06:00", outTime: "09:30", totalHours: 3.5 },
     ],
   },
-  { id: "V002", name: "Rahul Verma", phone: "9889900112", role: "Kitchen Helper", totalDaysWorked: 30, totalHoursThisMonth: 48,
+  {
+    id: "V002", name: "Rahul Verma", phone: "9889900112", role: "Kitchen Helper", totalDaysWorked: 30, totalHoursThisMonth: 48,
     attendance: [
       { date: "2026-02-20", inTime: "05:30", outTime: "09:30", totalHours: 4 },
       { date: "2026-02-19", inTime: "05:30", outTime: "09:00", totalHours: 3.5 },
     ],
   },
-  { id: "V003", name: "Sunita Patil", phone: "9990011223", role: "Trainer", totalDaysWorked: 60, totalHoursThisMonth: 72,
+  {
+    id: "V003", name: "Sunita Patil", phone: "9990011223", role: "Trainer", totalDaysWorked: 60, totalHoursThisMonth: 72,
     attendance: [
       { date: "2026-02-20", inTime: "06:00", outTime: "10:30", totalHours: 4.5 },
     ],
   },
-  { id: "V004", name: "Mohan Das", phone: "9001122334", role: "Cleaning Staff", totalDaysWorked: 25, totalHoursThisMonth: 40,
+  {
+    id: "V004", name: "Mohan Das", phone: "9001122334", role: "Cleaning Staff", totalDaysWorked: 25, totalHoursThisMonth: 40,
     attendance: [
       { date: "2026-02-20", inTime: "05:00", outTime: "08:00", totalHours: 3 },
     ],
@@ -124,23 +138,66 @@ export interface Product {
   stock: number;
   reorderLevel: number;
   status: "OK" | "Low" | "Critical";
+  image: string;
 }
 
 export const products: Product[] = [
-  { id: "P001", name: "Protein Shake", category: "Shakes", price: 120, stock: 45, reorderLevel: 10, status: "OK" },
-  { id: "P002", name: "Green Smoothie", category: "Shakes", price: 100, stock: 30, reorderLevel: 10, status: "OK" },
-  { id: "P003", name: "Mango Shake", category: "Shakes", price: 90, stock: 8, reorderLevel: 10, status: "Low" },
-  { id: "P004", name: "Aloe Vera Juice", category: "Healthy Juices", price: 80, stock: 25, reorderLevel: 10, status: "OK" },
-  { id: "P005", name: "Amla Juice", category: "Healthy Juices", price: 70, stock: 3, reorderLevel: 10, status: "Critical" },
-  { id: "P006", name: "Wheatgrass Shot", category: "Healthy Juices", price: 50, stock: 20, reorderLevel: 5, status: "OK" },
-  { id: "P007", name: "Sprouts Bowl", category: "Sprouts", price: 60, stock: 15, reorderLevel: 5, status: "OK" },
-  { id: "P008", name: "Mixed Sprouts Salad", category: "Sprouts", price: 70, stock: 4, reorderLevel: 5, status: "Low" },
-  { id: "P009", name: "Vitamin C Pack", category: "Supplements", price: 250, stock: 50, reorderLevel: 10, status: "OK" },
-  { id: "P010", name: "Protein Powder (500g)", category: "Supplements", price: 800, stock: 12, reorderLevel: 5, status: "OK" },
-  { id: "P011", name: "Herbal Tea", category: "Healthy Juices", price: 60, stock: 2, reorderLevel: 5, status: "Critical" },
-  { id: "P012", name: "Bronze Membership", category: "Membership Plans", price: 1500, stock: 999, reorderLevel: 0, status: "OK" },
-  { id: "P013", name: "Silver Membership", category: "Membership Plans", price: 2500, stock: 999, reorderLevel: 0, status: "OK" },
-  { id: "P014", name: "Gold Membership", category: "Membership Plans", price: 4000, stock: 999, reorderLevel: 0, status: "OK" },
+  {
+    id: "P001", name: "Protein Shake", category: "Shakes", price: 120, stock: 45, reorderLevel: 10, status: "OK",
+    image: "https://images.unsplash.com/photo-1593095394430-fc1ca9fb99f3?q=80&w=400"
+  },
+  {
+    id: "P002", name: "Green Smoothie", category: "Shakes", price: 100, stock: 30, reorderLevel: 10, status: "OK",
+    image: "https://images.unsplash.com/photo-1610970881699-44a5587cabec?q=80&w=400"
+  },
+  {
+    id: "P003", name: "Mango Shake", category: "Shakes", price: 90, stock: 8, reorderLevel: 10, status: "Low",
+    image: "https://images.unsplash.com/photo-1546173159-315724bc2f35?q=80&w=400"
+  },
+  {
+    id: "P004", name: "Aloe Vera Juice", category: "Healthy Juices", price: 80, stock: 25, reorderLevel: 10, status: "OK",
+    image: "https://images.unsplash.com/photo-1627308595229-7830a5c91f9f?q=80&w=400"
+  },
+  {
+    id: "P005", name: "Amla Juice", category: "Healthy Juices", price: 70, stock: 3, reorderLevel: 10, status: "Critical",
+    image: "https://images.unsplash.com/photo-1600275669439-14e40452d20b?q=80&w=400"
+  },
+  {
+    id: "P006", name: "Wheatgrass Shot", category: "Healthy Juices", price: 50, stock: 20, reorderLevel: 5, status: "OK",
+    image: "https://images.unsplash.com/photo-1623064039911-53697e682285?q=80&w=400"
+  },
+  {
+    id: "P007", name: "Sprouts Bowl", category: "Sprouts", price: 60, stock: 15, reorderLevel: 5, status: "OK",
+    image: "https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=400"
+  },
+  {
+    id: "P008", name: "Mixed Sprouts Salad", category: "Sprouts", price: 70, stock: 4, reorderLevel: 5, status: "Low",
+    image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=400"
+  },
+  {
+    id: "P009", name: "Vitamin C Pack", category: "Supplements", price: 250, stock: 50, reorderLevel: 10, status: "OK",
+    image: "https://images.unsplash.com/photo-1626074353765-517a681e40be?q=80&w=400"
+  },
+  {
+    id: "P010", name: "Protein Powder (500g)", category: "Supplements", price: 800, stock: 12, reorderLevel: 5, status: "OK",
+    image: "https://images.unsplash.com/photo-1593095394430-fc1ca9fb99f3?q=80&w=400"
+  },
+  {
+    id: "P011", name: "Herbal Tea", category: "Healthy Juices", price: 60, stock: 2, reorderLevel: 5, status: "Critical",
+    image: "https://images.unsplash.com/photo-1597481499750-3e6b22637e12?q=80&w=400"
+  },
+  {
+    id: "P012", name: "Bronze Membership", category: "Membership Plans", price: 1500, stock: 999, reorderLevel: 0, status: "OK",
+    image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?q=80&w=400"
+  },
+  {
+    id: "P013", name: "Silver Membership", category: "Membership Plans", price: 2500, stock: 999, reorderLevel: 0, status: "OK",
+    image: "https://images.unsplash.com/photo-1518611012118-2960f8abc6fe?q=80&w=400"
+  },
+  {
+    id: "P014", name: "Gold Membership", category: "Membership Plans", price: 4000, stock: 999, reorderLevel: 0, status: "OK",
+    image: "https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?q=80&w=400"
+  },
 ];
 
 export const loyaltyConfig = [
