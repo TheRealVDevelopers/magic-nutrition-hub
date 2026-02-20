@@ -1,105 +1,102 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
-
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --background: 100 33% 97%;
+    --foreground: 150 10% 15%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 150 10% 15%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 150 10% 15%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 122 46% 33%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 138 40% 94%;
+    --secondary-foreground: 122 46% 25%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 120 20% 95%;
+    --muted-foreground: 150 8% 46%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 28 80% 55%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 120 15% 90%;
+    --input: 120 15% 90%;
+    --ring: 122 46% 33%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-background: 120 20% 98%;
+    --sidebar-foreground: 150 10% 25%;
+    --sidebar-primary: 122 46% 33%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-}
+    --sidebar-accent: 138 40% 94%;
+    --sidebar-accent-foreground: 122 46% 25%;
+    --sidebar-border: 120 15% 90%;
+    --sidebar-ring: 122 46% 33%;
 
-@layer base {
+    /* Custom tokens */
+    --success: 122 46% 40%;
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+    --info: 200 80% 50%;
+    --info-foreground: 0 0% 100%;
+
+    --hero-gradient: linear-gradient(135deg, hsl(122 46% 33%), hsl(138 50% 45%));
+    --card-shadow: 0 1px 3px 0 hsl(150 10% 15% / 0.06), 0 1px 2px -1px hsl(150 10% 15% / 0.06);
+    --card-shadow-hover: 0 4px 12px 0 hsl(150 10% 15% / 0.1);
+
+    font-family: 'Inter', sans-serif;
+  }
+
   * {
     @apply border-border;
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Poppins', sans-serif;
+  }
+}
+
+@layer components {
+  .stat-card {
+    @apply bg-card rounded-xl p-5 border border-border transition-shadow duration-200;
+    box-shadow: var(--card-shadow);
+  }
+  .stat-card:hover {
+    box-shadow: var(--card-shadow-hover);
+  }
+  .badge-bronze {
+    @apply bg-amber-100 text-amber-800 text-xs font-medium px-2.5 py-0.5 rounded-full;
+  }
+  .badge-silver {
+    @apply bg-gray-200 text-gray-700 text-xs font-medium px-2.5 py-0.5 rounded-full;
+  }
+  .badge-gold {
+    @apply bg-yellow-100 text-yellow-800 text-xs font-medium px-2.5 py-0.5 rounded-full;
+  }
+  .badge-active {
+    @apply bg-emerald-100 text-emerald-700 text-xs font-medium px-2.5 py-0.5 rounded-full;
+  }
+  .badge-expiring {
+    @apply bg-orange-100 text-orange-700 text-xs font-medium px-2.5 py-0.5 rounded-full;
+  }
+  .badge-expired {
+    @apply bg-red-100 text-red-700 text-xs font-medium px-2.5 py-0.5 rounded-full;
   }
 }
