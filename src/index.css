@@ -99,6 +99,27 @@
   }
 }
 
+/* Mobile: touch-friendly and safe areas */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top);
+}
+.safe-area-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+@media (hover: none) and (pointer: coarse) {
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
 .animate-in {
   animation: fade-in 0.6s ease-out forwards;
 }

@@ -144,59 +144,59 @@ export interface Product {
 export const products: Product[] = [
   {
     id: "P001", name: "Protein Shake", category: "Shakes", price: 120, stock: 45, reorderLevel: 10, status: "OK",
-    image: "https://images.unsplash.com/photo-1593095394430-fc1ca9fb99f3?q=80&w=400"
+    image: "https://images.pexels.com/photos/1092730/pexels-photo-1092730.jpeg?auto=compress&cs=tinysrgb&w=400&v=1"
   },
   {
     id: "P002", name: "Green Smoothie", category: "Shakes", price: 100, stock: 30, reorderLevel: 10, status: "OK",
-    image: "https://images.unsplash.com/photo-1610970881699-44a5587cabec?q=80&w=400"
+    image: "https://images.pexels.com/photos/4443508/pexels-photo-4443508.jpeg?auto=compress&cs=tinysrgb&w=400&v=1"
   },
   {
     id: "P003", name: "Mango Shake", category: "Shakes", price: 90, stock: 8, reorderLevel: 10, status: "Low",
-    image: "https://images.unsplash.com/photo-1546173159-315724bc2f35?q=80&w=400"
+    image: "https://images.pexels.com/photos/1346342/pexels-photo-1346342.jpeg?auto=compress&cs=tinysrgb&w=400&v=1"
   },
   {
     id: "P004", name: "Aloe Vera Juice", category: "Healthy Juices", price: 80, stock: 25, reorderLevel: 10, status: "OK",
-    image: "https://images.unsplash.com/photo-1627308595229-7830a5c91f9f?q=80&w=400"
+    image: "https://images.pexels.com/photos/12049997/pexels-photo-12049997.jpeg?auto=compress&cs=tinysrgb&w=400&v=1"
   },
   {
     id: "P005", name: "Amla Juice", category: "Healthy Juices", price: 70, stock: 3, reorderLevel: 10, status: "Critical",
-    image: "https://images.unsplash.com/photo-1600275669439-14e40452d20b?q=80&w=400"
+    image: "https://images.pexels.com/photos/8181548/pexels-photo-8181548.jpeg?auto=compress&cs=tinysrgb&w=400&v=1"
   },
   {
     id: "P006", name: "Wheatgrass Shot", category: "Healthy Juices", price: 50, stock: 20, reorderLevel: 5, status: "OK",
-    image: "https://images.unsplash.com/photo-1623064039911-53697e682285?q=80&w=400"
+    image: "https://images.pexels.com/photos/4443507/pexels-photo-4443507.jpeg?auto=compress&cs=tinysrgb&w=400&v=1"
   },
   {
     id: "P007", name: "Sprouts Bowl", category: "Sprouts", price: 60, stock: 15, reorderLevel: 5, status: "OK",
-    image: "https://images.unsplash.com/photo-1540420773420-3366772f4999?q=80&w=400"
+    image: "https://images.pexels.com/photos/5946789/pexels-photo-5946789.jpeg?auto=compress&cs=tinysrgb&w=400&v=1"
   },
   {
     id: "P008", name: "Mixed Sprouts Salad", category: "Sprouts", price: 70, stock: 4, reorderLevel: 5, status: "Low",
-    image: "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?q=80&w=400"
+    image: "https://images.pexels.com/photos/5644870/pexels-photo-5644870.jpeg?auto=compress&cs=tinysrgb&w=400&v=1"
   },
   {
     id: "P009", name: "Vitamin C Pack", category: "Supplements", price: 250, stock: 50, reorderLevel: 10, status: "OK",
-    image: "https://images.unsplash.com/photo-1626074353765-517a681e40be?q=80&w=400"
+    image: "https://images.pexels.com/photos/4113130/pexels-photo-4113130.jpeg?auto=compress&cs=tinysrgb&w=400&v=1"
   },
   {
     id: "P010", name: "Protein Powder (500g)", category: "Supplements", price: 800, stock: 12, reorderLevel: 5, status: "OK",
-    image: "https://images.unsplash.com/photo-1593095394430-fc1ca9fb99f3?q=80&w=400"
+    image: "https://images.pexels.com/photos/7656390/pexels-photo-7656390.jpeg?auto=compress&cs=tinysrgb&w=400&v=1"
   },
   {
-    id: "P011", name: "Herbal Tea", category: "Healthy Juices", price: 60, stock: 2, reorderLevel: 5, status: "Critical",
-    image: "https://images.unsplash.com/photo-1597481499750-3e6b22637e12?q=80&w=400"
+    id: "P011", name: "Herbal Tea", category: "Tea", price: 60, stock: 2, reorderLevel: 5, status: "Critical",
+    image: "https://images.pexels.com/photos/842544/pexels-photo-842544.jpeg?auto=compress&cs=tinysrgb&w=400&v=1"
   },
   {
     id: "P012", name: "Bronze Membership", category: "Membership Plans", price: 1500, stock: 999, reorderLevel: 0, status: "OK",
-    image: "https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?q=80&w=400"
+    image: "https://images.pexels.com/photos/864939/pexels-photo-864939.jpeg?auto=compress&cs=tinysrgb&w=400&v=1"
   },
   {
     id: "P013", name: "Silver Membership", category: "Membership Plans", price: 2500, stock: 999, reorderLevel: 0, status: "OK",
-    image: "https://images.unsplash.com/photo-1518611012118-2960f8abc6fe?q=80&w=400"
+    image: "https://images.pexels.com/photos/6339345/pexels-photo-6339345.jpeg?auto=compress&cs=tinysrgb&w=400&v=1"
   },
   {
     id: "P014", name: "Gold Membership", category: "Membership Plans", price: 4000, stock: 999, reorderLevel: 0, status: "OK",
-    image: "https://images.unsplash.com/photo-1526506118085-60ce8714f8c5?q=80&w=400"
+    image: "https://images.pexels.com/photos/1552245/pexels-photo-1552245.jpeg?auto=compress&cs=tinysrgb&w=400&v=1"
   },
 ];
 
