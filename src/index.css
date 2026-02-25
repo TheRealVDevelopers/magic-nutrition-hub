@@ -6,7 +6,8 @@
 
 @layer base {
   :root {
-    --background: 100 33% 98.5%; /* #F9FFF8 - Soft Cream White */
+    --background: 100 33% 98.5%;
+    /* #F9FFF8 - Soft Cream White */
     --foreground: 150 10% 15%;
 
     --card: 0 0% 100%;
@@ -15,16 +16,19 @@
     --popover: 0 0% 100%;
     --popover-foreground: 150 10% 15%;
 
-    --primary: 122 46% 56%; /* #66BB6A - Light Herbal Green */
+    --primary: 122 46% 56%;
+    /* #66BB6A - Light Herbal Green */
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 130 38% 85%; /* #C8E6C9 - Mint Green */
+    --secondary: 130 38% 85%;
+    /* #C8E6C9 - Mint Green */
     --secondary-foreground: 122 46% 25%;
 
     --muted: 120 20% 95%;
     --muted-foreground: 150 8% 46%;
 
-    --accent: 35 100% 65%; /* #FFB74D - Soft Orange */
+    --accent: 35 100% 65%;
+    /* #FFB74D - Soft Orange */
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
@@ -54,10 +58,16 @@
 
   body {
     @apply bg-background text-foreground antialiased;
+    -webkit-font-feature-settings: "ss01", "ss02", "cv01", "cv02";
     font-feature-settings: "ss01", "ss02", "cv01", "cv02";
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-bold tracking-tight;
   }
 }
@@ -66,7 +76,7 @@
   .premium-card {
     @apply bg-card rounded-2xl p-6 border border-border shadow-soft hover:shadow-premium transition-all duration-300;
   }
-  
+
   .glass-card {
     @apply bg-white/70 backdrop-blur-md border border-white/20 rounded-2xl p-6 shadow-soft;
   }
@@ -82,18 +92,23 @@
   .badge-bronze {
     @apply bg-orange-100 text-orange-800 text-xs font-bold px-3 py-1 rounded-full;
   }
+
   .badge-silver {
     @apply bg-slate-100 text-slate-600 text-xs font-bold px-3 py-1 rounded-full;
   }
+
   .badge-gold {
     @apply bg-amber-100 text-amber-600 text-xs font-bold px-3 py-1 rounded-full;
   }
+
   .badge-active {
     @apply bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full;
   }
+
   .badge-expiring {
     @apply bg-amber-50 text-amber-600 text-xs font-bold px-3 py-1 rounded-full;
   }
+
   .badge-expired {
     @apply bg-red-50 text-red-600 text-xs font-bold px-3 py-1 rounded-full;
   }
@@ -103,9 +118,11 @@
 .safe-area-top {
   padding-top: env(safe-area-inset-top);
 }
+
 .safe-area-bottom {
   padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
 }
+
 @media (hover: none) and (pointer: coarse) {
   .touch-manipulation {
     touch-action: manipulation;
@@ -116,6 +133,7 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
