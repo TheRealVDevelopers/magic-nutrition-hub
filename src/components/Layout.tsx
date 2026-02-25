@@ -1,22 +1,24 @@
 import { useState, useEffect } from "react";
-import { Link, useLocation, Outlet } from "react-router-dom";
+import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
-  LayoutDashboard, Users, ShoppingCart, BarChart3, HeartHandshake,
-  Gift, Package, AlertTriangle, Wifi, Menu, Bell, ChevronDown, Leaf, X, Home
+  LayoutDashboard, Users, ShoppingCart, HeartHandshake,
+  Wallet, CreditCard, Package, GitBranch, Settings, Menu, Bell, ChevronDown, Leaf, X, LogOut
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { useAuth, signOutUser } from "@/lib/auth";
+import { usePendingTopupRequests } from "@/hooks/useOwner";
 
-const navItems = [
-  { title: "Landing Page", path: "/", icon: Home },
-  { title: "Dashboard", path: "/dashboard", icon: LayoutDashboard },
-  { title: "Members", path: "/members", icon: Users },
-  { title: "Billing (POS)", path: "/billing", icon: ShoppingCart },
-  { title: "Billing Reports", path: "/billing-reports", icon: BarChart3 },
-  { title: "Volunteers", path: "/volunteers", icon: HeartHandshake },
-  { title: "Loyalty & Rewards", path: "/loyalty", icon: Gift },
-  { title: "Inventory", path: "/inventory", icon: Package },
-  { title: "Expiry Management", path: "/expiry", icon: AlertTriangle },
-  { title: "NFC & Settings", path: "/nfc", icon: Wifi },
+const ownerNavItems = [
+  { title: "Dashboard", path: "/owner/dashboard", icon: LayoutDashboard },
+  { title: "Members", path: "/owner/members", icon: Users },
+  { title: "Membership Plans", path: "/owner/membership-plans", icon: CreditCard },
+  { title: "Wallet Approvals", path: "/owner/wallet-approvals", icon: Wallet, showBadge: true },
+  { title: "Volunteers", path: "/owner/volunteers", icon: HeartHandshake },
+  { title: "Inventory", path: "/owner/inventory", icon: Package },
+  { title: "Billing", path: "/owner/billing", icon: ShoppingCart },
+  { title: "My Network", path: "/owner/downline", icon: GitBranch },
+  { title: "Settings", path: "/owner/settings", icon: Settings },
 ];
 
 const closeSidebarOnNavigate = () => {
@@ -29,6 +31,11 @@ const closeSidebarOnNavigate = () => {
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { userProfile } = useAuth();
+  const { requests: pendingTopups } = usePendingTopupRequests();
+  const ownerName = userProfile?.name || "Owner";
+  const ownerInitials = ownerName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 768px)");
@@ -72,8 +79,8 @@ export default function Layout() {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-4 md:py-6 px-3 md:px-4 space-y-1">
-          {navItems.map((item) => {
-            const active = location.pathname === item.path || (item.path !== "/" && item.path !== "/dashboard" && location.pathname.startsWith(item.path));
+          {ownerNavItems.map((item) => {
+            const active = location.pathname === item.path || location.pathname.startsWith(item.path + "/");
             return (
               <Link
                 key={item.path}
@@ -82,24 +89,37 @@ export default function Layout() {
                 className={`flex items-center gap-3 md:gap-4 px-3 md:px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 group min-h-[44px] touch-manipulation ${!sidebarOpen ? "md:justify-center md:px-2" : ""} ${active
                   ? "bg-primary text-white shadow-premium"
                   : "text-muted-foreground hover:bg-secondary/30 hover:text-primary active:bg-secondary/50"
-                }`}
+                  }`}
               >
                 <item.icon className={`w-5 h-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110 ${active ? "text-white" : "text-primary"}`} />
-                {sidebarOpen && <span className="truncate">{item.title}</span>}
+                {sidebarOpen && (
+                  <span className="truncate flex-1">{item.title}</span>
+                )}
+                {sidebarOpen && (item as any).showBadge && pendingTopups.length > 0 && (
+                  <Badge variant="destructive" className="text-[10px] h-5 min-w-[20px] px-1">{pendingTopups.length}</Badge>
+                )}
               </Link>
             );
           })}
+          {/* Sign Out */}
+          <button
+            onClick={async () => { await signOutUser(); navigate("/login"); }}
+            className="flex items-center gap-3 md:gap-4 px-3 md:px-4 py-3 rounded-2xl text-sm font-bold text-red-500 hover:bg-red-50 transition-all mt-4 w-full min-h-[44px]"
+          >
+            <LogOut className="w-5 h-5 flex-shrink-0" />
+            {sidebarOpen && <span className="truncate">Sign Out</span>}
+          </button>
         </nav>
 
         {/* Bottom Profile */}
         <div className={`p-3 md:p-4 bg-secondary/20 m-3 md:m-4 rounded-2xl border border-primary/10 ${!sidebarOpen ? "md:flex md:justify-center" : ""}`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-wellness-forest flex items-center justify-center text-white font-bold flex-shrink-0">UP</div>
+            <div className="w-10 h-10 rounded-full bg-wellness-forest flex items-center justify-center text-white font-bold flex-shrink-0">{ownerInitials}</div>
             {sidebarOpen && (
-                <div className="overflow-hidden min-w-0">
-                  <p className="text-sm font-bold text-wellness-forest truncate">Usha Prasad</p>
-                  <p className="text-[10px] text-muted-foreground font-bold truncate">Club Owner</p>
-                </div>
+              <div className="overflow-hidden min-w-0">
+                <p className="text-sm font-bold text-wellness-forest truncate">{ownerName}</p>
+                <p className="text-[10px] text-muted-foreground font-bold truncate">Club Owner</p>
+              </div>
             )}
           </div>
         </div>
@@ -119,14 +139,14 @@ export default function Layout() {
             </button>
             <div className="min-w-0">
               <h1 className="font-black text-wellness-forest text-base sm:text-lg md:text-2xl tracking-tight truncate">
-                {navItems.find(n => n.path === location.pathname)?.title || "Member Profile"}
+                {ownerNavItems.find(n => location.pathname === n.path || location.pathname.startsWith(n.path + "/"))?.title || "Dashboard"}
               </h1>
             </div>
           </div>
           <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
             <div className="hidden md:flex flex-col text-right mr-2">
               <p className="text-xs font-black text-primary uppercase tracking-wider">Welcome Back</p>
-              <p className="text-sm font-bold text-wellness-forest">Manage Your Empire</p>
+              <p className="text-sm font-bold text-wellness-forest">{ownerName}</p>
             </div>
             <button className="p-2.5 md:p-3 rounded-2xl bg-white border border-border text-muted-foreground hover:text-primary transition-all relative shadow-sm group min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation">
               <Bell className="w-5 h-5 group-hover:animate-bounce" />
@@ -134,7 +154,7 @@ export default function Layout() {
             </button>
             <div className="h-8 md:h-10 w-px bg-border hidden sm:block" />
             <Button variant="ghost" className="gap-2 md:gap-3 px-2 hover:bg-transparent min-h-[44px] touch-manipulation">
-              <div className="w-9 h-9 md:w-10 md:h-10 rounded-2xl bg-primary flex items-center justify-center text-white text-xs md:text-sm font-black shadow-premium active:scale-95 transition-transform">UP</div>
+              <div className="w-9 h-9 md:w-10 md:h-10 rounded-2xl bg-primary flex items-center justify-center text-white text-xs md:text-sm font-black shadow-premium active:scale-95 transition-transform">{ownerInitials}</div>
               <ChevronDown className="w-4 h-4 text-muted-foreground hidden sm:inline" />
             </Button>
           </div>

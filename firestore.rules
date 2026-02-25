@@ -1,0 +1,219 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper functions ───────────────────────────────────────────
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getUserRole() {
+      return getUserData().role;
+    }
+
+    function getUserClubId() {
+      return getUserData().clubId;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserRole() == 'superAdmin';
+    }
+
+    function isClubOwner() {
+      return isAuthenticated() && getUserRole() == 'clubOwner';
+    }
+
+    function isStaff() {
+      return isAuthenticated() && getUserRole() == 'staff';
+    }
+
+    function isMember() {
+      return isAuthenticated() && getUserRole() == 'member';
+    }
+
+    function isOwnClub(clubId) {
+      return getUserClubId() == clubId;
+    }
+
+    // ─── /platform/{doc} ────────────────────────────────────────────
+
+    match /platform/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    // ─── /clubs/{clubId} ────────────────────────────────────────────
+
+    match /clubs/{clubId} {
+      // Unauthenticated users can read active clubs (for public landing page)
+      allow read: if !isAuthenticated() && resource.data.status == 'active';
+      // Authenticated users: superAdmin reads all, clubOwner reads own + downline
+      allow read: if isSuperAdmin();
+      allow read: if isClubOwner() && isOwnClub(clubId);
+      allow read: if isClubOwner()
+        && resource.data.treePath.matches(getUserData().clubId + '.*');
+      allow read: if (isStaff() || isMember()) && isOwnClub(clubId);
+      // Write: superAdmin can write all, clubOwner can write own club
+      allow write: if isSuperAdmin();
+      allow write: if isClubOwner() && isOwnClub(clubId);
+    }
+
+    // ─── /users/{userId} ────────────────────────────────────────────
+
+    match /users/{userId} {
+      // superAdmin: full access
+      allow read, write: if isSuperAdmin();
+      // clubOwner: read/write users in own club
+      allow read, write: if isClubOwner() && resource.data.clubId == getUserClubId();
+      // For creating new users (resource doesn't exist yet)
+      allow create: if isClubOwner() && request.resource.data.clubId == getUserClubId();
+      // staff: read users in own club
+      allow read: if isStaff() && resource.data.clubId == getUserClubId();
+      // member: read own document only
+      allow read: if isMember() && request.auth.uid == userId;
+      // member: update own document (profile edits)
+      allow update: if isMember() && request.auth.uid == userId;
+
+      // ─── /users/{userId}/weightLog/{logId} ──────────────────────
+
+      match /weightLog/{logId} {
+        allow read, write: if isSuperAdmin();
+        allow read, write: if isClubOwner()
+          && get(/databases/$(database)/documents/users/$(userId)).data.clubId == getUserClubId();
+        allow read: if isStaff()
+          && get(/databases/$(database)/documents/users/$(userId)).data.clubId == getUserClubId();
+        // member: read/write own weight log
+        allow read, write: if isMember() && request.auth.uid == userId;
+      }
+    }
+
+    // ─── /wallets/{userId} ──────────────────────────────────────────
+
+    match /wallets/{walletUserId} {
+      allow read, write: if isSuperAdmin();
+      allow read, write: if isClubOwner() && resource.data.clubId == getUserClubId();
+      allow create: if isClubOwner() && request.resource.data.clubId == getUserClubId();
+      // member: read own wallet only
+      allow read: if isMember() && request.auth.uid == walletUserId;
+      // staff: NO access to wallets
+    }
+
+    // ─── /walletTransactions/{transactionId} ────────────────────────
+
+    match /walletTransactions/{transactionId} {
+      allow read, write: if isSuperAdmin();
+      allow read, write: if isClubOwner() && resource.data.clubId == getUserClubId();
+      allow create: if isClubOwner() && request.resource.data.clubId == getUserClubId();
+      // member: read own transactions
+      allow read: if isMember() && resource.data.userId == request.auth.uid;
+      // staff: NO access
+    }
+
+    // ─── /topupRequests/{requestId} ─────────────────────────────────
+
+    match /topupRequests/{requestId} {
+      allow read, write: if isSuperAdmin();
+      allow read, write: if isClubOwner() && resource.data.clubId == getUserClubId();
+      allow create: if isClubOwner() && request.resource.data.clubId == getUserClubId();
+      // staff: read topup requests of own club
+      allow read: if isStaff() && resource.data.clubId == getUserClubId();
+      // member: create own requests, read own requests
+      allow create: if isMember()
+        && request.resource.data.memberId == request.auth.uid
+        && request.resource.data.clubId == getUserClubId();
+      allow read: if isMember() && resource.data.memberId == request.auth.uid;
+    }
+
+    // ─── /attendance/{attendanceId} ─────────────────────────────────
+
+    match /attendance/{attendanceId} {
+      allow read, write: if isSuperAdmin();
+      allow read, write: if isClubOwner() && resource.data.clubId == getUserClubId();
+      allow create: if isClubOwner() && request.resource.data.clubId == getUserClubId();
+      // staff: read + write attendance for own club
+      allow read, write: if isStaff() && resource.data.clubId == getUserClubId();
+      allow create: if isStaff() && request.resource.data.clubId == getUserClubId();
+      // member: read own attendance
+      allow read: if isMember() && resource.data.userId == request.auth.uid;
+    }
+
+    // ─── /orders/{orderId} ──────────────────────────────────────────
+
+    match /orders/{orderId} {
+      allow read, write: if isSuperAdmin();
+      allow read, write: if isClubOwner() && resource.data.clubId == getUserClubId();
+      allow create: if isClubOwner() && request.resource.data.clubId == getUserClubId();
+      // staff: read + write orders for own club
+      allow read, write: if isStaff() && resource.data.clubId == getUserClubId();
+      allow create: if isStaff() && request.resource.data.clubId == getUserClubId();
+      // member: read own orders
+      allow read: if isMember() && resource.data.memberId == request.auth.uid;
+      // member: write rating on own served orders
+      allow update: if isMember()
+        && resource.data.memberId == request.auth.uid
+        && resource.data.status == 'served'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'ratingNote']);
+    }
+
+    // ─── /products/{productId} ──────────────────────────────────────
+
+    match /products/{productId} {
+      allow read, write: if isSuperAdmin();
+      allow read, write: if isClubOwner() && resource.data.clubId == getUserClubId();
+      allow create: if isClubOwner() && request.resource.data.clubId == getUserClubId();
+      // staff: read products of own club
+      allow read: if isStaff() && resource.data.clubId == getUserClubId();
+      // member: read products of own club
+      allow read: if isMember() && resource.data.clubId == getUserClubId();
+    }
+
+    // ─── /memberships/{planId} ──────────────────────────────────────
+
+    match /memberships/{planId} {
+      allow read, write: if isSuperAdmin();
+      allow read, write: if isClubOwner() && resource.data.clubId == getUserClubId();
+      allow create: if isClubOwner() && request.resource.data.clubId == getUserClubId();
+      // staff + member: read memberships of own club
+      allow read: if (isStaff() || isMember()) && resource.data.clubId == getUserClubId();
+    }
+
+    // ─── /announcements/{announcementId} ────────────────────────────
+
+    match /announcements/{announcementId} {
+      allow read, write: if isSuperAdmin();
+      allow read, write: if isClubOwner() && resource.data.clubId == getUserClubId();
+      allow create: if isClubOwner() && request.resource.data.clubId == getUserClubId();
+      // staff + member: read announcements of own club
+      allow read: if (isStaff() || isMember()) && resource.data.clubId == getUserClubId();
+    }
+
+    // ─── /referrals/{referralId} ────────────────────────────────────
+
+    match /referrals/{referralId} {
+      allow read, write: if isSuperAdmin();
+      allow read, write: if isClubOwner() && resource.data.clubId == getUserClubId();
+      allow create: if isClubOwner() && request.resource.data.clubId == getUserClubId();
+      // member: read own referrals
+      allow read: if isMember()
+        && (resource.data.referrerId == request.auth.uid || resource.data.referredId == request.auth.uid);
+    }
+
+    // ─── /billingPrints/{billId} ────────────────────────────────────
+
+    match /billingPrints/{billId} {
+      allow read, write: if isSuperAdmin();
+      allow read, write: if isClubOwner() && resource.data.clubId == getUserClubId();
+      allow create: if isClubOwner() && request.resource.data.clubId == getUserClubId();
+      // staff: read billing prints of own club
+      allow read: if isStaff() && resource.data.clubId == getUserClubId();
+      // member: read own billing prints
+      allow read: if isMember() && resource.data.memberId == request.auth.uid;
+    }
+  }
+}
