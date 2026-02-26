@@ -29,6 +29,7 @@ export interface Club {
     kitchenPin: string;
     createdAt: Timestamp;
     createdBy: string;
+    referralBonusCoins?: number;
 }
 
 // ─── /users/{userId} ──────────────────────────────────────────────────

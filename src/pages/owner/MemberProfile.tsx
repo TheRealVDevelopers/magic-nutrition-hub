@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Edit, Wallet, ShoppingBag, Activity, Users, Plus } from "lucide-react";
+import { ArrowLeft, Edit, Wallet, ShoppingBag, Activity, Users, Plus, GitBranch } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,6 +16,7 @@ import MemberForm, { type MemberFormValues } from "@/components/owner/MemberForm
 import {
     useMemberById, useUpdateMember, useMemberWallet, useMemberTransactions,
     useMemberOrders, useMemberWeightLog, useAddWeightEntry, useMembershipPlans, useAssignMembership,
+    useMemberReferrals
 } from "@/hooks/useOwner";
 
 export default function OwnerMemberProfile() {
@@ -27,6 +28,7 @@ export default function OwnerMemberProfile() {
     const { data: transactions } = useMemberTransactions(id || "");
     const { data: orders } = useMemberOrders(id || "");
     const { data: weightLog } = useMemberWeightLog(id || "");
+    const { data: referrals } = useMemberReferrals(id || "");
     const { data: plans } = useMembershipPlans();
     const updateMember = useUpdateMember();
     const addWeight = useAddWeightEntry();
@@ -107,6 +109,7 @@ export default function OwnerMemberProfile() {
                     <TabsTrigger value="orders"><ShoppingBag className="w-4 h-4 mr-1" /> Orders</TabsTrigger>
                     <TabsTrigger value="progress"><Activity className="w-4 h-4 mr-1" /> Progress</TabsTrigger>
                     <TabsTrigger value="tree"><Users className="w-4 h-4 mr-1" /> Tree</TabsTrigger>
+                    <TabsTrigger value="referrals"><GitBranch className="w-4 h-4 mr-1" /> Referrals</TabsTrigger>
                 </TabsList>
 
                 {/* Wallet */}
@@ -186,6 +189,46 @@ export default function OwnerMemberProfile() {
                     <p className="text-sm text-muted-foreground text-center py-8">
                         MLM tree will be visualized in a future phase. Tree path: {member.treePath}
                     </p>
+                </TabsContent>
+
+                {/* Referrals */}
+                <TabsContent value="referrals" className="mt-6">
+                    {referrals && referrals.length > 0 ? (
+                        <div className="space-y-4">
+                            <div className="bg-emerald-50 text-emerald-700 p-4 rounded-xl border border-emerald-100 flex items-center justify-between">
+                                <div>
+                                    <p className="text-xs font-bold uppercase tracking-wider">Total Referrals</p>
+                                    <p className="text-2xl font-black mt-1">{referrals.length}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs font-bold uppercase tracking-wider">Total Bonus Coins</p>
+                                    <p className="text-2xl font-black mt-1">{referrals.reduce((sum, r) => sum + (r.bonusCoinsAwarded ?? 0), 0)}</p>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                {referrals.map((r: any) => (
+                                    <div key={r.id} className="flex items-center gap-3 p-3 rounded-xl border bg-white">
+                                        <Avatar className="h-10 w-10 border shadow-sm">
+                                            {r.referredUser?.photo ? <AvatarImage src={r.referredUser.photo} /> : <AvatarFallback>{r.referredUser?.name?.[0]}</AvatarFallback>}
+                                        </Avatar>
+                                        <div className="flex-1">
+                                            <p className="text-sm font-bold text-slate-900">{r.referredUser?.name}</p>
+                                            <p className="text-xs text-muted-foreground">Joined {r.createdAt?.toDate?.().toLocaleDateString()}</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <Badge variant="outline" className="bg-slate-50 border-emerald-200 text-emerald-700">+{r.bonusCoinsAwarded} {club?.currencyName}</Badge>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="text-center py-12 px-4 border border-dashed rounded-2xl bg-slate-50">
+                            <GitBranch className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+                            <h3 className="text-sm font-bold text-slate-900">No Referrals Yet</h3>
+                            <p className="text-xs text-slate-500 mt-1 max-w-[200px] mx-auto">This member hasn't referred anyone yet.</p>
+                        </div>
+                    )}
                 </TabsContent>
             </Tabs>
 

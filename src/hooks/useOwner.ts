@@ -8,7 +8,7 @@ import { db } from "@/lib/firebase";
 import { useClubContext } from "@/lib/clubDetection";
 import type {
     User, Wallet, WalletTransaction, TopupRequest, MembershipPlan,
-    Attendance, Order, Product, Announcement, Club,
+    Attendance, Order, Product, Announcement, Club, Referral
 } from "@/types/firestore";
 
 // ─── helpers ────────────────────────────────────────────────────────────
@@ -111,14 +111,32 @@ export function useAddMember() {
                 currencyName: club.currencyName, balance: 0, lastUpdated: now,
             } as Wallet);
 
-            // Create referral record
+            // Create referral record & award bonus
             if (parentUserId) {
+                const bonusCoins = club.referralBonusCoins ?? 50;
+
                 const refId = "ref_" + Date.now();
                 batch.set(doc(db, "referrals", refId), {
                     id: refId, referrerId: parentUserId, referredId: memberId,
-                    clubId: club.id, bonusCoinsAwarded: 0,
-                    status: "pending", createdAt: now, rewardedAt: null,
+                    clubId: club.id, bonusCoinsAwarded: bonusCoins,
+                    status: "rewarded", createdAt: now, rewardedAt: now,
                 });
+
+                // Reward referrer wallet natively inside batch
+                const referrerWalletSnap = await getDoc(doc(db, "wallets", parentUserId));
+                if (referrerWalletSnap.exists()) {
+                    const referrerWallet = referrerWalletSnap.data() as Wallet;
+                    const newBalance = referrerWallet.balance + bonusCoins;
+                    batch.update(doc(db, "wallets", parentUserId), { balance: newBalance, lastUpdated: now });
+
+                    const txId = "tx_" + Date.now() + "_ref";
+                    batch.set(doc(db, "walletTransactions", txId), {
+                        id: txId, userId: parentUserId, clubId: club.id,
+                        type: "credit", amount: bonusCoins, reason: "referral_bonus",
+                        addedBy: "system", note: `Referral bonus for ${input.name}`,
+                        createdAt: now, balanceAfter: newBalance,
+                    } as WalletTransaction);
+                }
             }
 
             await batch.commit();
@@ -595,6 +613,33 @@ export function useTodayAttendance() {
             return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Attendance);
         },
         enabled: !!club,
+    });
+}
+
+// ─── useMemberReferrals ───────────────────────────────────────────────────
+
+export function useMemberReferrals(memberId: string) {
+    return useQuery({
+        queryKey: ["owner", "referrals", memberId],
+        queryFn: async () => {
+            const snap = await getDocs(
+                query(collection(db, "referrals"), where("referrerId", "==", memberId))
+            );
+            const refs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Referral));
+
+            const detailed = [];
+            for (const r of refs) {
+                const uSnap = await getDoc(doc(db, "users", r.referredId || ""));
+                if (uSnap.exists()) {
+                    detailed.push({
+                        ...r,
+                        referredUser: { id: uSnap.id, ...uSnap.data() } as User
+                    });
+                }
+            }
+            return detailed;
+        },
+        enabled: !!memberId,
     });
 }
 

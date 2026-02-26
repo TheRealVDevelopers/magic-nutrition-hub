@@ -1,3 +1,4 @@
+import React, { Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Routes, Route, Navigate } from "react-router-dom";
@@ -5,41 +6,72 @@ import Layout from "./components/Layout";
 import SuperAdminLayout from "./components/superadmin/SuperAdminLayout";
 import { ProtectedRoute, RoleRoute } from "./components/ProtectedRoute";
 import { useAuth, getDashboardPath } from "@/lib/auth";
+import ErrorBoundary from "./components/ErrorBoundary";
+import PageSkeleton from "./components/PageSkeleton";
 
-// ─── Pages ──────────────────────────────────────────────────────────────
-import Landing from "./pages/Landing";
-import Login from "./pages/Login";
-import KitchenDisplay from "./pages/KitchenDisplay";
-import Dashboard from "./pages/Dashboard";
-import Members from "./pages/Members";
-import MemberProfile from "./pages/MemberProfile";
-import Billing from "./pages/Billing";
-import BillingReports from "./pages/BillingReports";
-import Volunteers from "./pages/Volunteers";
-import LoyaltyRewards from "./pages/LoyaltyRewards";
-import Inventory from "./pages/Inventory";
-import ExpiryManagement from "./pages/ExpiryManagement";
-import NFCSettings from "./pages/NFCSettings";
-import SettingsPage from "./pages/SettingsPage";
-import NotFound from "./pages/NotFound";
+// ─── Lazy Loaded Pages ──────────────────────────────────────────────────
+const Landing = lazy(() => import("./pages/Landing"));
+const Login = lazy(() => import("./pages/Login"));
+const KitchenDisplay = lazy(() => import("./pages/KitchenDisplay"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Members = lazy(() => import("./pages/Members"));
+const MemberProfile = lazy(() => import("./pages/MemberProfile"));
+const Billing = lazy(() => import("./pages/Billing"));
+const BillingReports = lazy(() => import("./pages/BillingReports"));
+const Volunteers = lazy(() => import("./pages/Volunteers"));
+const LoyaltyRewards = lazy(() => import("./pages/LoyaltyRewards"));
+const Inventory = lazy(() => import("./pages/Inventory"));
+const ExpiryManagement = lazy(() => import("./pages/ExpiryManagement"));
+const NFCSettings = lazy(() => import("./pages/NFCSettings"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Super Admin pages
-import SuperAdminDashboard from "./pages/superadmin/SuperAdminDashboard";
-import ClubsList from "./pages/superadmin/ClubsList";
-import CreateClub from "./pages/superadmin/CreateClub";
-import ClubDetail from "./pages/superadmin/ClubDetail";
-import ConvertToClub from "./pages/superadmin/ConvertToClub";
-import PlatformTree from "./pages/superadmin/PlatformTree";
+const SuperAdminDashboard = lazy(() => import("./pages/superadmin/SuperAdminDashboard"));
+const ClubsList = lazy(() => import("./pages/superadmin/ClubsList"));
+const CreateClub = lazy(() => import("./pages/superadmin/CreateClub"));
+const ClubDetail = lazy(() => import("./pages/superadmin/ClubDetail"));
+const ConvertToClub = lazy(() => import("./pages/superadmin/ConvertToClub"));
+const PlatformTree = lazy(() => import("./pages/superadmin/PlatformTree"));
 
 // Owner pages
-import OwnerDashboard from "./pages/owner/OwnerDashboard";
-import OwnerMembersPage from "./pages/owner/MembersPage";
-import OwnerMemberProfile from "./pages/owner/MemberProfile";
-import MembershipPlansPage from "./pages/owner/MembershipPlansPage";
-import WalletApprovalsPage from "./pages/owner/WalletApprovalsPage";
-import OwnerVolunteersPage from "./pages/owner/VolunteersPage";
-import DownlineClubs from "./pages/owner/DownlineClubs";
-import ClubSettingsPage from "./pages/owner/ClubSettingsPage";
+const OwnerDashboard = lazy(() => import("./pages/owner/OwnerDashboard"));
+const OwnerMembersPage = lazy(() => import("./pages/owner/MembersPage"));
+const OwnerMemberProfile = lazy(() => import("./pages/owner/MemberProfile"));
+const MembershipPlansPage = lazy(() => import("./pages/owner/MembershipPlansPage"));
+const WalletApprovalsPage = lazy(() => import("./pages/owner/WalletApprovalsPage"));
+const OwnerVolunteersPage = lazy(() => import("./pages/owner/VolunteersPage"));
+const DownlineClubs = lazy(() => import("./pages/owner/DownlineClubs"));
+const ClubSettingsPage = lazy(() => import("./pages/owner/ClubSettingsPage"));
+
+// Member pages
+const MemberWalletPage = lazy(() => import("./pages/member/WalletPage"));
+const MemberCheckInPage = lazy(() => import("./pages/member/CheckInPage"));
+
+// Attendance & Reception
+const AttendancePage = lazy(() => import("./pages/owner/AttendancePage"));
+const ReceptionDisplay = lazy(() => import("./pages/ReceptionDisplay"));
+const StaffDashboard = lazy(() => import("./pages/staff/StaffDashboard"));
+
+// Orders
+const OrdersManagementPage = lazy(() => import("./pages/owner/OrdersManagementPage"));
+const OrderEntryPage = lazy(() => import("./pages/staff/OrderEntryPage"));
+const TodaysMenuPage = lazy(() => import("./pages/member/TodaysMenuPage"));
+const MemberOrdersPage = lazy(() => import("./pages/member/OrdersPage"));
+
+// Billing
+const OwnerBillingPage = lazy(() => import("./pages/owner/BillingPage"));
+const OwnerBillingReportsPage = lazy(() => import("./pages/owner/BillingReportsPage"));
+
+// Inventory
+const InventoryPage = lazy(() => import("./pages/owner/InventoryPage"));
+const ExpiryManagementPage = lazy(() => import("./pages/owner/ExpiryManagementPage"));
+
+// MLM & Member Features
+const MLMTreePage = lazy(() => import("./pages/member/MLMTreePage"));
+const ProgressPage = lazy(() => import("./pages/member/ProgressPage"));
+const MemberCardPage = lazy(() => import("./pages/member/MemberCardPage"));
+import BirthdayPopup from "./components/mlm/BirthdayPopup";
 
 // ─── Redirect authenticated users from / to their dashboard ─────────────
 
@@ -64,96 +96,107 @@ function HomeRedirect() {
 // ─── App ────────────────────────────────────────────────────────────────
 
 const App = () => (
-  <>
+  <ErrorBoundary>
     <Toaster />
     <Sonner />
-    <Routes>
-      {/* ── Public routes ──────────────────────────────────────────── */}
-      <Route path="/" element={<HomeRedirect />} />
-      <Route path="/login" element={<Login />} />
-      <Route path="/kitchen" element={<KitchenDisplay />} />
+    <Suspense fallback={<PageSkeleton />}>
+      <Routes>
+        {/* ── Public routes ──────────────────────────────────────────── */}
+        <Route path="/" element={<HomeRedirect />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/kitchen" element={<KitchenDisplay />} />
+        <Route path="/reception" element={<ReceptionDisplay />} />
 
-      {/* ── Super Admin routes ─────────────────────────────────────── */}
-      <Route
-        path="/superadmin/*"
-        element={
-          <ProtectedRoute>
-            <RoleRoute roles={["superAdmin"]}>
-              <SuperAdminLayout />
-            </RoleRoute>
-          </ProtectedRoute>
-        }
-      >
-        <Route path="dashboard" element={<SuperAdminDashboard />} />
-        <Route path="clubs" element={<ClubsList />} />
-        <Route path="clubs/new" element={<CreateClub />} />
-        <Route path="clubs/:clubId" element={<ClubDetail />} />
-        <Route path="clubs/:clubId/convert" element={<ConvertToClub />} />
-        <Route path="tree" element={<PlatformTree />} />
-      </Route>
+        {/* ── Super Admin routes ─────────────────────────────────────── */}
+        <Route
+          path="/superadmin/*"
+          element={
+            <ProtectedRoute>
+              <RoleRoute roles={["superAdmin"]}>
+                <SuperAdminLayout />
+              </RoleRoute>
+            </ProtectedRoute>
+          }
+        >
+          <Route path="dashboard" element={<SuperAdminDashboard />} />
+          <Route path="clubs" element={<ClubsList />} />
+          <Route path="clubs/new" element={<CreateClub />} />
+          <Route path="clubs/:clubId" element={<ClubDetail />} />
+          <Route path="clubs/:clubId/convert" element={<ConvertToClub />} />
+          <Route path="tree" element={<PlatformTree />} />
+        </Route>
 
-      {/* ── Club Owner routes ──────────────────────────────────────── */}
-      <Route
-        path="/owner/*"
-        element={
-          <ProtectedRoute>
-            <RoleRoute roles={["clubOwner"]}>
-              <Layout />
-            </RoleRoute>
-          </ProtectedRoute>
-        }
-      >
-        <Route path="dashboard" element={<OwnerDashboard />} />
-        <Route path="members" element={<OwnerMembersPage />} />
-        <Route path="members/:id" element={<OwnerMemberProfile />} />
-        <Route path="membership-plans" element={<MembershipPlansPage />} />
-        <Route path="wallet-approvals" element={<WalletApprovalsPage />} />
-        <Route path="volunteers" element={<OwnerVolunteersPage />} />
-        <Route path="inventory" element={<Inventory />} />
-        <Route path="billing" element={<Billing />} />
-        <Route path="downline" element={<DownlineClubs />} />
-        <Route path="settings" element={<ClubSettingsPage />} />
-      </Route>
+        {/* ── Club Owner routes ──────────────────────────────────────── */}
+        <Route
+          path="/owner/*"
+          element={
+            <ProtectedRoute>
+              <RoleRoute roles={["clubOwner"]}>
+                <Layout />
+              </RoleRoute>
+            </ProtectedRoute>
+          }
+        >
+          <Route path="dashboard" element={<OwnerDashboard />} />
+          <Route path="members" element={<OwnerMembersPage />} />
+          <Route path="members/:id" element={<OwnerMemberProfile />} />
+          <Route path="membership-plans" element={<MembershipPlansPage />} />
+          <Route path="wallet-approvals" element={<WalletApprovalsPage />} />
+          <Route path="volunteers" element={<OwnerVolunteersPage />} />
+          <Route path="inventory" element={<InventoryPage />} />
+          <Route path="expiry-management" element={<ExpiryManagementPage />} />
+          <Route path="billing" element={<OwnerBillingPage />} />
+          <Route path="billing-reports" element={<OwnerBillingReportsPage />} />
+          <Route path="attendance" element={<AttendancePage />} />
+          <Route path="orders" element={<OrdersManagementPage />} />
+          <Route path="downline" element={<DownlineClubs />} />
+          <Route path="settings" element={<ClubSettingsPage />} />
+        </Route>
 
-      {/* ── Staff routes ───────────────────────────────────────────── */}
-      <Route
-        path="/staff/*"
-        element={
-          <ProtectedRoute>
-            <RoleRoute roles={["staff"]}>
-              <Layout />
-            </RoleRoute>
-          </ProtectedRoute>
-        }
-      >
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="attendance" element={<Volunteers />} />
-        <Route path="orders" element={<Billing />} />
-      </Route>
+        {/* ── Staff routes ───────────────────────────────────────────── */}
+        <Route
+          path="/staff/*"
+          element={
+            <ProtectedRoute>
+              <RoleRoute roles={["staff"]}>
+                <Layout />
+              </RoleRoute>
+            </ProtectedRoute>
+          }
+        >
+          <Route path="dashboard" element={<StaffDashboard />} />
+          <Route path="attendance" element={<Volunteers />} />
+          <Route path="orders" element={<OrderEntryPage />} />
+        </Route>
 
-      {/* ── Member routes ──────────────────────────────────────────── */}
-      <Route
-        path="/member/*"
-        element={
-          <ProtectedRoute>
-            <RoleRoute roles={["member"]}>
-              <Layout />
-            </RoleRoute>
-          </ProtectedRoute>
-        }
-      >
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="profile" element={<MemberProfile />} />
-        <Route path="wallet" element={<LoyaltyRewards />} />
-        <Route path="orders" element={<Billing />} />
-        <Route path="tree" element={<Dashboard />} />
-        <Route path="progress" element={<Dashboard />} />
-      </Route>
+        {/* ── Member routes ──────────────────────────────────────────── */}
+        <Route
+          path="/member/*"
+          element={
+            <ProtectedRoute>
+              <RoleRoute roles={["member"]}>
+                <Layout />
+              </RoleRoute>
+            </ProtectedRoute>
+          }
+        >
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="profile" element={<MemberProfile />} />
+          <Route path="wallet" element={<MemberWalletPage />} />
+          <Route path="checkin" element={<MemberCheckInPage />} />
+          <Route path="menu" element={<TodaysMenuPage />} />
+          <Route path="orders" element={<MemberOrdersPage />} />
+          <Route path="card" element={<MemberCardPage />} />
+          <Route path="tree" element={<MLMTreePage />} />
+          <Route path="progress" element={<ProgressPage />} />
+        </Route>
 
-      {/* ── Catch-all ──────────────────────────────────────────────── */}
-      <Route path="*" element={<NotFound />} />
-    </Routes>
-  </>
+        {/* ── Catch-all ──────────────────────────────────────────────── */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+      <BirthdayPopup />
+    </Suspense>
+  </ErrorBoundary>
 );
 
 export default App;

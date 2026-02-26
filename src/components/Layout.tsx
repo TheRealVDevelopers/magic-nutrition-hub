@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Users, ShoppingCart, HeartHandshake,
-  Wallet, CreditCard, Package, GitBranch, Settings, Menu, Bell, ChevronDown, Leaf, X, LogOut
+  Wallet, CreditCard, Package, GitBranch, Settings, Menu, Bell, ChevronDown, Leaf, X, LogOut,
+  CalendarCheck, ExternalLink, Activity, Network
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,13 +13,34 @@ import { usePendingTopupRequests } from "@/hooks/useOwner";
 const ownerNavItems = [
   { title: "Dashboard", path: "/owner/dashboard", icon: LayoutDashboard },
   { title: "Members", path: "/owner/members", icon: Users },
+  { title: "Attendance", path: "/owner/attendance", icon: CalendarCheck },
+  { title: "Orders", path: "/owner/orders", icon: ShoppingCart },
   { title: "Membership Plans", path: "/owner/membership-plans", icon: CreditCard },
   { title: "Wallet Approvals", path: "/owner/wallet-approvals", icon: Wallet, showBadge: true },
   { title: "Volunteers", path: "/owner/volunteers", icon: HeartHandshake },
   { title: "Inventory", path: "/owner/inventory", icon: Package },
+  { title: "Expiry Management", path: "/owner/expiry-management", icon: Package },
   { title: "Billing", path: "/owner/billing", icon: ShoppingCart },
+  { title: "Billing Reports", path: "/owner/billing-reports", icon: ShoppingCart },
+  { title: "Reports & Analytics", path: "/owner/reports", icon: Activity },
   { title: "My Network", path: "/owner/downline", icon: GitBranch },
   { title: "Settings", path: "/owner/settings", icon: Settings },
+];
+
+const memberNavItems = [
+  { title: "Dashboard", path: "/member/dashboard", icon: LayoutDashboard },
+  { title: "My Profile", path: "/member/profile", icon: Users },
+  { title: "My Wallet", path: "/member/wallet", icon: Wallet },
+  { title: "Todays Menu", path: "/member/menu", icon: ShoppingCart },
+  { title: "My Network", path: "/member/tree", icon: Network },
+  { title: "My Card", path: "/member/card", icon: CreditCard },
+  { title: "My Progress", path: "/member/progress", icon: Activity },
+];
+
+const staffNavItems = [
+  { title: "Dashboard", path: "/staff/dashboard", icon: LayoutDashboard },
+  { title: "Attendance", path: "/staff/attendance", icon: CalendarCheck },
+  { title: "New Order", path: "/staff/orders", icon: ShoppingCart },
 ];
 
 const closeSidebarOnNavigate = () => {
@@ -34,7 +56,10 @@ export default function Layout() {
   const navigate = useNavigate();
   const { userProfile } = useAuth();
   const { requests: pendingTopups } = usePendingTopupRequests();
-  const ownerName = userProfile?.name || "Owner";
+
+  const activeNavItems = userProfile?.role === "member" ? memberNavItems : userProfile?.role === "staff" ? staffNavItems : ownerNavItems;
+
+  const ownerName = userProfile?.name || "User";
   const ownerInitials = ownerName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 
   useEffect(() => {
@@ -79,7 +104,7 @@ export default function Layout() {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-4 md:py-6 px-3 md:px-4 space-y-1">
-          {ownerNavItems.map((item) => {
+          {activeNavItems.map((item) => {
             const active = location.pathname === item.path || location.pathname.startsWith(item.path + "/");
             return (
               <Link
@@ -118,7 +143,7 @@ export default function Layout() {
             {sidebarOpen && (
               <div className="overflow-hidden min-w-0">
                 <p className="text-sm font-bold text-wellness-forest truncate">{ownerName}</p>
-                <p className="text-[10px] text-muted-foreground font-bold truncate">Club Owner</p>
+                <p className="text-[10px] text-muted-foreground font-bold truncate capitalize">{userProfile?.role === "clubOwner" ? "Club Owner" : userProfile?.role}</p>
               </div>
             )}
           </div>
@@ -139,7 +164,7 @@ export default function Layout() {
             </button>
             <div className="min-w-0">
               <h1 className="font-black text-wellness-forest text-base sm:text-lg md:text-2xl tracking-tight truncate">
-                {ownerNavItems.find(n => location.pathname === n.path || location.pathname.startsWith(n.path + "/"))?.title || "Dashboard"}
+                {activeNavItems.find(n => location.pathname === n.path || location.pathname.startsWith(n.path + "/"))?.title || "Dashboard"}
               </h1>
             </div>
           </div>

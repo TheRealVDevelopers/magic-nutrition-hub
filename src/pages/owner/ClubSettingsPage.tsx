@@ -51,6 +51,9 @@ export default function ClubSettingsPage() {
     const [tagline, setTagline] = useState(club?.tagline || "");
     const [primaryColor, setPrimaryColor] = useState(club?.primaryColor || "#8B5CF6");
 
+    // Referral Settings
+    const [referralBonusCoins, setReferralBonusCoins] = useState(club?.referralBonusCoins ?? 50);
+
     const handleToggleProduct = (productId: string) => {
         const updated = selectedIds.includes(productId)
             ? selectedIds.filter((id) => id !== productId)
@@ -78,6 +81,14 @@ export default function ClubSettingsPage() {
         });
     };
 
+    const handleSaveReferralSettings = () => {
+        if (!club) return;
+        updateSettings.mutate({ clubId: club.id, data: { referralBonusCoins } }, {
+            onSuccess: () => toast({ title: "Referral settings updated!" }),
+            onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+        });
+    };
+
     return (
         <div className="space-y-6 animate-fade-in max-w-4xl">
             <h1 className="text-2xl font-black text-wellness-forest">Club Settings</h1>
@@ -88,6 +99,7 @@ export default function ClubSettingsPage() {
                     <TabsTrigger value="announcements">Announcements</TabsTrigger>
                     <TabsTrigger value="kitchen">Kitchen PIN</TabsTrigger>
                     <TabsTrigger value="profile">Club Profile</TabsTrigger>
+                    <TabsTrigger value="referrals">Referrals</TabsTrigger>
                 </TabsList>
 
                 {/* Today's Special */}
@@ -198,6 +210,27 @@ export default function ClubSettingsPage() {
                         </div>
                         <Button onClick={handleSaveProfile} disabled={updateSettings.isPending} className="w-full">
                             <Save className="w-4 h-4 mr-2" /> {updateSettings.isPending ? "Saving…" : "Save Profile"}
+                        </Button>
+                    </div>
+                </TabsContent>
+
+                {/* Referral Settings */}
+                <TabsContent value="referrals" className="mt-6">
+                    <div className="max-w-lg bg-white rounded-2xl border p-6 space-y-4">
+                        <div className="space-y-2">
+                            <Label>Referral Bonus Coins</Label>
+                            <Input
+                                type="number"
+                                value={referralBonusCoins}
+                                onChange={(e) => setReferralBonusCoins(Number(e.target.value))}
+                                min={0}
+                            />
+                            <p className="text-xs text-muted-foreground mt-2">
+                                Members currently earn {referralBonusCoins} {club?.currencyName || "coins"} for each successful referral.
+                            </p>
+                        </div>
+                        <Button onClick={handleSaveReferralSettings} disabled={updateSettings.isPending} className="w-full">
+                            <Save className="w-4 h-4 mr-2" /> {updateSettings.isPending ? "Saving…" : "Save Settings"}
                         </Button>
                     </div>
                 </TabsContent>
