@@ -144,15 +144,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        console.log("AuthProvider mounted, listening to onAuthStateChanged");
         const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+            console.log("onAuthStateChanged triggered:", fbUser ? `User: ${fbUser.uid}` : "No User");
             setFirebaseUser(fbUser);
 
             if (fbUser) {
                 try {
+                    console.log("Fetching profile for", fbUser.uid);
                     const profile = await fetchUserProfile(fbUser.uid);
+                    console.log("Fetched profile:", profile);
                     setUserProfile(profile);
                     setRole(profile?.role ?? null);
-                } catch {
+                } catch (err) {
+                    console.error("fetchUserProfile failed", err);
                     setUserProfile(null);
                     setRole(null);
                 }
@@ -161,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setRole(null);
             }
 
+            console.log("Setting Auth loading to false");
             setLoading(false);
         });
 

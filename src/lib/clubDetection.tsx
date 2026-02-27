@@ -95,8 +95,10 @@ export function useClub() {
         let cancelled = false;
 
         async function load() {
+            console.log("clubDetection: load() started");
             try {
                 const detected = await detectClub();
+                console.log("clubDetection: detectClub resolved:", detected);
                 if (!cancelled) {
                     setClub(detected);
                     if (!detected) {
@@ -104,10 +106,12 @@ export function useClub() {
                     }
                 }
             } catch (err: any) {
+                console.error("clubDetection: detectClub error", err);
                 if (!cancelled) {
                     setError(err.message || "Failed to detect club.");
                 }
             } finally {
+                console.log("clubDetection: setLoading(false)");
                 if (!cancelled) {
                     setLoading(false);
                 }
