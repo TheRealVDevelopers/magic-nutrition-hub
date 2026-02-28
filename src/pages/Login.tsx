@@ -28,7 +28,8 @@ export default function Login() {
 
         try {
             const profile = await signIn(email, password);
-            navigate(getDashboardPath(profile.role), { replace: true });
+            const dashboardPath = getDashboardPath(profile.role);
+            navigate(dashboardPath, { replace: true });
         } catch (err: any) {
             setError(err.message || "Login failed. Please try again.");
         } finally {

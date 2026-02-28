@@ -6,6 +6,7 @@ import Layout from "./components/Layout";
 import SuperAdminLayout from "./components/superadmin/SuperAdminLayout";
 import { ProtectedRoute, RoleRoute } from "./components/ProtectedRoute";
 import { useAuth, getDashboardPath } from "@/lib/auth";
+import { useClubContext } from "@/lib/clubDetection";
 import ErrorBoundary from "./components/ErrorBoundary";
 import PageSkeleton from "./components/PageSkeleton";
 
@@ -76,9 +77,19 @@ import BirthdayPopup from "./components/mlm/BirthdayPopup";
 // ─── Redirect authenticated users from / to their dashboard ─────────────
 
 function HomeRedirect() {
-  const { firebaseUser, role, loading } = useAuth();
+  const { firebaseUser, role, loading: authLoading } = useAuth();
+  const { loading: clubLoading } = useClubContext();
 
-  if (loading) {
+  const SUPERADMIN_DOMAINS = [
+    "magic-nutrition-club.web.app",
+    "magic-nutrition-club.firebaseapp.com",
+  ];
+
+  const isSuperAdminDomain = SUPERADMIN_DOMAINS.includes(window.location.hostname);
+
+  // On superadmin domains — only wait for auth, never for club detection
+  // On club domains — wait for both auth and club to finish loading
+  if (authLoading || (!isSuperAdminDomain && clubLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -86,10 +97,25 @@ function HomeRedirect() {
     );
   }
 
+  // Superadmin domain routing — club context not needed at all
+  if (isSuperAdminDomain) {
+    if (firebaseUser && role === "superAdmin") {
+      return <Navigate to="/superadmin/dashboard" replace />;
+    }
+    if (firebaseUser && role) {
+      // Owner/member logged in on superadmin domain — send to their dashboard
+      return <Navigate to={getDashboardPath(role)} replace />;
+    }
+    // Not logged in — go to login
+    return <Navigate to="/login" replace />;
+  }
+
+  // Club domain — logged in users go to their dashboard
   if (firebaseUser && role) {
     return <Navigate to={getDashboardPath(role)} replace />;
   }
 
+  // Club domain — not logged in — show club landing page
   return <Landing />;
 }
 

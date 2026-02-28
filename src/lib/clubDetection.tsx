@@ -43,38 +43,54 @@ const DEFAULT_DEV_CLUB: Club = {
     createdBy: "superadmin_user_1",
 };
 
+// ─── Superadmin domain detection ────────────────────────────────────────
+
+// Domains that belong to the developer/superadmin
+// These should never try to load a club
+const SUPERADMIN_DOMAINS = [
+    "magic-nutrition-club.web.app",
+    "magic-nutrition-club.firebaseapp.com",
+    "localhost",
+    "127.0.0.1",
+];
+
+export function isSuperAdminDomain(): boolean {
+    return SUPERADMIN_DOMAINS.includes(window.location.hostname);
+}
+
 // ─── Detection logic ────────────────────────────────────────────────────
 
 export async function detectClub(): Promise<Club | null> {
     const hostname = window.location.hostname;
 
-    // Localhost fallback: try to fetch from Firestore first, then use default
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
-        const devClubId = import.meta.env.VITE_DEV_CLUB_ID || "dev_club";
-
-        try {
-            const docRef = doc(db, "clubs", devClubId);
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-                return { id: docSnap.id, ...docSnap.data() } as Club;
+    // Superadmin/dev domains — skip club detection entirely
+    if (isSuperAdminDomain()) {
+        // For localhost only — try to load dev club for testing owner/member flows
+        if (hostname === "localhost" || hostname === "127.0.0.1") {
+            const devClubId = import.meta.env.VITE_DEV_CLUB_ID || "dev_club";
+            try {
+                const docRef = doc(db, "clubs", devClubId);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    return { id: docSnap.id, ...docSnap.data() } as Club;
+                }
+            } catch {
+                // fallback to default dev club
             }
-        } catch {
-            // Firestore not configured or dev club not seeded yet — fallback
+            return { ...DEFAULT_DEV_CLUB, id: devClubId };
         }
 
-        return { ...DEFAULT_DEV_CLUB, id: devClubId };
+        // For magic-nutrition-club.web.app — no club needed
+        return null;
     }
 
-    // Production: query by domain
+    // Production club domains — query Firestore by domain
     try {
         const clubsRef = collection(db, "clubs");
         const q = query(clubsRef, where("domain", "==", hostname));
         const snapshot = await getDocs(q);
 
-        if (snapshot.empty) {
-            return null;
-        }
+        if (snapshot.empty) return null;
 
         const clubDoc = snapshot.docs[0];
         return { id: clubDoc.id, ...clubDoc.data() } as Club;
