@@ -78,9 +78,9 @@ export default function Theme10ClassicRed({ club, membershipPlans, todaysSpecial
                                     {product.name.charAt(0)}
                                 </div>
                                 <h3 className="text-xl font-bold text-gray-900 mb-2">{product.name}</h3>
-                                <p className="text-gray-500 text-sm mb-6 flex-1">{product.notes}</p>
+                                <p className="text-gray-500 text-sm mb-6 flex-1">{product.category}</p>
                                 <div className="text-2xl font-black text-gray-900 w-full pt-4 border-t border-gray-100">
-                                    {product.pricePerUnit} <span className="text-xs text-gray-400 font-bold uppercase">{club.currencyName}</span>
+                                    {product.price} <span className="text-xs text-gray-400 font-bold uppercase">{club.currencyName}</span>
                                 </div>
                             </div>
                         ))}
@@ -113,7 +113,7 @@ export default function Theme10ClassicRed({ club, membershipPlans, todaysSpecial
                                 )}
                                 <div className="p-8 pb-6 border-b border-gray-100 bg-gray-50 text-center">
                                     <h3 className="text-2xl font-black uppercase tracking-widest text-gray-800">{plan.name}</h3>
-                                    <p className="text-gray-500 font-medium text-sm mt-1">{plan.durationDays} Days</p>
+                                    <p className="text-gray-500 font-medium text-sm mt-1">{plan.durationDays ?? 0} Days</p>
                                 </div>
                                 <div className="p-8 flex-1 flex flex-col">
                                     <div className="text-center mb-8">

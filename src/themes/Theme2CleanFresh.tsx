@@ -71,9 +71,9 @@ export default function Theme2CleanFresh({ club, membershipPlans, todaysSpecial,
                                     </svg>
                                 </div>
                                 <h3 className="text-xl font-bold text-stone-900 mb-3">{product.name}</h3>
-                                <p className="text-stone-500 mb-6 flex-1">{product.notes}</p>
+                                <p className="text-stone-500 mb-6 flex-1">{product.category}</p>
                                 <div className="text-2xl font-extrabold text-stone-900">
-                                    {product.pricePerUnit.toLocaleString()} <span className="text-sm text-stone-400 font-medium">{club.currencyName}</span>
+                                    {(product.price ?? 0).toLocaleString()} <span className="text-sm text-stone-400 font-medium">{club.currencyName}</span>
                                 </div>
                             </div>
                         ))}
@@ -95,9 +95,9 @@ export default function Theme2CleanFresh({ club, membershipPlans, todaysSpecial,
                                     <div className="absolute top-0 inset-x-0 h-1" style={{ backgroundColor: primaryColor }}></div>
                                 )}
                                 <h3 className="text-xl font-bold text-stone-900 mb-2">{plan.name}</h3>
-                                <p className="text-stone-500 text-sm mb-6">{plan.durationDays} Days Access</p>
+                                <p className="text-stone-500 text-sm mb-6">{plan.durationDays ?? 0} Days Access</p>
                                 <div className="mb-8">
-                                    <span className="text-4xl font-extrabold text-stone-900">{plan.price.toLocaleString()}</span>
+                                    <span className="text-4xl font-extrabold text-stone-900">{(plan.price ?? 0).toLocaleString()}</span>
                                     <span className="text-stone-500 font-medium ml-2">{club.currencyName}</span>
                                 </div>
                                 <ul className="space-y-4 mb-8 flex-1">

@@ -61,8 +61,8 @@ export default function Theme3PremiumGold({ club, membershipPlans, todaysSpecial
                                     <div className="w-full aspect-[4/3] bg-neutral-800 mb-6 flex items-center justify-center p-8 transition-colors group-hover:bg-neutral-800/80">
                                         <h3 className="text-2xl font-serif text-white">{product.name}</h3>
                                     </div>
-                                    <p className="text-neutral-400 text-sm mb-4">{product.notes}</p>
-                                    <p className="text-lg text-white tracking-widest">{product.pricePerUnit.toLocaleString()} {club.currencyName}</p>
+                                    <p className="text-neutral-400 text-sm mb-4">{product.category}</p>
+                                    <p className="text-lg text-white tracking-widest">{(product.price ?? 0).toLocaleString()} {club.currencyName}</p>
                                 </div>
                             ))}
                         </div>
@@ -80,9 +80,9 @@ export default function Theme3PremiumGold({ club, membershipPlans, todaysSpecial
                     {membershipPlans.map(plan => (
                         <div key={plan.id} className="border border-neutral-800 p-10 flex flex-col items-center text-center transition-all hover:border-neutral-600 bg-neutral-900/50">
                             <h3 className="text-xl text-white uppercase tracking-widest mb-2 font-serif">{plan.name}</h3>
-                            <p className="text-xs text-neutral-500 uppercase tracking-widest mb-8">{plan.durationDays} Days</p>
+                            <p className="text-xs text-neutral-500 uppercase tracking-widest mb-8">{plan.durationDays ?? 0} Days</p>
                             <p className="text-3xl text-white mb-10" style={{ color: goldAccent }}>
-                                {plan.price.toLocaleString()} <span className="text-sm text-neutral-500">{club.currencyName}</span>
+                                {(plan.price ?? 0).toLocaleString()} <span className="text-sm text-neutral-500">{club.currencyName}</span>
                             </p>
                             <ul className="space-y-4 mb-12 flex-1 w-full text-sm text-neutral-400 text-left border-t border-neutral-800 pt-8">
                                 {plan.benefits.map((benefit, i) => (

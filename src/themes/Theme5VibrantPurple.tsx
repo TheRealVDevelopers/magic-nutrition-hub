@@ -66,9 +66,9 @@ export default function Theme5VibrantPurple({ club, membershipPlans, todaysSpeci
                         {todaysSpecial.map(product => (
                             <div key={product.id} className="bg-white p-8 rounded-[2rem] shadow-sm hover:shadow-xl hover:-translate-y-2 transition-all border border-slate-100 group">
                                 <h3 className="text-2xl font-bold mb-2 group-hover:text-violet-600 transition-colors">{product.name}</h3>
-                                <p className="text-slate-500 mb-8">{product.notes}</p>
+                                <p className="text-slate-500 mb-8">{product.category}</p>
                                 <div className="flex justify-between items-center px-6 py-4 bg-slate-50 rounded-2xl">
-                                    <span className="font-extrabold text-2xl">{product.pricePerUnit}</span>
+                                    <span className="font-extrabold text-2xl">{product.price}</span>
                                     <span className="text-slate-400 font-bold">{club.currencyName}</span>
                                 </div>
                             </div>
@@ -89,7 +89,7 @@ export default function Theme5VibrantPurple({ club, membershipPlans, todaysSpeci
                             <div key={plan.id} className="bg-slate-800 rounded-[2.5rem] p-8 flex flex-col border border-slate-700 relative overflow-hidden">
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-bl-full pointer-events-none"></div>
                                 <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
-                                <p className="text-slate-400 font-medium mb-6">{plan.durationDays} Days</p>
+                                <p className="text-slate-400 font-medium mb-6">{plan.durationDays ?? 0} Days</p>
                                 <div className="mb-8">
                                     <span className="text-5xl font-extrabold" style={{ color: primaryColor }}>{plan.price}</span>
                                     <span className="text-slate-400 text-sm font-bold ml-2">{club.currencyName}</span>

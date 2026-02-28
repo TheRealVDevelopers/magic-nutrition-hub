@@ -70,9 +70,9 @@ export default function Theme4OceanCalm({ club, membershipPlans, todaysSpecial, 
                             {todaysSpecial.map(product => (
                                 <div key={product.id} className="bg-slate-50 rounded-3xl p-8 hover:-translate-y-1 transition-transform border border-slate-100">
                                     <h3 className="text-xl font-medium text-slate-800 mb-3">{product.name}</h3>
-                                    <p className="text-slate-500 mb-6 min-h-[50px]">{product.notes}</p>
+                                    <p className="text-slate-500 mb-6 min-h-[50px]">{product.category}</p>
                                     <div className="flex items-center justify-between">
-                                        <span className="text-lg font-medium text-slate-600">{product.pricePerUnit} {club.currencyName}</span>
+                                        <span className="text-lg font-medium text-slate-600">{product.price} {club.currencyName}</span>
                                         <div className="w-8 h-8 rounded-full flex items-center justify-center bg-white shadow-sm" style={{ color: primaryColor }}>
                                             +
                                         </div>
@@ -94,7 +94,7 @@ export default function Theme4OceanCalm({ club, membershipPlans, todaysSpecial, 
                     {membershipPlans.map((plan, idx) => (
                         <div key={plan.id} className={`bg-white rounded-3xl p-8 shadow-sm border border-slate-100 flex flex-col ${idx === 1 ? 'md:-translate-y-4 shadow-md' : ''}`}>
                             <h3 className="text-2xl font-medium text-slate-800 mb-2">{plan.name}</h3>
-                            <p className="text-sm text-slate-400 mb-6">{plan.durationDays} Days</p>
+                            <p className="text-sm text-slate-400 mb-6">{plan.durationDays ?? 0} Days</p>
                             <div className="text-4xl text-slate-800 font-light mb-8">
                                 {plan.price} <span className="text-lg text-slate-400">{club.currencyName}</span>
                             </div>

@@ -75,10 +75,10 @@ export default function Theme9NightMode({ club, membershipPlans, todaysSpecial, 
                                         0{idx + 1}
                                     </div>
                                     <h3 className="text-xl font-bold text-white mb-2 group-hover:text-zinc-300">{product.name}</h3>
-                                    <p className="text-zinc-500 text-sm mb-8 min-h-[60px]">{product.notes}</p>
+                                    <p className="text-zinc-500 text-sm mb-8 min-h-[60px]">{product.category}</p>
                                     <div className="flex justify-between items-baseline border-t border-zinc-900 pt-6">
                                         <div className="font-mono text-xl text-white">
-                                            {product.pricePerUnit} <span className="text-xs text-zinc-600 ml-1">{club.currencyName}</span>
+                                            {product.price} <span className="text-xs text-zinc-600 ml-1">{club.currencyName}</span>
                                         </div>
                                         <span className="text-[10px] uppercase tracking-widest font-bold" style={{ color: neonGlow }}>Available</span>
                                     </div>
@@ -109,7 +109,7 @@ export default function Theme9NightMode({ club, membershipPlans, todaysSpecial, 
                                 {idx === 1 && <div className="absolute -top-px left-0 w-full h-1" style={{ backgroundColor: neonGlow, boxShadow: neonShadow }}></div>}
 
                                 <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-1">{plan.name}</h3>
-                                <p className="font-mono text-xs text-zinc-500 mb-8 uppercase tracking-widest pl-0.5">{plan.durationDays} Cycles</p>
+                                <p className="font-mono text-xs text-zinc-500 mb-8 uppercase tracking-widest pl-0.5">{plan.durationDays ?? 0} Cycles</p>
 
                                 <div className="mb-10 pl-0.5">
                                     <span className="text-5xl font-black text-white">{plan.price}</span>

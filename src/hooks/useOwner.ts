@@ -241,7 +241,7 @@ export function useAssignMembership() {
             const now = Timestamp.now();
             const newBalance = wallet.balance - plan.price;
             const start = new Date();
-            const end = new Date(start.getTime() + plan.durationDays * 86400000);
+            const end = new Date(start.getTime() + (plan.durationDays ?? 0) * 86400000);
 
             // Deduct wallet
             batch.update(doc(db, "wallets", memberId), { balance: newBalance, lastUpdated: now });

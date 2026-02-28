@@ -36,7 +36,7 @@ export default function PlanCard({ plan, onEdit, onToggle, isToggling }: Props) 
             </div>
 
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                <div className="flex items-center gap-1"><Clock className="w-4 h-4" /> {plan.durationDays} days</div>
+                <div className="flex items-center gap-1"><Clock className="w-4 h-4" /> {plan.durationDays ?? 0} days</div>
                 <div className="flex items-center gap-1"><Coins className="w-4 h-4" /> {plan.price} {club?.currencyName}</div>
             </div>
 

@@ -55,9 +55,9 @@ export default function Theme8SunsetWarm({ club, membershipPlans, todaysSpecial,
                                     ✨
                                 </div>
                                 <h3 className="text-2xl font-bold mb-3 text-orange-900">{product.name}</h3>
-                                <p className="text-orange-950/60 mb-8 min-h-[60px] leading-relaxed">{product.notes}</p>
+                                <p className="text-orange-950/60 mb-8 min-h-[60px] leading-relaxed">{product.category}</p>
                                 <div className="flex items-end gap-2 border-t border-orange-50 pt-4">
-                                    <span className="text-3xl font-extrabold text-orange-600">{product.pricePerUnit.toLocaleString()}</span>
+                                    <span className="text-3xl font-extrabold text-orange-600">{(product.price ?? 0).toLocaleString()}</span>
                                     <span className="text-sm font-bold text-orange-400 uppercase mb-1">{club.currencyName}</span>
                                 </div>
                             </div>
@@ -82,9 +82,9 @@ export default function Theme8SunsetWarm({ club, membershipPlans, todaysSpecial,
                                     </div>
                                 )}
                                 <h3 className="text-2xl font-extrabold text-orange-900 mb-1">{plan.name}</h3>
-                                <p className="text-orange-500 font-bold text-sm uppercase mb-8">{plan.durationDays} Days Duration</p>
+                                <p className="text-orange-500 font-bold text-sm uppercase mb-8">{plan.durationDays ?? 0} Days Duration</p>
                                 <div className="flex items-baseline gap-2 mb-10">
-                                    <span className="text-5xl font-extrabold text-orange-600">{plan.price.toLocaleString()}</span>
+                                    <span className="text-5xl font-extrabold text-orange-600">{(plan.price ?? 0).toLocaleString()}</span>
                                     <span className="text-orange-400 font-bold uppercase">{club.currencyName}</span>
                                 </div>
                                 <ul className="space-y-4 mb-10 flex-1">

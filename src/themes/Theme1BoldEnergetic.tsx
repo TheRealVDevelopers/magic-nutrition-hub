@@ -76,9 +76,9 @@ export default function Theme1BoldEnergetic({ club, membershipPlans, todaysSpeci
                                 <div key={product.id} className="group relative bg-slate-950 p-6 border border-white/10 hover:border-white/30 transition-colors">
                                     <div className="w-16 h-1 bg-slate-800 mb-6 group-hover:bg-white transition-colors" style={{ backgroundColor: primaryColor }}></div>
                                     <h4 className="text-2xl font-bold mb-2">{product.name}</h4>
-                                    <p className="text-slate-400 mb-6 min-h-[60px]">{product.notes}</p>
+                                    <p className="text-slate-400 mb-6 min-h-[60px]">{product.category}</p>
                                     <div className="flex justify-between items-center">
-                                        <span className="text-2xl font-black">{product.pricePerUnit.toLocaleString()} {club.currencyName}</span>
+                                        <span className="text-2xl font-black">{(product.price ?? 0).toLocaleString()} {club.currencyName}</span>
                                         <span className="text-xs uppercase font-bold px-3 py-1 bg-white text-black">Available Today</span>
                                     </div>
                                 </div>
@@ -104,18 +104,18 @@ export default function Theme1BoldEnergetic({ club, membershipPlans, todaysSpeci
                             )}
                             <h4 className="text-2xl font-black uppercase mb-2">{plan.name}</h4>
                             <div className="flex items-baseline gap-2 mb-6">
-                                <span className="text-5xl font-black" style={{ color: primaryColor }}>{plan.price.toLocaleString()}</span>
+                                <span className="text-5xl font-black" style={{ color: primaryColor }}>{(plan.price ?? 0).toLocaleString()}</span>
                                 <span className="text-slate-400 font-bold uppercase">{club.currencyName}</span>
                             </div>
                             <ul className="space-y-4 mb-8 flex-1">
                                 {plan.benefits.map((benefit, i) => (
                                     <li key={i} className="flex items-start gap-3 text-slate-300">
-                                        <div className="w-4 h-4 mt-1 bg-white shrink-0" style={{ backgroundColor: primaryColor }} style={{ clipPath: 'polygon(0 0, 100% 50%, 0 100%)' }}></div>
+                                        <div className="w-4 h-4 mt-1 bg-white shrink-0" style={{ backgroundColor: primaryColor, clipPath: 'polygon(0 0, 100% 50%, 0 100%)' }}></div>
                                         <span>{benefit}</span>
                                     </li>
                                 ))}
                             </ul>
-                            <p className="text-sm text-center text-slate-500 font-bold uppercase mb-4">Duration: {plan.durationDays} Days</p>
+                            <p className="text-sm text-center text-slate-500 font-bold uppercase mb-4">Duration: {plan.durationDays ?? 0} Days</p>
                             <a
                                 href="#contact"
                                 className="block w-full text-center py-4 font-bold uppercase tracking-widest bg-white text-black hover:bg-slate-200 transition-colors"

@@ -8,14 +8,18 @@ import {
     Menu,
     X,
     Shield,
+    Settings,
+    Palette,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 
 const navItems = [
-    { title: "Dashboard", path: "/superadmin/dashboard", icon: LayoutDashboard },
-    { title: "Clubs", path: "/superadmin/clubs", icon: Building2 },
-    { title: "Platform Tree", path: "/superadmin/tree", icon: GitBranch },
+    { title: "Dashboard", path: "/superadmin/dashboard", icon: LayoutDashboard, dev: false },
+    { title: "Clubs", path: "/superadmin/clubs", icon: Building2, dev: false },
+    { title: "Platform Tree", path: "/superadmin/tree", icon: GitBranch, dev: false },
+    { title: "Settings", path: "/superadmin/settings", icon: Settings, dev: false },
+    { title: "Theme Testing", path: "/superadmin/theme-test", icon: Palette, dev: true },
 ];
 
 export default function SuperAdminLayout() {
@@ -88,7 +92,14 @@ export default function SuperAdminLayout() {
                                     }`}
                             >
                                 <item.icon className="w-5 h-5 flex-shrink-0" />
-                                {sidebarOpen && <span className="truncate">{item.title}</span>}
+                                {sidebarOpen && (
+                                    <span className="truncate flex-1">{item.title}</span>
+                                )}
+                                {sidebarOpen && item.dev && (
+                                    <span className="flex-shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                        DEV
+                                    </span>
+                                )}
                             </Link>
                         );
                     })}

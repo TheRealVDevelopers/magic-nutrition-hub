@@ -50,9 +50,9 @@ export default function Theme7MinimalWhite({ club, membershipPlans, todaysSpecia
                             <div key={product.id} className="group">
                                 <div className="h-px w-full bg-neutral-200 mb-6 group-hover:bg-black transition-colors"></div>
                                 <h3 className="text-xl font-medium mb-3">{product.name}</h3>
-                                <p className="text-neutral-500 text-sm leading-relaxed min-h-[60px] mb-6">{product.notes}</p>
+                                <p className="text-neutral-500 text-sm leading-relaxed min-h-[60px] mb-6">{product.category}</p>
                                 <div className="flex justify-between items-center">
-                                    <span className="font-bold text-lg">{product.pricePerUnit.toLocaleString()} <span className="text-xs text-neutral-400 ml-1">{club.currencyName}</span></span>
+                                    <span className="font-bold text-lg">{(product.price ?? 0).toLocaleString()} <span className="text-xs text-neutral-400 ml-1">{club.currencyName}</span></span>
                                     <span className="w-2 h-2 rounded-full" style={{ backgroundColor: primaryColor }}></span>
                                 </div>
                             </div>
@@ -73,10 +73,10 @@ export default function Theme7MinimalWhite({ club, membershipPlans, todaysSpecia
                         {membershipPlans.map((plan, idx) => (
                             <div key={plan.id} className={`p-10 md:p-12 hover:bg-neutral-50 transition-colors ${idx !== membershipPlans.length - 1 ? 'border-b md:border-b-0 md:border-r border-neutral-200' : ''}`}>
                                 <h3 className="text-lg font-bold uppercase tracking-widest mb-1">{plan.name}</h3>
-                                <p className="text-xs text-neutral-400 uppercase tracking-widest mb-10">{plan.durationDays} Days</p>
+                                <p className="text-xs text-neutral-400 uppercase tracking-widest mb-10">{plan.durationDays ?? 0} Days</p>
 
                                 <div className="text-5xl font-light tracking-tight mb-12">
-                                    {plan.price.toLocaleString()}
+                                    {(plan.price ?? 0).toLocaleString()}
                                     <span className="text-sm font-bold text-neutral-400 tracking-widest ml-2 uppercase">{club.currencyName}</span>
                                 </div>
 

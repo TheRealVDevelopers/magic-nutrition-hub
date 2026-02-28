@@ -63,10 +63,10 @@ export default function Theme6NatureGreen({ club, membershipPlans, todaysSpecial
                             {todaysSpecial.map((product, idx) => (
                                 <div key={product.id} className={`p-8 border border-white/10 hover:border-white/30 transition-colors ${idx % 2 === 0 ? 'bg-white/5' : 'bg-transparent'}`}>
                                     <h3 className="text-2xl font-bold mb-3">{product.name}</h3>
-                                    <p className="font-sans text-sm opacity-70 mb-6 leading-relaxed min-h-[60px]">{product.notes}</p>
+                                    <p className="font-sans text-sm opacity-70 mb-6 leading-relaxed min-h-[60px]">{product.category}</p>
                                     <div className="flex justify-between items-end font-sans">
                                         <div>
-                                            <span className="text-xl font-bold mr-1">{product.pricePerUnit}</span>
+                                            <span className="text-xl font-bold mr-1">{product.price}</span>
                                             <span className="text-xs uppercase tracking-widest opacity-60">{club.currencyName}</span>
                                         </div>
                                         <div className="text-xs uppercase tracking-widest font-bold px-3 py-1" style={{ backgroundColor: primaryColor, color: '#f4f1ea' }}>Fresh</div>
@@ -89,7 +89,7 @@ export default function Theme6NatureGreen({ club, membershipPlans, todaysSpecial
                         <div key={plan.id} className="bg-white p-10 border border-[#e0ddcd] shadow-sm relative group">
                             <div className="absolute top-0 left-0 w-full h-1 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left" style={{ backgroundColor: primaryColor }}></div>
                             <h3 className="text-2xl font-bold text-[#2d3a2d] mb-1">{plan.name}</h3>
-                            <p className="font-sans text-xs uppercase tracking-widest opacity-60 mb-6">{plan.durationDays} Days</p>
+                            <p className="font-sans text-xs uppercase tracking-widest opacity-60 mb-6">{plan.durationDays ?? 0} Days</p>
                             <div className="mb-8 font-sans">
                                 <span className="text-4xl font-bold text-[#2d3a2d]" style={{ color: primaryColor }}>{plan.price}</span>
                                 <span className="text-sm font-bold opacity-60 ml-2 uppercase">{club.currencyName}</span>
