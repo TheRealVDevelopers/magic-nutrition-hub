@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
     ArrowLeft,
@@ -19,6 +19,9 @@ import {
     History,
     RotateCcw,
     HardDrive,
+    Pencil,
+    X,
+    Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -69,7 +72,7 @@ import {
 import { useClubPayments, useAddPayment } from "@/hooks/superadmin/useClubPayments";
 import { useEnquiries, useUpdateEnquiryStatus, exportEnquiriesToCSV } from "@/hooks/superadmin/useEnquiries";
 import { useClubCostEstimate } from "@/hooks/superadmin/useFirebaseUsage";
-import { ref, uploadString, getDownloadURL } from "firebase/storage";
+import { ref, uploadString, getDownloadURL, getBytes } from "firebase/storage";
 import { doc, updateDoc, arrayUnion, Timestamp } from "firebase/firestore";
 import { storage, db } from "@/lib/firebase";
 import type { Club, LandingImage, Enquiry } from "@/types/firestore";
@@ -196,6 +199,7 @@ export default function ClubDetail() {
 
 function ClubInfoTab({ club }: { club: Club }) {
     const { toast } = useToast();
+    const navigate = useNavigate();
     const updateClub = useUpdateClub();
     const toggleStatus = useToggleClubStatus();
 
@@ -477,24 +481,197 @@ function ClubInfoTab({ club }: { club: Club }) {
 
 // ─── Tab 2: Landing Page ──────────────────────────────────────────────────
 
+// Reads a file from Firebase Storage using the SDK — avoids CORS entirely.
+// Works for both authenticated and public Storage URLs.
+async function readStorageUrl(url: string): Promise<string> {
+    const match = url.match(/\/o\/([^?#]+)/);
+    if (!match) throw new Error("Cannot parse Storage URL: " + url);
+    const storagePath = decodeURIComponent(match[1]);
+    const fileRef = ref(storage, storagePath);
+    const bytes = await getBytes(fileRef);
+    return new TextDecoder("utf-8").decode(bytes);
+}
+
+// Dialog step: null = closed, "first" = first confirm, "second" = final confirm
+type PublishStep = null | "first" | "second";
+// Restore state per-version
+interface RestoreTarget { url: string; version: number }
+
 function LandingPageTab({ clubId, club }: { clubId: string; club: Club }) {
     const { toast } = useToast();
     const { userProfile } = useAuth();
     const images = club.landingPageImages ?? [];
     const history = club.landingPageHistory ?? [];
 
-    const [imageLabel, setImageLabel] = useState("");
-    const [imageFile, setImageFile] = useState<File | null>(null);
+    // ── HTML editor state ──────────────────────────────────────────────
+    const [htmlContent, setHtmlContent]   = useState("");
+    const [savedHtml, setSavedHtml]       = useState("");   // last fetched/published value
+    const [fetchingHtml, setFetchingHtml] = useState(false);
+    const [editMode, setEditMode]         = useState(false);
+    const [publishing, setPublishing]     = useState(false);
+    const [publishStep, setPublishStep]   = useState<PublishStep>(null);
+
+    // ── Preview modals ─────────────────────────────────────────────────
+    const [livePreviewOpen, setLivePreviewOpen]   = useState(false);
+    const [versionPreviewUrl, setVersionPreviewUrl] = useState<string | null>(null);
+
+    // ── Restore state ──────────────────────────────────────────────────
+    const [restoreTarget, setRestoreTarget]   = useState<RestoreTarget | null>(null);
+    const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
+    const [restoring, setRestoring]           = useState(false);
+
+    // ── Image state ────────────────────────────────────────────────────
+    const [imageLabel, setImageLabel]   = useState("");
+    const [imageFile, setImageFile]     = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { upload, uploading: imageUploading, progress: imageProgress } = useUploadLandingImage(clubId);
-    const { deleteImage, deleting } = useDeleteLandingImage(clubId);
-    const [copiedId, setCopiedId] = useState<string | null>(null);
+    const { deleteImage, deleting }     = useDeleteLandingImage(clubId);
+    const [copiedId, setCopiedId]       = useState<string | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-    const [htmlContent, setHtmlContent] = useState("");
-    const { uploadHTML, uploading: htmlUploading } = useUploadLandingHTML(clubId);
-    const [publishing, setPublishing] = useState(false);
+    // ── useUploadLandingHTML kept for compatibility (not used for upload path below) ──
+    useUploadLandingHTML(clubId); // keeps the hook alive; we do the upload manually
 
+    // ── Auto-load current HTML whenever the landing page URL changes ──
+    useEffect(() => {
+        let cancelled = false;
+
+        if (!club.landingPageUrl) {
+            setHtmlContent("");
+            setSavedHtml("");
+            setFetchingHtml(false);
+            return;
+        }
+
+        setFetchingHtml(true);
+
+        readStorageUrl(club.landingPageUrl)
+            .then((text) => {
+                if (cancelled) return;
+                setHtmlContent(text);
+                setSavedHtml(text);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                toast({ title: "Could not load current HTML", variant: "destructive" });
+            })
+            .finally(() => {
+                if (!cancelled) setFetchingHtml(false);
+            });
+
+        return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [club.landingPageUrl]);
+
+    // ── Helpers ────────────────────────────────────────────────────────
+    function enterEditMode()  { setEditMode(true); }
+    function cancelEdit()     { setHtmlContent(savedHtml); setEditMode(false); }
+
+    // Step 1 of publish flow
+    function requestPublish() {
+        if (!htmlContent.trim()) return;
+        setPublishStep("first");
+    }
+
+    // Step 2 — user clicked "Yes, Review"
+    function advanceToSecondConfirm() { setPublishStep("second"); }
+
+    // Actual publish — called only after both confirmations
+    async function executePublish() {
+        setPublishStep(null);
+        setPublishing(true);
+        try {
+            // a) Save current live URL to history first
+            if (club.landingPageUrl) {
+                const nextVer = (history.length ?? 0) + 1;
+                await updateDoc(doc(db, "clubs", clubId), {
+                    landingPageHistory: arrayUnion({
+                        version: nextVer,
+                        url: club.landingPageUrl,
+                        publishedAt: Timestamp.now(),
+                        publishedBy: userProfile?.name ?? "Unknown",
+                        label: `Version ${nextVer}`,
+                    }),
+                });
+            }
+
+            // b) Upload with timestamped filename so old files are NOT overwritten
+            const ts = Date.now();
+            const htmlRef = ref(storage, `clubs/${clubId}/landing/landing_${ts}.html`);
+            await uploadString(htmlRef, htmlContent, "raw", { contentType: "text/html" });
+            const newUrl = await getDownloadURL(htmlRef);
+
+            // c) Update Firestore with new URL
+            await updateDoc(doc(db, "clubs", clubId), { landingPageUrl: newUrl });
+
+            // d) Keep textarea content (do NOT clear it)
+            setSavedHtml(htmlContent);
+
+            // e) Back to read-only
+            setEditMode(false);
+
+            toast({ title: "✅ Published successfully" });
+        } catch (err: unknown) {
+            toast({
+                title: "Publish failed — your HTML was not cleared",
+                description: err instanceof Error ? err.message : "Unknown error",
+                variant: "destructive",
+            });
+        } finally {
+            setPublishing(false);
+        }
+    }
+
+    // ── Restore ────────────────────────────────────────────────────────
+    function openRestoreConfirm(target: RestoreTarget) {
+        setRestoreTarget(target);
+        setRestoreConfirmOpen(true);
+    }
+
+    async function executeRestore() {
+        if (!restoreTarget) return;
+        setRestoreConfirmOpen(false);
+        setRestoring(true);
+        try {
+            // Save current live URL to history
+            if (club.landingPageUrl) {
+                const nextVer = (history.length ?? 0) + 1;
+                await updateDoc(doc(db, "clubs", clubId), {
+                    landingPageHistory: arrayUnion({
+                        version: nextVer,
+                        url: club.landingPageUrl,
+                        publishedAt: Timestamp.now(),
+                        publishedBy: userProfile?.name ?? "Unknown",
+                        label: `Version ${nextVer}`,
+                    }),
+                });
+            }
+
+            // Set the restored URL as the new live URL
+            await updateDoc(doc(db, "clubs", clubId), {
+                landingPageUrl: restoreTarget.url,
+            });
+
+            // Load restored HTML into textarea via Storage SDK (no CORS)
+            const html = await readStorageUrl(restoreTarget.url);
+            setHtmlContent(html);
+            setSavedHtml(html);
+            setEditMode(false);
+
+            toast({ title: `✅ Restored to Version ${restoreTarget.version}` });
+        } catch (err: unknown) {
+            toast({
+                title: "Restore failed",
+                description: err instanceof Error ? err.message : "Unknown error",
+                variant: "destructive",
+            });
+        } finally {
+            setRestoring(false);
+            setRestoreTarget(null);
+        }
+    }
+
+    // ── Image helpers ──────────────────────────────────────────────────
     async function handleImageUpload() {
         if (!imageFile || !imageLabel) return;
         try {
@@ -524,124 +701,197 @@ function LandingPageTab({ clubId, club }: { clubId: string; club: Club }) {
         setTimeout(() => setCopiedId(null), 2000);
     }
 
-    async function handlePublishHTML() {
-        if (!htmlContent.trim()) return;
-        setPublishing(true);
-        try {
-            // Save current version to history first
-            if (club.landingPageUrl) {
-                const nextVersion = (history.length ?? 0) + 1;
-                await updateDoc(doc(db, "clubs", clubId), {
-                    landingPageHistory: arrayUnion({
-                        version: nextVersion,
-                        url: club.landingPageUrl,
-                        publishedAt: Timestamp.now(),
-                        publishedBy: userProfile?.name ?? "Unknown",
-                    }),
-                });
-            }
-            await uploadHTML(htmlContent);
-            toast({ title: "Landing page published!" });
-            setHtmlContent("");
-        } catch {
-            toast({ title: "Publish failed", variant: "destructive" });
-        } finally {
-            setPublishing(false);
-        }
+    // ── Format timestamp for version history ──────────────────────────
+    function formatVersionDate(ts: { toDate?: () => Date } | null | undefined) {
+        if (!ts?.toDate) return "—";
+        const d = ts.toDate();
+        return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+             + " · "
+             + d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
     }
 
-    async function handleRestore(versionUrl: string, versionNum: number) {
-        setPublishing(true);
-        try {
-            // Fetch HTML from version URL
-            const res = await fetch(versionUrl);
-            const html = await res.text();
-
-            // Save current as history
-            if (club.landingPageUrl) {
-                const nextVersion = (history.length ?? 0) + 1;
-                await updateDoc(doc(db, "clubs", clubId), {
-                    landingPageHistory: arrayUnion({
-                        version: nextVersion,
-                        url: club.landingPageUrl,
-                        publishedAt: Timestamp.now(),
-                        publishedBy: userProfile?.name ?? "Unknown",
-                    }),
-                });
-            }
-
-            // Upload restored version as new landing page
-            const htmlRef = ref(storage, `clubs/${clubId}/landing.html`);
-            await uploadString(htmlRef, html, "raw", { contentType: "text/html" });
-            const url = await getDownloadURL(htmlRef);
-            await updateDoc(doc(db, "clubs", clubId), { landingPageUrl: url });
-
-            toast({ title: `Version ${versionNum} restored!` });
-        } catch {
-            toast({ title: "Restore failed", variant: "destructive" });
-        } finally {
-            setPublishing(false);
-        }
-    }
-
+    // ── Render ─────────────────────────────────────────────────────────
     return (
         <div className="space-y-6 max-w-3xl">
-            {/* Status */}
-            <div className="bg-white rounded-2xl border p-5 space-y-3">
-                <h3 className="font-semibold text-sm">Current Status</h3>
-                {club.landingPageUrl ? (
-                    <div className="flex items-center gap-3">
-                        <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">Live</Badge>
-                        <a
-                            href={club.landingPageUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-violet-600 hover:underline flex items-center gap-1"
-                        >
-                            View Live Page <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                    </div>
-                ) : (
-                    <div className="flex items-center gap-3">
-                        <Badge className="border-orange-200 bg-orange-50 text-orange-700">No Page</Badge>
-                        <p className="text-sm text-muted-foreground">Upload HTML below to publish this club's landing page.</p>
-                    </div>
+
+            {/* ── Status bar ─────────────────────────────────────────── */}
+            <div className="bg-white rounded-2xl border p-5 flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-3">
+                    {club.landingPageUrl ? (
+                        <>
+                            <Badge className="border-emerald-200 bg-emerald-50 text-emerald-700">Live</Badge>
+                            <a
+                                href={club.landingPageUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-violet-600 hover:underline flex items-center gap-1"
+                            >
+                                Open URL <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                        </>
+                    ) : (
+                        <>
+                            <Badge className="border-orange-200 bg-orange-50 text-orange-700">No Page</Badge>
+                            <p className="text-sm text-muted-foreground">No landing page yet — paste HTML below and publish.</p>
+                        </>
+                    )}
+                </div>
+                {club.landingPageUrl && (
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 text-xs"
+                        onClick={() => setLivePreviewOpen(true)}
+                    >
+                        <Eye className="w-3.5 h-3.5" />
+                        Preview Live Page
+                    </Button>
                 )}
             </div>
 
-            {/* Version History */}
-            {history.length > 0 && (
-                <div className="bg-white rounded-2xl border p-5 space-y-3">
-                    <div className="flex items-center gap-2">
-                        <History className="w-4 h-4 text-muted-foreground" />
-                        <h3 className="font-semibold text-sm">Version History</h3>
+            {/* ── HTML Editor card ────────────────────────────────────── */}
+            <div className="bg-white rounded-2xl border overflow-hidden">
+                {/* Card header */}
+                <div className="flex items-center justify-between px-5 py-4 border-b bg-gray-50">
+                    <div>
+                        <h3 className="font-semibold text-sm">HTML Editor</h3>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            {editMode
+                                ? "Edit mode — make changes then click Publish"
+                                : "Read-only — click Edit to make changes"}
+                        </p>
                     </div>
-                    <div className="space-y-2">
-                        {[...history].reverse().map((v, i) => (
-                            <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border">
-                                <div>
-                                    <p className="text-sm font-medium">Version {v.version}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                        {v.publishedBy} · {formatDate(v.publishedAt as { toDate?: () => Date })}
-                                    </p>
-                                </div>
+                    <div className="flex items-center gap-2">
+                        {!editMode && !fetchingHtml && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 text-xs"
+                                onClick={enterEditMode}
+                            >
+                                <Pencil className="w-3.5 h-3.5" />
+                                Edit
+                            </Button>
+                        )}
+                        {editMode && (
+                            <>
                                 <Button
                                     size="sm"
                                     variant="outline"
-                                    className="gap-1 text-xs"
+                                    className="gap-1.5 text-xs"
+                                    onClick={cancelEdit}
                                     disabled={publishing}
-                                    onClick={() => handleRestore(v.url, v.version)}
                                 >
-                                    <RotateCcw className="w-3 h-3" />
-                                    Restore
+                                    <X className="w-3.5 h-3.5" />
+                                    Cancel
                                 </Button>
-                            </div>
-                        ))}
+                                <Button
+                                    size="sm"
+                                    className="gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                                    onClick={requestPublish}
+                                    disabled={!htmlContent.trim() || publishing}
+                                >
+                                    {publishing
+                                        ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Publishing…</>
+                                        : <><Upload className="w-3.5 h-3.5" /> Publish</>}
+                                </Button>
+                            </>
+                        )}
                     </div>
                 </div>
-            )}
 
-            {/* Images */}
+                {/* Textarea body */}
+                <div className="p-5 space-y-3">
+                    {fetchingHtml ? (
+                        <div className="flex items-center justify-center min-h-[300px] gap-3 text-muted-foreground">
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <span className="text-sm">Loading current HTML…</span>
+                        </div>
+                    ) : (
+                        <textarea
+                            value={htmlContent}
+                            onChange={(e) => editMode && setHtmlContent(e.target.value)}
+                            readOnly={!editMode}
+                            placeholder={club.landingPageUrl
+                                ? "Loading HTML…"
+                                : "No landing page yet. Click Edit and paste your complete HTML here to publish."}
+                            className={[
+                                "w-full min-h-[480px] font-mono text-sm p-4 rounded-xl border resize-y",
+                                "focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-colors",
+                                editMode
+                                    ? "bg-white cursor-text"
+                                    : "bg-gray-50 text-gray-600 cursor-default select-text",
+                            ].join(" ")}
+                        />
+                    )}
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{htmlContent.length.toLocaleString()} characters</span>
+                        {editMode && htmlContent !== savedHtml && (
+                            <span className="text-orange-500 font-medium">Unsaved changes</span>
+                        )}
+                    </div>
+                </div>
+            </div>
+
+            {/* ── Version History ─────────────────────────────────────── */}
+            <div className="bg-white rounded-2xl border overflow-hidden">
+                <div className="flex items-center gap-2 px-5 py-4 border-b bg-gray-50">
+                    <History className="w-4 h-4 text-muted-foreground" />
+                    <h3 className="font-semibold text-sm">Version History</h3>
+                    {history.length > 0 && (
+                        <Badge variant="outline" className="text-xs ml-1">{history.length}</Badge>
+                    )}
+                </div>
+                <div className="p-4">
+                    {history.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-6">
+                            No previous versions yet.<br />
+                            <span className="text-xs">Previous versions will appear here after each publish.</span>
+                        </p>
+                    ) : (
+                        <div className="space-y-2">
+                            {[...history].reverse().map((v, i) => (
+                                <div
+                                    key={i}
+                                    className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border hover:bg-gray-100 transition-colors"
+                                >
+                                    <div>
+                                        <p className="text-sm font-medium">Version {v.version}</p>
+                                        <p className="text-xs text-muted-foreground">
+                                            {formatVersionDate(v.publishedAt as { toDate?: () => Date })}
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            className="gap-1 text-xs h-8"
+                                            onClick={() => setVersionPreviewUrl(v.url)}
+                                        >
+                                            <Eye className="w-3.5 h-3.5" />
+                                            Preview
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="gap-1 text-xs h-8"
+                                            disabled={restoring}
+                                            onClick={() => openRestoreConfirm({ url: v.url, version: v.version })}
+                                        >
+                                            {restoring && restoreTarget?.version === v.version
+                                                ? <Loader2 className="w-3 h-3 animate-spin" />
+                                                : <RotateCcw className="w-3 h-3" />}
+                                            Restore
+                                        </Button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* ── Image Manager ───────────────────────────────────────── */}
             <div className="bg-white rounded-2xl border p-5 space-y-4">
                 <h3 className="font-semibold text-sm">Image Manager</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -696,24 +946,145 @@ function LandingPageTab({ clubId, club }: { clubId: string; club: Club }) {
                 )}
             </div>
 
-            {/* HTML Editor */}
-            <div className="bg-white rounded-2xl border p-5 space-y-4">
-                <h3 className="font-semibold text-sm">HTML Editor</h3>
-                <p className="text-xs text-muted-foreground">Paste complete HTML. On publish, current version is saved to history.</p>
-                <Textarea
-                    value={htmlContent}
-                    onChange={(e) => setHtmlContent(e.target.value)}
-                    placeholder="Paste your complete HTML here..."
-                    className="min-h-[400px] font-mono text-sm resize-y"
-                />
-                <div className="flex items-center justify-between">
-                    <p className="text-xs text-muted-foreground">{htmlContent.length.toLocaleString()} characters</p>
-                </div>
-                <Button disabled={!htmlContent.trim() || htmlUploading || publishing} onClick={handlePublishHTML} className="gap-2">
-                    <Upload className="w-4 h-4" />
-                    {htmlUploading || publishing ? "Publishing…" : "Publish Landing Page"}
-                </Button>
-            </div>
+            {/* ════════════════════════════════════════════════════════
+                DIALOGS — using Dialog (not AlertDialog) so we control
+                close timing ourselves and prevent premature dismissal.
+            ════════════════════════════════════════════════════════ */}
+
+            {/* Publish step 1 */}
+            <Dialog open={publishStep === "first"} onOpenChange={(o) => { if (!o) setPublishStep(null); }}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Are you sure you want to publish?</DialogTitle>
+                        <p className="text-sm text-muted-foreground pt-1">
+                            This will update the live landing page for <strong>{club.name}</strong>.
+                            The current version will be saved to history before updating.
+                        </p>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 pt-2">
+                        <Button variant="outline" onClick={() => setPublishStep(null)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                            onClick={() => {
+                                // explicitly advance — do NOT let Dialog close first
+                                setPublishStep("second");
+                            }}
+                        >
+                            Yes, Review →
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Publish step 2 — final confirmation */}
+            <Dialog open={publishStep === "second"} onOpenChange={(o) => { if (!o) setPublishStep(null); }}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Final confirmation — publish now?</DialogTitle>
+                        <p className="text-sm text-muted-foreground pt-1">
+                            Current live version will be saved to history first, then the new HTML will go live.
+                            This cannot be automatically undone (you can restore from history).
+                        </p>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 pt-2">
+                        <Button variant="outline" onClick={() => setPublishStep("first")}>
+                            ← Go Back
+                        </Button>
+                        <Button
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                            disabled={publishing}
+                            onClick={() => {
+                                setPublishStep(null);
+                                executePublish();
+                            }}
+                        >
+                            {publishing
+                                ? <><Loader2 className="w-4 h-4 animate-spin mr-1" /> Publishing…</>
+                                : "Publish Now"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Restore confirmation */}
+            <Dialog open={restoreConfirmOpen} onOpenChange={(o) => { if (!o) { setRestoreConfirmOpen(false); setRestoreTarget(null); } }}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Restore Version {restoreTarget?.version}?</DialogTitle>
+                        <p className="text-sm text-muted-foreground pt-1">
+                            The current live version will be saved to history before restoring.
+                            Version {restoreTarget?.version} will become the new live landing page.
+                        </p>
+                    </DialogHeader>
+                    <DialogFooter className="gap-2 pt-2">
+                        <Button variant="outline" onClick={() => { setRestoreConfirmOpen(false); setRestoreTarget(null); }}>
+                            Cancel
+                        </Button>
+                        <Button
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                            disabled={restoring}
+                            onClick={() => {
+                                setRestoreConfirmOpen(false);
+                                executeRestore();
+                            }}
+                        >
+                            {restoring
+                                ? <><Loader2 className="w-4 h-4 animate-spin mr-1" /> Restoring…</>
+                                : `Restore Version ${restoreTarget?.version}`}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Live page preview modal */}
+            <Dialog open={livePreviewOpen} onOpenChange={setLivePreviewOpen}>
+                <DialogContent className="max-w-5xl w-full h-[90vh] flex flex-col p-0">
+                    <DialogHeader className="px-5 py-4 border-b flex-shrink-0">
+                        <div className="flex items-center justify-between">
+                            <DialogTitle className="text-sm">Live Page Preview — {club.name}</DialogTitle>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setLivePreviewOpen(false)}>
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </div>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-hidden">
+                        {club.landingPageUrl && (
+                            <iframe
+                                src={club.landingPageUrl}
+                                title="Live Landing Page Preview"
+                                className="w-full h-full border-0"
+                                sandbox="allow-same-origin allow-scripts"
+                            />
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Version preview modal */}
+            <Dialog open={!!versionPreviewUrl} onOpenChange={(o) => !o && setVersionPreviewUrl(null)}>
+                <DialogContent className="max-w-5xl w-full h-[90vh] flex flex-col p-0">
+                    <DialogHeader className="px-5 py-4 border-b flex-shrink-0">
+                        <div className="flex items-center justify-between">
+                            <DialogTitle className="text-sm">Version Preview</DialogTitle>
+                            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setVersionPreviewUrl(null)}>
+                                <X className="w-4 h-4" />
+                            </Button>
+                        </div>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-hidden">
+                        {versionPreviewUrl && (
+                            <iframe
+                                src={versionPreviewUrl}
+                                title="Version Preview"
+                                className="w-full h-full border-0"
+                                sandbox="allow-same-origin allow-scripts"
+                            />
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }
