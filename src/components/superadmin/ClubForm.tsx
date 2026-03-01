@@ -11,21 +11,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { ColorPicker } from "@/components/ui/ColorPicker";
 import { useAllClubs } from "@/hooks/useSuperAdmin";
-import type { Club } from "@/types/firestore";
-
-const THEMES = [
-    { id: "theme_1", color: "#f97316", label: "Bold & Energetic" },
-    { id: "theme_2", color: "#22c55e", label: "Clean & Fresh" },
-    { id: "theme_3", color: "#eab308", label: "Premium Gold" },
-    { id: "theme_4", color: "#0ea5e9", label: "Ocean Calm" },
-    { id: "theme_5", color: "#a855f7", label: "Vibrant Purple" },
-    { id: "theme_6", color: "#15803d", label: "Nature Green" },
-    { id: "theme_7", color: "#171717", label: "Minimal White" },
-    { id: "theme_8", color: "#f43f5e", label: "Sunset Warm" },
-    { id: "theme_9", color: "#3b82f6", label: "Night Mode" },
-    { id: "theme_10", color: "#ef4444", label: "Classic Red" },
-];
 
 const clubSchema = z.object({
     name: z.string().min(2, "Club name is required"),
@@ -37,8 +24,9 @@ const clubSchema = z.object({
     tagline: z.string().optional(),
     kitchenPin: z.string().regex(/^\d{4}$/, "Must be 4 digits"),
     parentClubId: z.string().optional(),
-    theme: z.string().default("theme_1"),
     primaryColor: z.string().default("#8B5CF6"),
+    secondaryColor: z.string().default("#10B981"),
+    tertiaryColor: z.string().default("#F59E0B"),
 });
 
 export type ClubFormValues = z.infer<typeof clubSchema>;
@@ -70,14 +58,16 @@ export default function ClubForm({ defaultValues, onSubmit, isLoading, mode }: P
             tagline: "",
             kitchenPin: "",
             parentClubId: "",
-            theme: "theme_1",
             primaryColor: "#8B5CF6",
+            secondaryColor: "#10B981",
+            tertiaryColor: "#F59E0B",
             ...defaultValues,
         },
     });
 
-    const selectedTheme = watch("theme");
     const primaryColor = watch("primaryColor");
+    const secondaryColor = watch("secondaryColor");
+    const tertiaryColor = watch("tertiaryColor");
 
     return (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -157,46 +147,29 @@ export default function ClubForm({ defaultValues, onSubmit, isLoading, mode }: P
                 </Select>
             </div>
 
-            {/* Theme Picker */}
-            <div className="space-y-3">
-                <Label>Theme</Label>
-                <div className="flex flex-wrap gap-2">
-                    {THEMES.map((t) => (
-                        <button
-                            key={t.id}
-                            type="button"
-                            onClick={() => {
-                                setValue("theme", t.id);
-                                setValue("primaryColor", t.color);
-                            }}
-                            className={`w-10 h-10 rounded-xl transition-all ${selectedTheme === t.id
-                                ? "ring-2 ring-offset-2 ring-violet-500 scale-110"
-                                : "hover:scale-105"
-                                }`}
-                            style={{ backgroundColor: t.color }}
-                            title={t.label}
-                        />
-                    ))}
-                </div>
+            {/* Colors */}
+            <div className="space-y-1 pt-2">
+                <h3 className="text-sm font-semibold text-foreground">Brand Colors</h3>
+                <p className="text-xs text-muted-foreground">Choose colors used throughout this club's dashboard</p>
             </div>
-
-            {/* Custom Color */}
-            <div className="space-y-2">
-                <Label htmlFor="primaryColor">Primary Color</Label>
-                <div className="flex items-center gap-3">
-                    <input
-                        type="color"
-                        id="primaryColor"
-                        value={primaryColor}
-                        onChange={(e) => setValue("primaryColor", e.target.value)}
-                        className="w-10 h-10 rounded-lg cursor-pointer border-0"
-                    />
-                    <Input
-                        value={primaryColor}
-                        onChange={(e) => setValue("primaryColor", e.target.value)}
-                        className="w-32 font-mono text-sm"
-                    />
-                </div>
+            <div className="space-y-6 p-4 rounded-xl border bg-gray-50">
+                <ColorPicker
+                    label="Primary Color"
+                    value={primaryColor}
+                    onChange={(c) => setValue("primaryColor", c)}
+                />
+                <div className="h-px bg-border" />
+                <ColorPicker
+                    label="Secondary Color"
+                    value={secondaryColor}
+                    onChange={(c) => setValue("secondaryColor", c)}
+                />
+                <div className="h-px bg-border" />
+                <ColorPicker
+                    label="Tertiary Color"
+                    value={tertiaryColor}
+                    onChange={(c) => setValue("tertiaryColor", c)}
+                />
             </div>
 
             {/* Submit */}

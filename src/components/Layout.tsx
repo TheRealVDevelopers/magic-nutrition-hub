@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth, signOutUser } from "@/lib/auth";
+import { useClubContext } from "@/lib/clubDetection";
 import { usePendingTopupRequests } from "@/hooks/useOwner";
 
 const ownerNavItems = [
@@ -55,7 +56,16 @@ export default function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { userProfile } = useAuth();
+  const { club } = useClubContext();
   const { requests: pendingTopups } = usePendingTopupRequests();
+
+  useEffect(() => {
+    if (club) {
+      document.documentElement.style.setProperty("--club-primary", club.primaryColor || "#8B5CF6");
+      document.documentElement.style.setProperty("--club-secondary", club.secondaryColor || "#10B981");
+      document.documentElement.style.setProperty("--club-tertiary", club.tertiaryColor || "#F59E0B");
+    }
+  }, [club]);
 
   const activeNavItems = userProfile?.role === "member" ? memberNavItems : userProfile?.role === "staff" ? staffNavItems : ownerNavItems;
 
@@ -91,7 +101,7 @@ export default function Layout() {
       >
         {/* Brand */}
         <div className={`p-4 md:p-6 border-b border-border flex items-center gap-3 min-h-[72px] ${!sidebarOpen ? "md:justify-center md:px-2" : ""}`}>
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center flex-shrink-0 shadow-premium">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-premium" style={{ backgroundColor: "var(--club-primary)" }}>
             <Leaf className="w-6 h-6 text-white" />
           </div>
           {sidebarOpen && (
@@ -112,11 +122,12 @@ export default function Layout() {
                 to={item.path}
                 onClick={handleNavClick}
                 className={`flex items-center gap-3 md:gap-4 px-3 md:px-4 py-3 rounded-2xl text-sm font-bold transition-all duration-300 group min-h-[44px] touch-manipulation ${!sidebarOpen ? "md:justify-center md:px-2" : ""} ${active
-                  ? "bg-primary text-white shadow-premium"
+                  ? "text-white shadow-premium"
                   : "text-muted-foreground hover:bg-secondary/30 hover:text-primary active:bg-secondary/50"
                   }`}
+                style={active ? { backgroundColor: "var(--club-primary)", borderLeft: "3px solid var(--club-primary)" } : {}}
               >
-                <item.icon className={`w-5 h-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110 ${active ? "text-white" : "text-primary"}`} />
+                <item.icon className={`w-5 h-5 flex-shrink-0 transition-transform duration-300 group-hover:scale-110 ${active ? "text-white" : ""}`} style={!active ? { color: "var(--club-primary)" } : {}} />
                 {sidebarOpen && (
                   <span className="truncate flex-1">{item.title}</span>
                 )}
@@ -139,7 +150,7 @@ export default function Layout() {
         {/* Bottom Profile */}
         <div className={`p-3 md:p-4 bg-secondary/20 m-3 md:m-4 rounded-2xl border border-primary/10 ${!sidebarOpen ? "md:flex md:justify-center" : ""}`}>
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-wellness-forest flex items-center justify-center text-white font-bold flex-shrink-0">{ownerInitials}</div>
+            <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0" style={{ backgroundColor: "var(--club-primary)" }}>{ownerInitials}</div>
             {sidebarOpen && (
               <div className="overflow-hidden min-w-0">
                 <p className="text-sm font-bold text-wellness-forest truncate">{ownerName}</p>
@@ -170,7 +181,7 @@ export default function Layout() {
           </div>
           <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
             <div className="hidden md:flex flex-col text-right mr-2">
-              <p className="text-xs font-black text-primary uppercase tracking-wider">Welcome Back</p>
+              <p className="text-xs font-black uppercase tracking-wider" style={{ color: "var(--club-primary)" }}>Welcome Back</p>
               <p className="text-sm font-bold text-wellness-forest">{ownerName}</p>
             </div>
             <button className="p-2.5 md:p-3 rounded-2xl bg-white border border-border text-muted-foreground hover:text-primary transition-all relative shadow-sm group min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation">
@@ -179,7 +190,7 @@ export default function Layout() {
             </button>
             <div className="h-8 md:h-10 w-px bg-border hidden sm:block" />
             <Button variant="ghost" className="gap-2 md:gap-3 px-2 hover:bg-transparent min-h-[44px] touch-manipulation">
-              <div className="w-9 h-9 md:w-10 md:h-10 rounded-2xl bg-primary flex items-center justify-center text-white text-xs md:text-sm font-black shadow-premium active:scale-95 transition-transform">{ownerInitials}</div>
+              <div className="w-9 h-9 md:w-10 md:h-10 rounded-2xl flex items-center justify-center text-white text-xs md:text-sm font-black shadow-premium active:scale-95 transition-transform" style={{ backgroundColor: "var(--club-primary)" }}>{ownerInitials}</div>
               <ChevronDown className="w-4 h-4 text-muted-foreground hidden sm:inline" />
             </Button>
           </div>

@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --club-primary: #8B5CF6;
+  --club-secondary: #10B981;
+  --club-tertiary: #F59E0B;
+}
+
 @layer base {
   :root {
     --background: 100 33% 98.5%;

@@ -25,19 +25,6 @@ import {
 } from "@/hooks/useSuperAdmin";
 import type { User } from "@/types/firestore";
 
-const THEMES = [
-    { id: "theme_1", color: "#8B5CF6", label: "Violet" },
-    { id: "theme_2", color: "#10B981", label: "Emerald" },
-    { id: "theme_3", color: "#F59E0B", label: "Amber" },
-    { id: "theme_4", color: "#EF4444", label: "Red" },
-    { id: "theme_5", color: "#3B82F6", label: "Blue" },
-    { id: "theme_6", color: "#EC4899", label: "Pink" },
-    { id: "theme_7", color: "#14B8A6", label: "Teal" },
-    { id: "theme_8", color: "#F97316", label: "Orange" },
-    { id: "theme_9", color: "#6366F1", label: "Indigo" },
-    { id: "theme_10", color: "#84CC16", label: "Lime" },
-];
-
 export default function ConvertToClub() {
     const { clubId } = useParams<{ clubId: string }>();
     const navigate = useNavigate();
@@ -57,7 +44,6 @@ export default function ConvertToClub() {
     const [domain, setDomain] = useState("");
     const [tagline, setTagline] = useState("");
     const [kitchenPin, setKitchenPin] = useState("");
-    const [theme, setTheme] = useState("theme_1");
     const [primaryColor, setPrimaryColor] = useState("#8B5CF6");
 
     const filteredMembers = members?.filter((m) => {
@@ -78,7 +64,7 @@ export default function ConvertToClub() {
                     domain,
                     tagline,
                     kitchenPin,
-                    theme,
+                    theme: "custom",
                     primaryColor,
                     parentClubId: clubId,
                 },
@@ -209,23 +195,6 @@ export default function ConvertToClub() {
                         <div className="space-y-2">
                             <Label>Kitchen PIN *</Label>
                             <Input value={kitchenPin} onChange={(e) => setKitchenPin(e.target.value.replace(/\D/g, ""))} maxLength={4} placeholder="1234" />
-                        </div>
-
-                        {/* Theme picker */}
-                        <div className="space-y-2">
-                            <Label>Theme</Label>
-                            <div className="flex flex-wrap gap-2">
-                                {THEMES.map((t) => (
-                                    <button
-                                        key={t.id}
-                                        type="button"
-                                        onClick={() => { setTheme(t.id); setPrimaryColor(t.color); }}
-                                        className={`w-8 h-8 rounded-lg transition-all ${theme === t.id ? "ring-2 ring-offset-2 ring-violet-500 scale-110" : "hover:scale-105"
-                                            }`}
-                                        style={{ backgroundColor: t.color }}
-                                    />
-                                ))}
-                            </div>
                         </div>
 
                         {/* Warning */}

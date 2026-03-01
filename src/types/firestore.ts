@@ -7,6 +7,15 @@ export interface PlatformConfig {
     lastUpdated: Timestamp;
 }
 
+// ─── Landing page images ─────────────────────────────────────────────
+export interface LandingImage {
+    id: string;
+    name: string;
+    url: string;
+    path: string;
+    uploadedAt: Timestamp;
+}
+
 // ─── /clubs/{clubId} ──────────────────────────────────────────────────
 export interface Club {
     id: string;
@@ -17,6 +26,8 @@ export interface Club {
     treePath: string;
     theme: string;
     primaryColor: string;
+    secondaryColor: string;
+    tertiaryColor: string;
     logo: string;
     heroImage: string;
     tagline: string;
@@ -30,6 +41,8 @@ export interface Club {
     createdAt: Timestamp;
     createdBy: string;
     referralBonusCoins?: number;
+    landingPageUrl: string | null;
+    landingPageImages: LandingImage[];
 }
 
 // ─── /users/{userId} ──────────────────────────────────────────────────
