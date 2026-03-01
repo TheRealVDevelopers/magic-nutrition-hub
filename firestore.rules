@@ -62,7 +62,26 @@ service cloud.firestore {
     }
     match /platform/{docId} {
       allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // ─── Payments subcollection ───────────────────────────────────────
+    match /clubs/{clubId}/payments/{paymentId} {
+      allow read: if isSuperAdmin();
+      allow write: if isSuperAdmin();
+    }
+
+    // ─── Usage stats subcollection ────────────────────────────────────
+    match /clubs/{clubId}/usageStats/{doc} {
+      allow read: if isSuperAdmin();
       allow write: if isAuth();
+    }
+
+    // ─── Enquiries ────────────────────────────────────────────────────
+    match /enquiries/{enquiryId} {
+      allow read: if isSuperAdmin() || isAuth() && isOwnerOf(resource.data.clubId);
+      allow create: if true;
+      allow update: if isSuperAdmin() || isAuth() && isOwnerOf(resource.data.clubId);
     }
   }
 }

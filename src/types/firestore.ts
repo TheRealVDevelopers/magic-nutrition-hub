@@ -22,6 +22,7 @@ export interface Club {
     name: string;
     currencyName: string;
     domain: string;
+    domains?: string[];
     parentClubId: string | null;
     treePath: string;
     theme: string;
@@ -33,16 +34,75 @@ export interface Club {
     tagline: string;
     ownerName: string;
     ownerPhone: string;
+    ownerEmail?: string;
     ownerUserId: string;
-    status: "active" | "disabled";
+    address?: string;
+    status: "active" | "disabled" | "suspended";
     maintenancePaid: boolean;
     maintenanceDueDate: Timestamp;
+    monthlyFee?: number;
     kitchenPin: string;
     createdAt: Timestamp;
     createdBy: string;
     referralBonusCoins?: number;
     landingPageUrl: string | null;
     landingPageImages: LandingImage[];
+    landingPageHistory?: LandingPageVersion[];
+}
+
+// ─── Landing page version history ─────────────────────────────────────
+export interface LandingPageVersion {
+    version: number;
+    url: string;
+    publishedAt: Timestamp;
+    publishedBy: string;
+}
+
+// ─── /clubs/{clubId}/payments/{paymentId} ─────────────────────────────
+export interface PaymentRecord {
+    id: string;
+    clubId: string;
+    amount: number;
+    date: Timestamp;
+    notes: string;
+    recordedBy: string;
+    createdAt: Timestamp;
+}
+
+// ─── /clubs/{clubId}/usageStats ───────────────────────────────────────
+export interface UsageStats {
+    reads: number;
+    writes: number;
+    lastUpdated: Timestamp;
+}
+
+// ─── /enquiries/{enquiryId} ───────────────────────────────────────────
+export interface Enquiry {
+    id: string;
+    clubId: string;
+    name: string;
+    phone: string;
+    whatsapp?: string;
+    email?: string;
+    address?: string;
+    dob?: string;
+    currentWeight?: number;
+    targetWeight?: number;
+    healthConditions?: string;
+    referredBy?: string;
+    status: "new" | "contacted" | "converted" | "rejected";
+    createdAt: Timestamp;
+}
+
+// ─── /platform/settings ───────────────────────────────────────────────
+export interface PlatformSettings {
+    platformName: string;
+    logoUrl: string;
+    supportEmail: string;
+    supportPhone: string;
+    defaultMonthlyFee: number;
+    updatedAt: Timestamp;
+    updatedBy: string;
 }
 
 // ─── /users/{userId} ──────────────────────────────────────────────────

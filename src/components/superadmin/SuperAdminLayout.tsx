@@ -9,13 +9,16 @@ import {
     X,
     Shield,
     Settings,
+    MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
+import { useUnreadEnquiryCount } from "@/hooks/superadmin/useEnquiries";
 
-const navItems = [
+const baseNavItems = [
     { title: "Dashboard", path: "/superadmin/dashboard", icon: LayoutDashboard },
     { title: "Clubs", path: "/superadmin/clubs", icon: Building2 },
+    { title: "Enquiries", path: "/superadmin/enquiries", icon: MessageSquare },
     { title: "Platform Tree", path: "/superadmin/tree", icon: GitBranch },
     { title: "Settings", path: "/superadmin/settings", icon: Settings },
 ];
@@ -24,6 +27,7 @@ export default function SuperAdminLayout() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const location = useLocation();
     const { signOut, userProfile } = useAuth();
+    const { data: unreadEnquiries = 0 } = useUnreadEnquiryCount();
 
     useEffect(() => {
         const mq = window.matchMedia("(min-width: 768px)");
@@ -73,11 +77,14 @@ export default function SuperAdminLayout() {
 
                 {/* Nav */}
                 <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1">
-                    {navItems.map((item) => {
+                    {baseNavItems.map((item) => {
                         const active =
                             location.pathname === item.path ||
                             (item.path !== "/superadmin/dashboard" &&
                                 location.pathname.startsWith(item.path));
+                        const badge = item.path === "/superadmin/enquiries" && unreadEnquiries > 0
+                            ? unreadEnquiries
+                            : 0;
                         return (
                             <Link
                                 key={item.path}
@@ -89,8 +96,22 @@ export default function SuperAdminLayout() {
                                         : "text-gray-400 hover:bg-gray-800 hover:text-white"
                                     }`}
                             >
-                                <item.icon className="w-5 h-5 flex-shrink-0" />
-                                {sidebarOpen && <span className="truncate">{item.title}</span>}
+                                <div className="relative flex-shrink-0">
+                                    <item.icon className="w-5 h-5" />
+                                    {badge > 0 && (
+                                        <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-0.5">
+                                            {badge > 99 ? "99+" : badge}
+                                        </span>
+                                    )}
+                                </div>
+                                {sidebarOpen && (
+                                    <span className="flex-1 truncate">{item.title}</span>
+                                )}
+                                {sidebarOpen && badge > 0 && (
+                                    <span className="ml-auto min-w-[20px] h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+                                        {badge > 99 ? "99+" : badge}
+                                    </span>
+                                )}
                             </Link>
                         );
                     })}

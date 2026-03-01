@@ -2,24 +2,31 @@ import { useState, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
     ArrowLeft,
-    Power,
-    CheckCircle,
-    AlertTriangle,
-    Users,
-    Globe,
-    Phone,
-    Mail,
-    Upload,
-    Trash2,
     Copy,
     Check,
+    Eye,
+    EyeOff,
+    Plus,
+    Trash2,
+    Upload,
     ExternalLink,
+    AlertTriangle,
+    DollarSign,
+    MessageSquare,
+    Flame,
+    ChevronDown,
+    ChevronUp,
+    History,
+    RotateCcw,
+    HardDrive,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Progress } from "@/components/ui/progress";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -31,17 +38,27 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
-import { ImageLabelSelect } from "@/components/ui/ImageLabelSelect";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import ClubForm, { type ClubFormValues } from "@/components/superadmin/ClubForm";
-import MaintenanceBadge from "@/components/superadmin/MaintenanceBadge";
+import { useAuth } from "@/lib/auth";
 import {
     useClubById,
     useUpdateClub,
     useToggleClubStatus,
-    useToggleMaintenancePaid,
     useMemberCountByClub,
 } from "@/hooks/useSuperAdmin";
 import {
@@ -49,23 +66,54 @@ import {
     useDeleteLandingImage,
     useUploadLandingHTML,
 } from "@/hooks/useLandingImages";
-import type { LandingImage } from "@/types/firestore";
+import { useClubPayments, useAddPayment } from "@/hooks/superadmin/useClubPayments";
+import { useEnquiries, useUpdateEnquiryStatus, exportEnquiriesToCSV } from "@/hooks/superadmin/useEnquiries";
+import { useClubCostEstimate } from "@/hooks/superadmin/useFirebaseUsage";
+import { ref, uploadString, getDownloadURL } from "firebase/storage";
+import { doc, updateDoc, arrayUnion, Timestamp } from "firebase/firestore";
+import { storage, db } from "@/lib/firebase";
+import type { Club, LandingImage, Enquiry } from "@/types/firestore";
+import { ImageLabelSelect } from "@/components/ui/ImageLabelSelect";
+
+// ─── Helpers ─────────────────────────────────────────────────────────────
+
+function formatDate(ts: { toDate?: () => Date } | null | undefined) {
+    if (!ts?.toDate) return "—";
+    return ts.toDate().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function CopyButton({ text }: { text: string }) {
+    const [copied, setCopied] = useState(false);
+    return (
+        <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => {
+                navigator.clipboard.writeText(text);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+            }}
+        >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+        </Button>
+    );
+}
+
+// ─── Main ClubDetail ─────────────────────────────────────────────────────
 
 export default function ClubDetail() {
     const { clubId } = useParams<{ clubId: string }>();
     const navigate = useNavigate();
-    const { toast } = useToast();
-    const { data: club, isLoading } = useClubById(clubId || "");
-    const { data: memberCount } = useMemberCountByClub(clubId || "");
-    const updateClub = useUpdateClub();
-    const toggleStatus = useToggleClubStatus();
-    const toggleMaintenance = useToggleMaintenancePaid();
+    const { data: club, isLoading } = useClubById(clubId ?? "");
+    const { data: memberCount } = useMemberCountByClub(clubId ?? "");
 
     if (isLoading) {
         return (
             <div className="space-y-6">
                 <Skeleton className="h-8 w-48" />
-                <Skeleton className="h-64 rounded-2xl" />
+                <Skeleton className="h-96 rounded-2xl" />
             </div>
         );
     }
@@ -81,41 +129,6 @@ export default function ClubDetail() {
         );
     }
 
-    const initials = club.name
-        .split(" ")
-        .map((w) => w[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase();
-
-    const handleEdit = async (data: ClubFormValues) => {
-        try {
-            await updateClub.mutateAsync({
-                clubId: club.id,
-                data: {
-                    name: data.name,
-                    currencyName: data.currencyName,
-                    domain: data.domain,
-                    ownerName: data.ownerName,
-                    ownerPhone: data.ownerPhone,
-                    tagline: data.tagline || "",
-                    kitchenPin: data.kitchenPin,
-                    parentClubId: data.parentClubId || null,
-                    primaryColor: data.primaryColor,
-                    secondaryColor: data.secondaryColor,
-                    tertiaryColor: data.tertiaryColor,
-                },
-            });
-            toast({ title: "Club updated!", description: "Changes saved successfully." });
-        } catch (err: any) {
-            toast({
-                title: "Update failed",
-                description: err.message,
-                variant: "destructive",
-            });
-        }
-    };
-
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -127,199 +140,349 @@ export default function ClubDetail() {
                     <h1 className="text-2xl font-bold tracking-tight truncate">{club.name}</h1>
                     <p className="text-sm text-muted-foreground">{club.domain}</p>
                 </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                    <Badge
+                        variant={club.status === "active" ? "outline" : "destructive"}
+                        className={club.status === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : ""}
+                    >
+                        {club.status}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                        {memberCount ?? 0} members
+                    </Badge>
+                </div>
             </div>
 
             {/* Tabs */}
-            <Tabs defaultValue="overview">
-                <TabsList>
-                    <TabsTrigger value="overview">Overview</TabsTrigger>
+            <Tabs defaultValue="info">
+                <TabsList className="flex-wrap h-auto gap-1">
+                    <TabsTrigger value="info">Club Info</TabsTrigger>
                     <TabsTrigger value="landing">Landing Page</TabsTrigger>
-                    <TabsTrigger value="edit">Edit Branding</TabsTrigger>
-                    <TabsTrigger value="danger">Danger Zone</TabsTrigger>
+                    <TabsTrigger value="payments">
+                        <DollarSign className="w-3.5 h-3.5 mr-1" />
+                        Payments
+                    </TabsTrigger>
+                    <TabsTrigger value="enquiries">
+                        <MessageSquare className="w-3.5 h-3.5 mr-1" />
+                        Enquiries
+                    </TabsTrigger>
+                    <TabsTrigger value="firebase">
+                        <Flame className="w-3.5 h-3.5 mr-1" />
+                        Firebase Usage
+                    </TabsTrigger>
                 </TabsList>
 
-                {/* Tab 1: Overview */}
-                <TabsContent value="overview" className="mt-6 space-y-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Club Info Card */}
-                        <div className="lg:col-span-2 bg-white rounded-2xl border p-6 space-y-4">
-                            <div className="flex items-start gap-4">
-                                <Avatar className="h-16 w-16 rounded-2xl">
-                                    {club.logo ? <AvatarImage src={club.logo} /> : null}
-                                    <AvatarFallback
-                                        className="rounded-2xl text-white font-bold text-lg"
-                                        style={{ backgroundColor: club.primaryColor || "#8B5CF6" }}
-                                    >
-                                        {initials}
-                                    </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 space-y-1">
-                                    <h2 className="text-lg font-bold">{club.name}</h2>
-                                    <p className="text-sm text-muted-foreground">{club.tagline || "No tagline"}</p>
-                                    <div className="flex items-center gap-2 mt-2">
-                                        <Badge
-                                            variant={club.status === "active" ? "outline" : "destructive"}
-                                            className={
-                                                club.status === "active"
-                                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                                    : ""
-                                            }
-                                        >
-                                            {club.status}
-                                        </Badge>
-                                        <MaintenanceBadge
-                                            maintenancePaid={club.maintenancePaid}
-                                            maintenanceDueDate={club.maintenanceDueDate}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-3 pt-4 border-t text-sm">
-                                <div className="flex items-center gap-2 text-muted-foreground">
-                                    <Globe className="w-4 h-4" />
-                                    <span>{club.domain}</span>
-                                </div>
-                                <div className="flex items-center gap-2 text-muted-foreground">
-                                    <Users className="w-4 h-4" />
-                                    <span>{memberCount ?? 0} members</span>
-                                </div>
-                                <div className="flex items-center gap-2 text-muted-foreground">
-                                    <Phone className="w-4 h-4" />
-                                    <span>{club.ownerPhone}</span>
-                                </div>
-                                <div className="flex items-center gap-2 text-muted-foreground">
-                                    <Mail className="w-4 h-4" />
-                                    <span>{club.ownerName}</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Quick Actions Card */}
-                        <div className="bg-white rounded-2xl border p-6 space-y-3">
-                            <h3 className="font-semibold text-sm">Quick Actions</h3>
-                            <Button
-                                variant={club.status === "active" ? "destructive" : "default"}
-                                className="w-full justify-start gap-2"
-                                disabled={toggleStatus.isPending}
-                                onClick={() =>
-                                    toggleStatus.mutate({ clubId: club.id, currentStatus: club.status })
-                                }
-                            >
-                                <Power className="w-4 h-4" />
-                                {club.status === "active" ? "Disable Club" : "Enable Club"}
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="w-full justify-start gap-2"
-                                disabled={toggleMaintenance.isPending}
-                                onClick={() =>
-                                    toggleMaintenance.mutate({
-                                        clubId: club.id,
-                                        currentPaid: club.maintenancePaid,
-                                    })
-                                }
-                            >
-                                <CheckCircle className="w-4 h-4" />
-                                {club.maintenancePaid ? "Mark Maintenance Unpaid" : "Mark Maintenance Paid"}
-                            </Button>
-                        </div>
-                    </div>
+                <TabsContent value="info" className="mt-6">
+                    <ClubInfoTab club={club} />
                 </TabsContent>
-
-                {/* Tab 2: Landing Page */}
                 <TabsContent value="landing" className="mt-6">
                     <LandingPageTab clubId={club.id} club={club} />
                 </TabsContent>
-
-                {/* Tab 3: Edit */}
-                <TabsContent value="edit" className="mt-6">
-                    <div className="max-w-2xl bg-white rounded-2xl border p-6">
-                        <ClubForm
-                            mode="edit"
-                            defaultValues={{
-                                name: club.name,
-                                currencyName: club.currencyName,
-                                domain: club.domain,
-                                ownerName: club.ownerName,
-                                ownerPhone: club.ownerPhone,
-                                tagline: club.tagline,
-                                kitchenPin: club.kitchenPin,
-                                parentClubId: club.parentClubId || "",
-                                primaryColor: club.primaryColor,
-                                secondaryColor: club.secondaryColor || "#10B981",
-                                tertiaryColor: club.tertiaryColor || "#F59E0B",
-                            }}
-                            onSubmit={handleEdit}
-                            isLoading={updateClub.isPending}
-                        />
-                    </div>
+                <TabsContent value="payments" className="mt-6">
+                    <PaymentsTab club={club} />
                 </TabsContent>
-
-                {/* Tab 4: Danger Zone */}
-                <TabsContent value="danger" className="mt-6">
-                    <div className="max-w-lg space-y-4">
-                        <div className="rounded-2xl border border-red-200 bg-red-50 p-6 space-y-4">
-                            <div className="flex items-center gap-2">
-                                <AlertTriangle className="w-5 h-5 text-red-500" />
-                                <h3 className="font-semibold text-red-700">Danger Zone</h3>
-                            </div>
-
-                            {/* Disable */}
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button
-                                        variant="destructive"
-                                        className="w-full"
-                                        disabled={club.status === "disabled"}
-                                    >
-                                        {club.status === "disabled" ? "Club Already Disabled" : "Disable Club"}
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                        <AlertDialogTitle>Disable {club.name}?</AlertDialogTitle>
-                                        <AlertDialogDescription>
-                                            This will prevent all users from accessing this club. Members
-                                            will see a "Club disabled" message. You can re-enable it later.
-                                        </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                        <AlertDialogAction
-                                            onClick={() =>
-                                                toggleStatus.mutate({ clubId: club.id, currentStatus: club.status })
-                                            }
-                                        >
-                                            Disable
-                                        </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-
-                            {/* Convert Member */}
-                            <Button
-                                variant="outline"
-                                className="w-full border-orange-300 text-orange-700 hover:bg-orange-50"
-                                onClick={() => navigate(`/superadmin/clubs/${club.id}/convert`)}
-                            >
-                                Convert Member to Club Owner
-                            </Button>
-                        </div>
-                    </div>
+                <TabsContent value="enquiries" className="mt-6">
+                    <EnquiriesTab clubId={club.id} clubName={club.name} />
+                </TabsContent>
+                <TabsContent value="firebase" className="mt-6">
+                    <FirebaseUsageTab clubId={club.id} />
                 </TabsContent>
             </Tabs>
         </div>
     );
 }
 
-// ─── Landing Page Tab ────────────────────────────────────────────────────
+// ─── Tab 1: Club Info ─────────────────────────────────────────────────────
 
-function LandingPageTab({ clubId, club }: { clubId: string; club: import("@/types/firestore").Club }) {
+function ClubInfoTab({ club }: { club: Club }) {
     const { toast } = useToast();
-    const images = club.landingPageImages ?? [];
+    const updateClub = useUpdateClub();
+    const toggleStatus = useToggleClubStatus();
 
-    // Image upload state
+    const [form, setForm] = useState({
+        name: club.name,
+        ownerName: club.ownerName,
+        ownerEmail: club.ownerEmail ?? "",
+        ownerPhone: club.ownerPhone,
+        address: club.address ?? "",
+        kitchenPin: club.kitchenPin,
+        monthlyFee: String(club.monthlyFee ?? 20000),
+        primaryColor: club.primaryColor,
+        secondaryColor: club.secondaryColor || "#10B981",
+        tertiaryColor: club.tertiaryColor || "#F59E0B",
+    });
+
+    const [domains, setDomains] = useState<string[]>(
+        club.domains?.length ? club.domains : [club.domain]
+    );
+    const [newDomain, setNewDomain] = useState("");
+    const [showPin, setShowPin] = useState(false);
+
+    function handleChange(field: keyof typeof form, value: string) {
+        setForm((prev) => ({ ...prev, [field]: value }));
+    }
+
+    function addDomain() {
+        const d = newDomain.trim();
+        if (!d || domains.includes(d)) return;
+        setDomains((prev) => [...prev, d]);
+        setNewDomain("");
+    }
+
+    function removeDomain(domain: string) {
+        if (domains.length <= 1) {
+            toast({ title: "At least one domain is required.", variant: "destructive" });
+            return;
+        }
+        setDomains((prev) => prev.filter((d) => d !== domain));
+    }
+
+    async function handleSave() {
+        try {
+            await updateClub.mutateAsync({
+                clubId: club.id,
+                data: {
+                    name: form.name,
+                    ownerName: form.ownerName,
+                    ownerEmail: form.ownerEmail,
+                    ownerPhone: form.ownerPhone,
+                    address: form.address,
+                    kitchenPin: form.kitchenPin,
+                    monthlyFee: Number(form.monthlyFee),
+                    primaryColor: form.primaryColor,
+                    secondaryColor: form.secondaryColor,
+                    tertiaryColor: form.tertiaryColor,
+                    domain: domains[0],
+                    domains,
+                },
+            });
+            toast({ title: "Club updated!", description: "Changes saved successfully." });
+        } catch (err: unknown) {
+            toast({
+                title: "Update failed",
+                description: err instanceof Error ? err.message : "Unknown error",
+                variant: "destructive",
+            });
+        }
+    }
+
+    return (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-6">
+                {/* Club Info */}
+                <div className="bg-white rounded-2xl border p-6 space-y-5">
+                    <h3 className="font-semibold">Club Information</h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <Label>Club Name</Label>
+                            <Input value={form.name} onChange={(e) => handleChange("name", e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Monthly Fee (₹)</Label>
+                            <Input
+                                type="number"
+                                value={form.monthlyFee}
+                                onChange={(e) => handleChange("monthlyFee", e.target.value)}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Owner Name</Label>
+                            <Input value={form.ownerName} onChange={(e) => handleChange("ownerName", e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Owner Email</Label>
+                            <Input value={form.ownerEmail} onChange={(e) => handleChange("ownerEmail", e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Owner Phone</Label>
+                            <Input value={form.ownerPhone} onChange={(e) => handleChange("ownerPhone", e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5 sm:col-span-2">
+                            <Label>Address</Label>
+                            <Input value={form.address} onChange={(e) => handleChange("address", e.target.value)} />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Kitchen PIN */}
+                <div className="bg-white rounded-2xl border p-6 space-y-4">
+                    <h3 className="font-semibold">Kitchen PIN</h3>
+                    <div className="space-y-1.5">
+                        <Label>PIN (4 digits)</Label>
+                        <div className="flex items-center gap-2">
+                            <Input
+                                type={showPin ? "text" : "password"}
+                                value={form.kitchenPin}
+                                onChange={(e) => handleChange("kitchenPin", e.target.value)}
+                                maxLength={4}
+                                className="w-32"
+                            />
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                className="h-9 w-9"
+                                onClick={() => setShowPin((p) => !p)}
+                            >
+                                {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Domains */}
+                <div className="bg-white rounded-2xl border p-6 space-y-4">
+                    <h3 className="font-semibold">Domains</h3>
+                    <div className="space-y-2">
+                        {domains.map((domain) => (
+                            <div key={domain} className="flex items-center gap-2 p-2.5 rounded-xl bg-gray-50 border">
+                                <span className="flex-1 text-sm font-mono truncate">{domain}</span>
+                                <CopyButton text={domain} />
+                                {domains.length > 1 && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7 text-red-400 hover:text-red-600"
+                                        onClick={() => removeDomain(domain)}
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </Button>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex gap-2">
+                        <Input
+                            placeholder="Add domain…"
+                            value={newDomain}
+                            onChange={(e) => setNewDomain(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && addDomain()}
+                            className="flex-1"
+                        />
+                        <Button type="button" variant="outline" size="sm" onClick={addDomain} className="gap-1">
+                            <Plus className="w-3.5 h-3.5" />
+                            Add
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Colors */}
+                <div className="bg-white rounded-2xl border p-6 space-y-4">
+                    <h3 className="font-semibold">Club Colors</h3>
+                    <div className="grid grid-cols-3 gap-4">
+                        {(["primaryColor", "secondaryColor", "tertiaryColor"] as const).map((field) => (
+                            <div key={field} className="space-y-1.5">
+                                <Label className="text-xs capitalize">{field.replace("Color", "")}</Label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        value={form[field]}
+                                        onChange={(e) => handleChange(field, e.target.value)}
+                                        className="h-9 w-9 rounded-lg border cursor-pointer p-0.5"
+                                    />
+                                    <Input
+                                        value={form[field]}
+                                        onChange={(e) => handleChange(field, e.target.value)}
+                                        className="font-mono text-xs"
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <Button onClick={handleSave} disabled={updateClub.isPending} className="w-full sm:w-auto">
+                    {updateClub.isPending ? "Saving…" : "Save Changes"}
+                </Button>
+            </div>
+
+            {/* Right column */}
+            <div className="space-y-4">
+                {/* Club ID */}
+                <div className="bg-white rounded-2xl border p-5 space-y-3">
+                    <h3 className="font-semibold text-sm">Club ID</h3>
+                    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-gray-50 border">
+                        <span className="flex-1 text-xs font-mono text-muted-foreground truncate">{club.id}</span>
+                        <CopyButton text={club.id} />
+                    </div>
+                </div>
+
+                {/* Status toggle */}
+                <div className="bg-white rounded-2xl border p-5 space-y-3">
+                    <h3 className="font-semibold text-sm">Club Status</h3>
+                    <div className="flex items-center gap-3">
+                        <Badge
+                            variant={club.status === "active" ? "outline" : "destructive"}
+                            className={`${club.status === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : ""}`}
+                        >
+                            {club.status === "active" ? "Active" : "Suspended"}
+                        </Badge>
+                    </div>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button
+                                variant={club.status === "active" ? "destructive" : "default"}
+                                size="sm"
+                                className="w-full"
+                                disabled={toggleStatus.isPending}
+                            >
+                                {club.status === "active" ? "Suspend Club" : "Activate Club"}
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>
+                                    {club.status === "active" ? `Suspend ${club.name}?` : `Activate ${club.name}?`}
+                                </AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    {club.status === "active"
+                                        ? "Members will be unable to access this club. You can reactivate it at any time."
+                                        : "All club members and staff will regain access immediately."}
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                    onClick={() => toggleStatus.mutate({ clubId: club.id, currentStatus: club.status })}
+                                    className={club.status === "active" ? "bg-destructive hover:bg-destructive/90" : ""}
+                                >
+                                    {club.status === "active" ? "Suspend" : "Activate"}
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                </div>
+
+                {/* Danger zone */}
+                <div className="bg-white rounded-2xl border border-red-200 p-5 space-y-3">
+                    <div className="flex items-center gap-2 text-red-600">
+                        <AlertTriangle className="w-4 h-4" />
+                        <h3 className="font-semibold text-sm">Danger Zone</h3>
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full border-orange-300 text-orange-700 hover:bg-orange-50"
+                        onClick={() => navigate(`/superadmin/clubs/${club.id}/convert`)}
+                    >
+                        Convert Member → Club Owner
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ─── Tab 2: Landing Page ──────────────────────────────────────────────────
+
+function LandingPageTab({ clubId, club }: { clubId: string; club: Club }) {
+    const { toast } = useToast();
+    const { userProfile } = useAuth();
+    const images = club.landingPageImages ?? [];
+    const history = club.landingPageHistory ?? [];
+
     const [imageLabel, setImageLabel] = useState("");
     const [imageFile, setImageFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -328,9 +491,9 @@ function LandingPageTab({ clubId, club }: { clubId: string; club: import("@/type
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-    // HTML upload state
     const [htmlContent, setHtmlContent] = useState("");
     const { uploadHTML, uploading: htmlUploading } = useUploadLandingHTML(clubId);
+    const [publishing, setPublishing] = useState(false);
 
     async function handleImageUpload() {
         if (!imageFile || !imageLabel) return;
@@ -363,18 +526,68 @@ function LandingPageTab({ clubId, club }: { clubId: string; club: import("@/type
 
     async function handlePublishHTML() {
         if (!htmlContent.trim()) return;
+        setPublishing(true);
         try {
+            // Save current version to history first
+            if (club.landingPageUrl) {
+                const nextVersion = (history.length ?? 0) + 1;
+                await updateDoc(doc(db, "clubs", clubId), {
+                    landingPageHistory: arrayUnion({
+                        version: nextVersion,
+                        url: club.landingPageUrl,
+                        publishedAt: Timestamp.now(),
+                        publishedBy: userProfile?.name ?? "Unknown",
+                    }),
+                });
+            }
             await uploadHTML(htmlContent);
-            toast({ title: "Landing page published successfully!" });
+            toast({ title: "Landing page published!" });
+            setHtmlContent("");
         } catch {
             toast({ title: "Publish failed", variant: "destructive" });
+        } finally {
+            setPublishing(false);
+        }
+    }
+
+    async function handleRestore(versionUrl: string, versionNum: number) {
+        setPublishing(true);
+        try {
+            // Fetch HTML from version URL
+            const res = await fetch(versionUrl);
+            const html = await res.text();
+
+            // Save current as history
+            if (club.landingPageUrl) {
+                const nextVersion = (history.length ?? 0) + 1;
+                await updateDoc(doc(db, "clubs", clubId), {
+                    landingPageHistory: arrayUnion({
+                        version: nextVersion,
+                        url: club.landingPageUrl,
+                        publishedAt: Timestamp.now(),
+                        publishedBy: userProfile?.name ?? "Unknown",
+                    }),
+                });
+            }
+
+            // Upload restored version as new landing page
+            const htmlRef = ref(storage, `clubs/${clubId}/landing.html`);
+            await uploadString(htmlRef, html, "raw", { contentType: "text/html" });
+            const url = await getDownloadURL(htmlRef);
+            await updateDoc(doc(db, "clubs", clubId), { landingPageUrl: url });
+
+            toast({ title: `Version ${versionNum} restored!` });
+        } catch {
+            toast({ title: "Restore failed", variant: "destructive" });
+        } finally {
+            setPublishing(false);
         }
     }
 
     return (
-        <div className="space-y-8 max-w-3xl">
-            {/* Section 1 — Current Status */}
-            <div className="bg-white rounded-2xl border p-6 space-y-3">
+        <div className="space-y-6 max-w-3xl">
+            {/* Status */}
+            <div className="bg-white rounded-2xl border p-5 space-y-3">
                 <h3 className="font-semibold text-sm">Current Status</h3>
                 {club.landingPageUrl ? (
                     <div className="flex items-center gap-3">
@@ -390,50 +603,70 @@ function LandingPageTab({ clubId, club }: { clubId: string; club: import("@/type
                     </div>
                 ) : (
                     <div className="flex items-center gap-3">
-                        <Badge className="border-orange-200 bg-orange-50 text-orange-700">No Landing Page</Badge>
-                        <p className="text-sm text-muted-foreground">Upload an HTML file to publish this club's landing page</p>
+                        <Badge className="border-orange-200 bg-orange-50 text-orange-700">No Page</Badge>
+                        <p className="text-sm text-muted-foreground">Upload HTML below to publish this club's landing page.</p>
                     </div>
                 )}
             </div>
 
-            {/* Section 2 — Images */}
-            <div className="bg-white rounded-2xl border p-6 space-y-5">
-                <div>
-                    <h3 className="font-semibold text-sm">Images</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">Upload images for the landing page. Generate links to use in your HTML.</p>
-                </div>
-
-                <div className="space-y-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <ImageLabelSelect
-                            existingImages={images}
-                            value={imageLabel}
-                            onChange={setImageLabel}
-                        />
-                        <div>
-                            <Label className="text-xs">File</Label>
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/jpeg,image/png,image/webp"
-                                onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-                                className="mt-1 block w-full text-sm file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-violet-50 file:text-violet-700 file:font-medium file:text-xs hover:file:bg-violet-100"
-                            />
-                        </div>
+            {/* Version History */}
+            {history.length > 0 && (
+                <div className="bg-white rounded-2xl border p-5 space-y-3">
+                    <div className="flex items-center gap-2">
+                        <History className="w-4 h-4 text-muted-foreground" />
+                        <h3 className="font-semibold text-sm">Version History</h3>
                     </div>
-                    <Button
-                        size="sm"
-                        disabled={!imageFile || !imageLabel || imageUploading}
-                        onClick={handleImageUpload}
-                        className="gap-1.5"
-                    >
-                        <Upload className="w-3.5 h-3.5" />
-                        {imageUploading ? "Uploading…" : "Upload Image"}
-                    </Button>
+                    <div className="space-y-2">
+                        {[...history].reverse().map((v, i) => (
+                            <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border">
+                                <div>
+                                    <p className="text-sm font-medium">Version {v.version}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {v.publishedBy} · {formatDate(v.publishedAt as { toDate?: () => Date })}
+                                    </p>
+                                </div>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1 text-xs"
+                                    disabled={publishing}
+                                    onClick={() => handleRestore(v.url, v.version)}
+                                >
+                                    <RotateCcw className="w-3 h-3" />
+                                    Restore
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
+            )}
 
+            {/* Images */}
+            <div className="bg-white rounded-2xl border p-5 space-y-4">
+                <h3 className="font-semibold text-sm">Image Manager</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <ImageLabelSelect existingImages={images} value={imageLabel} onChange={setImageLabel} />
+                    <div>
+                        <Label className="text-xs">File</Label>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+                            className="mt-1 block w-full text-sm file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-violet-50 file:text-violet-700 file:font-medium file:text-xs hover:file:bg-violet-100"
+                        />
+                    </div>
+                </div>
+                <Button
+                    size="sm"
+                    disabled={!imageFile || !imageLabel || imageUploading}
+                    onClick={handleImageUpload}
+                    className="gap-1.5"
+                >
+                    <Upload className="w-3.5 h-3.5" />
+                    {imageUploading ? "Uploading…" : "Upload Image"}
+                </Button>
                 {imageUploading && <Progress value={imageProgress} className="h-2" />}
-
                 {images.length > 0 ? (
                     <div className="space-y-2">
                         {images.map((img) => (
@@ -441,38 +674,17 @@ function LandingPageTab({ clubId, club }: { clubId: string; club: import("@/type
                                 <img src={img.url} alt={img.name} className="w-12 h-12 rounded-lg object-cover flex-shrink-0 border" />
                                 <div className="flex-1 min-w-0">
                                     <p className="text-xs font-semibold truncate">{img.name}</p>
-                                    <input
-                                        readOnly
-                                        value={img.url}
-                                        className="w-full text-[10px] text-muted-foreground bg-transparent outline-none truncate"
-                                    />
+                                    <input readOnly value={img.url} className="w-full text-[10px] text-muted-foreground bg-transparent outline-none truncate" />
                                 </div>
-                                <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8 flex-shrink-0"
-                                    onClick={() => copyUrl(img.id, img.url)}
-                                    title="Copy URL"
-                                >
+                                <Button size="icon" variant="ghost" className="h-8 w-8 flex-shrink-0" onClick={() => copyUrl(img.id, img.url)} title="Copy URL">
                                     {copiedId === img.id ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                                 </Button>
                                 {deleteConfirmId === img.id ? (
-                                    <Button
-                                        size="sm"
-                                        variant="destructive"
-                                        className="text-xs flex-shrink-0"
-                                        disabled={deleting}
-                                        onClick={() => handleDeleteImage(img)}
-                                    >
+                                    <Button size="sm" variant="destructive" className="text-xs flex-shrink-0" disabled={deleting} onClick={() => handleDeleteImage(img)}>
                                         {deleting ? "…" : "Confirm"}
                                     </Button>
                                 ) : (
-                                    <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-8 w-8 text-red-500 flex-shrink-0"
-                                        onClick={() => setDeleteConfirmId(img.id)}
-                                    >
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-red-500 flex-shrink-0" onClick={() => setDeleteConfirmId(img.id)}>
                                         <Trash2 className="w-3.5 h-3.5" />
                                     </Button>
                                 )}
@@ -480,40 +692,366 @@ function LandingPageTab({ clubId, club }: { clubId: string; club: import("@/type
                         ))}
                     </div>
                 ) : (
-                    <p className="text-center text-sm text-muted-foreground py-6">
-                        No images uploaded yet. Upload images above to get their Storage URLs.
-                    </p>
+                    <p className="text-center text-sm text-muted-foreground py-4">No images uploaded yet.</p>
                 )}
             </div>
 
-            {/* Section 3 — Update HTML */}
-            <div className="bg-white rounded-2xl border p-6 space-y-4">
-                <div>
-                    <h3 className="font-semibold text-sm">Update Landing Page HTML</h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">Paste your complete HTML for this club's landing page.</p>
-                </div>
-
-                <textarea
+            {/* HTML Editor */}
+            <div className="bg-white rounded-2xl border p-5 space-y-4">
+                <h3 className="font-semibold text-sm">HTML Editor</h3>
+                <p className="text-xs text-muted-foreground">Paste complete HTML. On publish, current version is saved to history.</p>
+                <Textarea
                     value={htmlContent}
                     onChange={(e) => setHtmlContent(e.target.value)}
                     placeholder="Paste your complete HTML here..."
-                    className="w-full min-h-[400px] font-mono text-sm border rounded-xl p-4 resize-y focus:outline-none focus:ring-2 focus:ring-violet-500"
+                    className="min-h-[400px] font-mono text-sm resize-y"
                 />
                 <div className="flex items-center justify-between">
                     <p className="text-xs text-muted-foreground">{htmlContent.length.toLocaleString()} characters</p>
-                    <div className="bg-violet-50 text-violet-700 text-xs px-3 py-1.5 rounded-lg">
-                        Use the image URLs from the Images section wherever images are needed in your HTML.
+                </div>
+                <Button disabled={!htmlContent.trim() || htmlUploading || publishing} onClick={handlePublishHTML} className="gap-2">
+                    <Upload className="w-4 h-4" />
+                    {htmlUploading || publishing ? "Publishing…" : "Publish Landing Page"}
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+// ─── Tab 3: Payments ──────────────────────────────────────────────────────
+
+function PaymentsTab({ club }: { club: Club }) {
+    const { toast } = useToast();
+    const { userProfile } = useAuth();
+    const { data: payments, isLoading } = useClubPayments(club.id);
+    const addPayment = useAddPayment();
+    const [showModal, setShowModal] = useState(false);
+    const [payForm, setPayForm] = useState({ amount: "", date: new Date().toISOString().slice(0, 10), notes: "" });
+
+    const totalPaid = payments?.reduce((sum, p) => sum + p.amount, 0) ?? 0;
+    const lastPayment = payments?.[0];
+    const nextDue = lastPayment
+        ? new Date(lastPayment.date.toDate().getTime() + 30 * 86_400_000)
+        : club.maintenanceDueDate?.toDate?.();
+
+    async function handleAddPayment() {
+        if (!payForm.amount) return;
+        try {
+            await addPayment.mutateAsync({
+                clubId: club.id,
+                amount: Number(payForm.amount),
+                date: Timestamp.fromDate(new Date(payForm.date)),
+                notes: payForm.notes,
+                recordedBy: userProfile?.name ?? "Super Admin",
+            });
+            setShowModal(false);
+            setPayForm({ amount: "", date: new Date().toISOString().slice(0, 10), notes: "" });
+            toast({ title: "Payment recorded!" });
+        } catch (err: unknown) {
+            toast({
+                title: "Failed to add payment",
+                description: err instanceof Error ? err.message : "Unknown error",
+                variant: "destructive",
+            });
+        }
+    }
+
+    return (
+        <div className="space-y-6 max-w-3xl">
+            {/* Summary */}
+            <div className="grid grid-cols-3 gap-4">
+                <div className="bg-white rounded-2xl border p-5 text-center">
+                    <p className="text-2xl font-bold text-emerald-600">₹{totalPaid.toLocaleString("en-IN")}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Total Paid (all time)</p>
+                </div>
+                <div className="bg-white rounded-2xl border p-5 text-center">
+                    <p className="text-2xl font-bold">₹{(club.monthlyFee ?? 20000).toLocaleString("en-IN")}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Monthly Fee</p>
+                </div>
+                <div className="bg-white rounded-2xl border p-5 text-center">
+                    <p className="text-2xl font-bold text-orange-500">
+                        {nextDue ? nextDue.toLocaleDateString("en-IN", { day: "2-digit", month: "short" }) : "—"}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">Next Due</p>
+                </div>
+            </div>
+
+            {/* Add payment */}
+            <div className="flex justify-end">
+                <Button onClick={() => setShowModal(true)} className="gap-2">
+                    <Plus className="w-4 h-4" />
+                    Record Payment
+                </Button>
+            </div>
+
+            {/* Payment history */}
+            <div className="bg-white rounded-2xl border overflow-hidden">
+                <div className="px-4 py-3 border-b bg-gray-50">
+                    <h3 className="font-semibold text-sm">Payment History</h3>
+                </div>
+                {isLoading ? (
+                    <div className="p-4 space-y-2">
+                        {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 rounded-xl" />)}
+                    </div>
+                ) : !payments?.length ? (
+                    <p className="text-sm text-muted-foreground text-center py-10">No payments recorded yet.</p>
+                ) : (
+                    <div className="divide-y">
+                        <div className="grid grid-cols-4 px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide bg-gray-50">
+                            <span>Date</span><span>Amount</span><span>Notes</span><span>Recorded By</span>
+                        </div>
+                        {payments.map((p) => (
+                            <div key={p.id} className="grid grid-cols-4 px-4 py-3 text-sm items-center">
+                                <span>{formatDate(p.date as { toDate?: () => Date })}</span>
+                                <span className="font-semibold text-emerald-600">₹{p.amount.toLocaleString("en-IN")}</span>
+                                <span className="text-muted-foreground truncate">{p.notes || "—"}</span>
+                                <span className="text-muted-foreground truncate">{p.recordedBy}</span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Add Payment Modal */}
+            <Dialog open={showModal} onOpenChange={setShowModal}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Record Payment</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-1.5">
+                            <Label>Amount (₹)</Label>
+                            <Input
+                                type="number"
+                                placeholder={String(club.monthlyFee ?? 20000)}
+                                value={payForm.amount}
+                                onChange={(e) => setPayForm((p) => ({ ...p, amount: e.target.value }))}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Date</Label>
+                            <Input
+                                type="date"
+                                value={payForm.date}
+                                onChange={(e) => setPayForm((p) => ({ ...p, date: e.target.value }))}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label>Notes (optional)</Label>
+                            <Input
+                                placeholder="e.g. March 2026 maintenance"
+                                value={payForm.notes}
+                                onChange={(e) => setPayForm((p) => ({ ...p, notes: e.target.value }))}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowModal(false)}>Cancel</Button>
+                        <Button onClick={handleAddPayment} disabled={!payForm.amount || addPayment.isPending}>
+                            {addPayment.isPending ? "Saving…" : "Save Payment"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
+    );
+}
+
+// ─── Tab 4: Enquiries ─────────────────────────────────────────────────────
+
+function EnquiriesTab({ clubId, clubName }: { clubId: string; clubName: string }) {
+    const { data: enquiries, isLoading } = useEnquiries(clubId);
+    const updateStatus = useUpdateEnquiryStatus();
+    const [expandedId, setExpandedId] = useState<string | null>(null);
+
+    const statusColors: Record<Enquiry["status"], string> = {
+        new: "border-blue-200 bg-blue-50 text-blue-700",
+        contacted: "border-yellow-200 bg-yellow-50 text-yellow-700",
+        converted: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        rejected: "border-red-200 bg-red-50 text-red-700",
+    };
+
+    return (
+        <div className="space-y-4">
+            <div className="flex items-center justify-between">
+                <h3 className="font-semibold">{enquiries?.length ?? 0} Enquiries</h3>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => enquiries && exportEnquiriesToCSV(enquiries, `${clubName}-enquiries.csv`)}
+                    disabled={!enquiries?.length}
+                >
+                    Export CSV
+                </Button>
+            </div>
+
+            {isLoading ? (
+                <div className="space-y-2">{[1, 2, 3].map((i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
+            ) : !enquiries?.length ? (
+                <div className="text-center py-12 text-muted-foreground">
+                    <MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-40" />
+                    <p className="text-sm">No enquiries yet for this club.</p>
+                </div>
+            ) : (
+                <div className="bg-white rounded-2xl border overflow-hidden">
+                    <div className="hidden sm:grid sm:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_auto] gap-3 px-4 py-2 bg-gray-50 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                        <span>Name</span><span>Phone</span><span>WhatsApp</span><span>Date</span><span>Status</span><span></span>
+                    </div>
+                    <div className="divide-y">
+                        {enquiries.map((e) => (
+                            <div key={e.id}>
+                                <div
+                                    className="grid grid-cols-1 sm:grid-cols-[1.5fr_1fr_1fr_1fr_1fr_auto] gap-2 sm:gap-3 px-4 py-3 items-center cursor-pointer hover:bg-gray-50"
+                                    onClick={() => setExpandedId(expandedId === e.id ? null : e.id)}
+                                >
+                                    <span className="text-sm font-medium">{e.name}</span>
+                                    <span className="text-sm text-muted-foreground">{e.phone}</span>
+                                    <span className="text-sm text-muted-foreground">{e.whatsapp || "—"}</span>
+                                    <span className="text-xs text-muted-foreground">{formatDate(e.createdAt as { toDate?: () => Date })}</span>
+                                    <Select
+                                        value={e.status}
+                                        onValueChange={(v) => {
+                                            updateStatus.mutate({ enquiryId: e.id, status: v as Enquiry["status"] });
+                                        }}
+                                    >
+                                        <SelectTrigger className="h-7 text-xs w-28" onClick={(ev) => ev.stopPropagation()}>
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {(["new", "contacted", "converted", "rejected"] as const).map((s) => (
+                                                <SelectItem key={s} value={s} className="text-xs capitalize">{s}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); setExpandedId(expandedId === e.id ? null : e.id); }}>
+                                        {expandedId === e.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                    </Button>
+                                </div>
+                                {expandedId === e.id && (
+                                    <div className="px-4 pb-4 bg-gray-50 border-t">
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3">
+                                            {[
+                                                ["Email", e.email],
+                                                ["Address", e.address],
+                                                ["Date of Birth", e.dob],
+                                                ["Current Weight", e.currentWeight ? `${e.currentWeight} kg` : null],
+                                                ["Target Weight", e.targetWeight ? `${e.targetWeight} kg` : null],
+                                                ["Health Conditions", e.healthConditions],
+                                                ["Referred By", e.referredBy],
+                                            ].map(([label, value]) => value ? (
+                                                <div key={String(label)}>
+                                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+                                                    <p className="text-sm mt-0.5">{String(value)}</p>
+                                                </div>
+                                            ) : null)}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
                     </div>
                 </div>
+            )}
+        </div>
+    );
+}
 
-                <Button
-                    disabled={!htmlContent.trim() || htmlUploading}
-                    onClick={handlePublishHTML}
-                    className="gap-2"
+// ─── Tab 5: Firebase Usage ────────────────────────────────────────────────
+
+function FirebaseUsageTab({ clubId }: { clubId: string }) {
+    const {
+        storageMB,
+        storageGB,
+        reads,
+        writes,
+        storageCostINR,
+        readsCostINR,
+        writesCostINR,
+        totalCostINR,
+        isLoading,
+        constants,
+    } = useClubCostEstimate(clubId);
+
+    const [showExplainer, setShowExplainer] = useState(false);
+
+    if (isLoading) {
+        return (
+            <div className="space-y-4 max-w-2xl">
+                {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6 max-w-2xl">
+            {/* Usage stats */}
+            <div className="grid grid-cols-3 gap-4">
+                <div className="bg-white rounded-2xl border p-5 text-center">
+                    <HardDrive className="w-6 h-6 mx-auto mb-2 text-violet-500" />
+                    <p className="text-xl font-bold">{storageMB.toFixed(2)} MB</p>
+                    <p className="text-xs text-muted-foreground mt-1">Storage Used</p>
+                </div>
+                <div className="bg-white rounded-2xl border p-5 text-center">
+                    <p className="text-xl font-bold">{reads.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Firestore Reads</p>
+                </div>
+                <div className="bg-white rounded-2xl border p-5 text-center">
+                    <p className="text-xl font-bold">{writes.toLocaleString()}</p>
+                    <p className="text-xs text-muted-foreground mt-1">Firestore Writes</p>
+                </div>
+            </div>
+
+            {/* Cost breakdown */}
+            <div className="bg-white rounded-2xl border p-6 space-y-4">
+                <h3 className="font-semibold">Estimated Monthly Cost</h3>
+                <div className="space-y-3">
+                    <div className="flex justify-between text-sm py-2 border-b">
+                        <span className="text-muted-foreground">Storage ({storageGB.toFixed(4)} GB × ₹{(constants.STORAGE_COST_PER_GB * constants.USD_TO_INR).toFixed(2)}/GB)</span>
+                        <span className="font-medium">₹{storageCostINR.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm py-2 border-b">
+                        <span className="text-muted-foreground">Reads ({reads.toLocaleString()} reads)</span>
+                        <span className="font-medium">₹{readsCostINR.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm py-2 border-b">
+                        <span className="text-muted-foreground">Writes ({writes.toLocaleString()} writes)</span>
+                        <span className="font-medium">₹{writesCostINR.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-base font-bold py-2">
+                        <span>Total Estimated Cost</span>
+                        <span className="text-violet-600">₹{totalCostINR.toFixed(2)}</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Explainer */}
+            <div className="bg-white rounded-2xl border overflow-hidden">
+                <button
+                    className="w-full flex items-center justify-between px-5 py-4 text-sm font-medium hover:bg-gray-50 transition-colors"
+                    onClick={() => setShowExplainer((p) => !p)}
                 >
-                    <Upload className="w-4 h-4" />
-                    {htmlUploading ? "Publishing…" : "Update Landing Page"}
-                </Button>
+                    <span>How is this calculated?</span>
+                    {showExplainer ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+                {showExplainer && (
+                    <div className="px-5 pb-5 space-y-3 text-sm text-muted-foreground border-t">
+                        <p className="pt-3">Firebase costs are estimated using the following rates:</p>
+                        <ul className="space-y-2 list-disc pl-5">
+                            <li><strong>Storage:</strong> ${constants.STORAGE_COST_PER_GB}/GB/month = ₹{(constants.STORAGE_COST_PER_GB * constants.USD_TO_INR).toFixed(2)}/GB/month</li>
+                            <li><strong>Firestore Reads:</strong> ${constants.READS_COST_PER_100K} per 100,000 reads = ₹{(constants.READS_COST_PER_100K * constants.USD_TO_INR).toFixed(2)} per 100k</li>
+                            <li><strong>Firestore Writes:</strong> ${constants.WRITES_COST_PER_100K} per 100,000 writes = ₹{(constants.WRITES_COST_PER_100K * constants.USD_TO_INR).toFixed(2)} per 100k</li>
+                        </ul>
+                        <p>USD → INR conversion rate: 1 USD = ₹{constants.USD_TO_INR}</p>
+                        <p className="text-xs">
+                            Read/write counts are stored in <code className="bg-gray-100 px-1 rounded">clubs/{clubId}/usageStats/counters</code> and incremented automatically by the platform.
+                            Storage is calculated by listing all files under <code className="bg-gray-100 px-1 rounded">clubs/{clubId}/</code> in Firebase Storage.
+                        </p>
+                        <p className="text-xs font-medium text-orange-600">
+                            Note: These are estimates only. Firebase free tier quotas (1 GB storage, 50k reads/day, 20k writes/day) may mean actual cost is $0.
+                        </p>
+                    </div>
+                )}
             </div>
         </div>
     );

@@ -35,6 +35,8 @@ const ClubDetail = lazy(() => import("./pages/superadmin/ClubDetail"));
 const ConvertToClub = lazy(() => import("./pages/superadmin/ConvertToClub"));
 const PlatformTree = lazy(() => import("./pages/superadmin/PlatformTree"));
 const SuperAdminSettings = lazy(() => import("./pages/superadmin/SuperAdminSettings"));
+const SuperAdminEnquiries = lazy(() => import("./pages/superadmin/Enquiries"));
+const PlatformSettings = lazy(() => import("./pages/superadmin/PlatformSettings"));
 
 // Owner pages
 const OwnerDashboard = lazy(() => import("./pages/owner/OwnerDashboard"));
@@ -151,7 +153,9 @@ const App = () => (
           <Route path="clubs/:clubId" element={<ClubDetail />} />
           <Route path="clubs/:clubId/convert" element={<ConvertToClub />} />
           <Route path="tree" element={<PlatformTree />} />
-          <Route path="settings" element={<SuperAdminSettings />} />
+          <Route path="enquiries" element={<SuperAdminEnquiries />} />
+          <Route path="settings" element={<PlatformSettings />} />
+          <Route path="legacy-settings" element={<SuperAdminSettings />} />
         </Route>
 
         {/* ── Club Owner routes ──────────────────────────────────────── */}
