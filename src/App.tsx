@@ -6,13 +6,12 @@ import Layout from "./components/Layout";
 import SuperAdminLayout from "./components/superadmin/SuperAdminLayout";
 import { ProtectedRoute, RoleRoute } from "./components/ProtectedRoute";
 import { useAuth, getDashboardPath } from "@/lib/auth";
-import { useClubContext } from "@/lib/clubDetection";
+import { useClubContext, isSuperAdminDomain } from "@/lib/clubDetection";
 import ErrorBoundary from "./components/ErrorBoundary";
 import PageSkeleton from "./components/PageSkeleton";
 
 // ─── Lazy Loaded Pages ──────────────────────────────────────────────────
 const Landing = lazy(() => import("./pages/Landing"));
-const Login = lazy(() => import("./pages/Login"));
 const KitchenDisplay = lazy(() => import("./pages/KitchenDisplay"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Members = lazy(() => import("./pages/Members"));
@@ -28,6 +27,7 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 // Super Admin pages
+const SuperAdminLogin = lazy(() => import("./pages/superadmin/SuperAdminLogin"));
 const SuperAdminDashboard = lazy(() => import("./pages/superadmin/SuperAdminDashboard"));
 const ClubsList = lazy(() => import("./pages/superadmin/ClubsList"));
 const CreateClub = lazy(() => import("./pages/superadmin/CreateClub"));
@@ -37,6 +37,9 @@ const PlatformTree = lazy(() => import("./pages/superadmin/PlatformTree"));
 const SuperAdminSettings = lazy(() => import("./pages/superadmin/SuperAdminSettings"));
 const SuperAdminEnquiries = lazy(() => import("./pages/superadmin/Enquiries"));
 const PlatformSettings = lazy(() => import("./pages/superadmin/PlatformSettings"));
+
+// PIN-gated pages (club domain only)
+const AdminAccess = lazy(() => import("./pages/AdminAccess"));
 
 // Owner pages
 const OwnerDashboard = lazy(() => import("./pages/owner/OwnerDashboard"));
@@ -77,22 +80,26 @@ const ProgressPage = lazy(() => import("./pages/member/ProgressPage"));
 const MemberCardPage = lazy(() => import("./pages/member/MemberCardPage"));
 import BirthdayPopup from "./components/mlm/BirthdayPopup";
 
-// ─── Redirect authenticated users from / to their dashboard ─────────────
+// ─── Domain flag (evaluated once at module load) ─────────────────────────
+const IS_SUPERADMIN_DOMAIN = isSuperAdminDomain();
+
+// ─── HomeRedirect ────────────────────────────────────────────────────────
+//
+// SUPERADMIN DOMAIN (magic-nutrition-club.web.app)
+//   /  → redirect to /superadmin/login (if not logged in)
+//   /  → redirect to /superadmin/dashboard (if already logged in as superAdmin)
+//
+// CLUB DOMAIN (e.g. magicnutritionclub.com)
+//   /  → Landing page (iframe)
+//   /  → role-based dashboard (if already logged in via Firebase Auth)
 
 function HomeRedirect() {
   const { firebaseUser, role, loading: authLoading } = useAuth();
   const { loading: clubLoading } = useClubContext();
 
-  const SUPERADMIN_DOMAINS = [
-    "magic-nutrition-club.web.app",
-    "magic-nutrition-club.firebaseapp.com",
-  ];
+  const loading = authLoading || (!IS_SUPERADMIN_DOMAIN && clubLoading);
 
-  const isSuperAdminDomain = SUPERADMIN_DOMAINS.includes(window.location.hostname);
-
-  // On superadmin domains — only wait for auth, never for club detection
-  // On club domains — wait for both auth and club to finish loading
-  if (authLoading || (!isSuperAdminDomain && clubLoading)) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -100,29 +107,42 @@ function HomeRedirect() {
     );
   }
 
-  // Superadmin domain routing — club context not needed at all
-  if (isSuperAdminDomain) {
+  if (IS_SUPERADMIN_DOMAIN) {
     if (firebaseUser && role === "superAdmin") {
       return <Navigate to="/superadmin/dashboard" replace />;
     }
+    // Any other logged-in role on the superadmin domain — route to dashboard
     if (firebaseUser && role) {
-      // Owner/member logged in on superadmin domain — send to their dashboard
       return <Navigate to={getDashboardPath(role)} replace />;
     }
-    // Not logged in — go to login
-    return <Navigate to="/login" replace />;
+    // Not logged in → superadmin login page
+    return <Navigate to="/superadmin/login" replace />;
   }
 
-  // Club domain — logged in users go to their dashboard
+  // Club domain — logged in via Firebase Auth → go to dashboard
   if (firebaseUser && role) {
     return <Navigate to={getDashboardPath(role)} replace />;
   }
 
-  // Club domain — not logged in — show club landing page
+  // Club domain — not logged in → show landing page
   return <Landing />;
 }
 
-// ─── App ────────────────────────────────────────────────────────────────
+// ─── App ─────────────────────────────────────────────────────────────────
+//
+// ROUTING SUMMARY
+//
+// SUPERADMIN DOMAIN (magic-nutrition-club.web.app)
+//   /                    → redirect to /superadmin/login
+//   /superadmin/login    → email + password login
+//   /superadmin/*        → protected superadmin pages
+//
+// CLUB DOMAIN (e.g. magicnutritionclub.com)
+//   /                    → landing page
+//   /kitchen             → 6-digit PIN gate → kitchen display
+//   /login               → 8-digit PIN gate → owner dashboard
+//   /admin               → 8-digit PIN gate → owner dashboard
+//   /superadmin/*        → redirect to /
 
 const App = () => (
   <ErrorBoundary>
@@ -130,21 +150,40 @@ const App = () => (
     <Sonner />
     <Suspense fallback={<PageSkeleton />}>
       <Routes>
-        {/* ── Public routes ──────────────────────────────────────────── */}
+        {/* ── Root ────────────────────────────────────────────────────── */}
         <Route path="/" element={<HomeRedirect />} />
-        <Route path="/login" element={<Login />} />
+
+        {/* ── Superadmin login (superadmin domain only) ───────────────── */}
+        <Route
+          path="/superadmin/login"
+          element={IS_SUPERADMIN_DOMAIN ? <SuperAdminLogin /> : <Navigate to="/" replace />}
+        />
+
+        {/* ── Club-domain public routes ────────────────────────────────── */}
+        {/*    /login + /admin → PIN gate (8-digit) → owner dashboard with sidebar */}
+        {/*    Using /* wildcard so nested routes inside AdminAccess resolve correctly */}
+        <Route
+          path="/login/*"
+          element={IS_SUPERADMIN_DOMAIN ? <Navigate to="/superadmin/login" replace /> : <AdminAccess />}
+        />
         <Route path="/kitchen" element={<KitchenDisplay />} />
+        <Route path="/admin/*" element={<AdminAccess />} />
         <Route path="/reception" element={<ReceptionDisplay />} />
 
-        {/* ── Super Admin routes ─────────────────────────────────────── */}
+        {/* ── Super Admin routes (superadmin domain only) ─────────────── */}
         <Route
           path="/superadmin/*"
           element={
-            <ProtectedRoute>
-              <RoleRoute roles={["superAdmin"]}>
-                <SuperAdminLayout />
-              </RoleRoute>
-            </ProtectedRoute>
+            IS_SUPERADMIN_DOMAIN ? (
+              <ProtectedRoute>
+                <RoleRoute roles={["superAdmin"]}>
+                  <SuperAdminLayout />
+                </RoleRoute>
+              </ProtectedRoute>
+            ) : (
+              // Club owners trying to hit /superadmin/* → bounce to home
+              <Navigate to="/" replace />
+            )
           }
         >
           <Route path="dashboard" element={<SuperAdminDashboard />} />
@@ -158,7 +197,7 @@ const App = () => (
           <Route path="legacy-settings" element={<SuperAdminSettings />} />
         </Route>
 
-        {/* ── Club Owner routes ──────────────────────────────────────── */}
+        {/* ── Club Owner routes (Firebase Auth) ─────────────────────── */}
         <Route
           path="/owner/*"
           element={

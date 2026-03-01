@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth, getDashboardPath } from "@/lib/auth";
+import { isSuperAdminDomain } from "@/lib/clubDetection";
 import type { UserRole } from "@/types/firestore";
 
 // ─── Loading spinner ────────────────────────────────────────────────────
@@ -16,10 +17,17 @@ function LoadingScreen() {
     );
 }
 
+// The login path depends on which domain we're on:
+// - Superadmin domain → /superadmin/login  (email + password)
+// - Club domain       → /login             (PIN gate — but protected routes
+//                                           are only used on the superadmin
+//                                           domain so this path rarely fires)
+const LOGIN_PATH = isSuperAdminDomain() ? "/superadmin/login" : "/login";
+
 // ─── ProtectedRoute ─────────────────────────────────────────────────────
-// Wraps any route that requires authentication.
-// If not logged in → redirects to /login
-// If logged in but wrong role → redirects to role's correct dashboard
+// Wraps any route that requires Firebase Auth.
+// If not logged in → redirects to the appropriate login page.
+// If logged in but wrong role → redirects to role's correct dashboard.
 
 interface ProtectedRouteProps {
     children: ReactNode;
@@ -34,7 +42,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     }
 
     if (!firebaseUser) {
-        return <Navigate to="/login" state={{ from: location }} replace />;
+        return <Navigate to={LOGIN_PATH} state={{ from: location }} replace />;
     }
 
     // If role hasn't loaded yet but user is authenticated, wait
@@ -62,8 +70,7 @@ export function RoleRoute({ roles, children }: RoleRouteProps) {
     }
 
     if (!role || !roles.includes(role)) {
-        // Redirect to the user's correct dashboard
-        const dashboardPath = role ? getDashboardPath(role) : "/login";
+        const dashboardPath = role ? getDashboardPath(role) : LOGIN_PATH;
         return <Navigate to={dashboardPath} replace />;
     }
 

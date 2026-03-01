@@ -1,37 +1,22 @@
 import { useState, useEffect } from "react";
 import { useClubContext } from "@/lib/clubDetection";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useKitchenOrders, useUpdateOrderStatus, useTodayOrdersSummary } from "@/hooks/useOrders";
 import KitchenOrderCard from "@/components/orders/KitchenOrderCard";
+import PinGate from "@/components/PinGate";
+import { usePinAccess } from "@/hooks/usePinAccess";
 
 export default function KitchenDisplay() {
-    const { club, loading: clubLoading } = useClubContext();
-    const [pin, setPin] = useState("");
-    const [authenticated, setAuthenticated] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [kitchenPin, setKitchenPin] = useState<string | null>(null);
+    const { isVerified, isLoading, clubName, clubLogo, verify, logout } = usePinAccess("kitchen");
     const [clock, setClock] = useState(new Date());
 
     useEffect(() => {
-        if (club?.kitchenPin) setKitchenPin(club.kitchenPin);
-    }, [club]);
-
-    useEffect(() => {
-        if (!authenticated) return;
+        if (!isVerified) return;
         const t = setInterval(() => setClock(new Date()), 1000);
         return () => clearInterval(t);
-    }, [authenticated]);
+    }, [isVerified]);
 
-    const handlePinSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        setError(null);
-        if (!kitchenPin) { setError("Kitchen display is not configured for this club."); return; }
-        if (pin === kitchenPin) setAuthenticated(true);
-        else { setError("Invalid PIN. Please try again."); setPin(""); }
-    };
-
-    if (clubLoading) {
+    if (isLoading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-background">
                 <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
@@ -39,34 +24,23 @@ export default function KitchenDisplay() {
         );
     }
 
-    if (!authenticated) {
+    if (!isVerified) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-white to-yellow-50 p-4">
-                <div className="w-full max-w-sm">
-                    <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-white/20 p-8 space-y-6">
-                        <div className="text-center space-y-2">
-                            <div className="h-14 w-14 mx-auto rounded-xl bg-gradient-to-br from-orange-500 to-yellow-500 flex items-center justify-center">
-                                <span className="text-white text-2xl">🍳</span>
-                            </div>
-                            <h1 className="text-2xl font-bold">Kitchen Display</h1>
-                            <p className="text-sm text-muted-foreground">{club?.name || "Magic Nutrition Club"}</p>
-                            <p className="text-xs text-muted-foreground">Enter the 4-digit kitchen PIN</p>
-                        </div>
-                        <form onSubmit={handlePinSubmit} className="space-y-4">
-                            <Input type="password" inputMode="numeric" maxLength={4} placeholder="• • • •" value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} className="text-center text-2xl tracking-[0.5em] font-mono" autoFocus />
-                            {error && <div className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2 text-center">{error}</div>}
-                            <Button type="submit" className="w-full" disabled={pin.length !== 4}>Enter Kitchen</Button>
-                        </form>
-                    </div>
-                </div>
-            </div>
+            <PinGate
+                type="kitchen"
+                clubName={clubName}
+                clubLogo={clubLogo}
+                pinLength={6}
+                isLoading={false}
+                onVerify={verify}
+            />
         );
     }
 
-    return <KitchenScreen club={club} clock={clock} onLock={() => { setAuthenticated(false); setPin(""); }} />;
+    return <KitchenScreen clubName={clubName} clock={clock} onLock={logout} />;
 }
 
-function KitchenScreen({ club, clock, onLock }: { club: any; clock: Date; onLock: () => void }) {
+function KitchenScreen({ clubName, clock, onLock }: { clubName: string; clock: Date; onLock: () => void }) {
     const { orders, loading } = useKitchenOrders();
     const { summary } = useTodayOrdersSummary();
     const updateStatus = useUpdateOrderStatus();
@@ -84,7 +58,7 @@ function KitchenScreen({ club, clock, onLock }: { club: any; clock: Date; onLock
             <div className="flex items-center justify-between p-4 border-b border-gray-800">
                 <div className="flex items-center gap-4">
                     <h1 className="text-2xl font-black">🍳 Kitchen</h1>
-                    <span className="text-sm text-gray-400">{club?.name}</span>
+                    <span className="text-sm text-gray-400">{clubName}</span>
                 </div>
                 <div className="flex items-center gap-6">
                     <span className="text-sm text-gray-400">{summary?.totalOrders || 0} orders today</span>
@@ -139,4 +113,3 @@ function KitchenScreen({ club, clock, onLock }: { club: any; clock: Date; onLock
         </div>
     );
 }
-

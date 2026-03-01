@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useLocation, Outlet } from "react-router-dom";
+import { Link, useLocation, Outlet, useNavigate } from "react-router-dom";
 import {
     LayoutDashboard,
     Building2,
@@ -26,6 +26,7 @@ const baseNavItems = [
 export default function SuperAdminLayout() {
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const location = useLocation();
+    const navigate = useNavigate();
     const { signOut, userProfile } = useAuth();
     const { data: unreadEnquiries = 0 } = useUnreadEnquiryCount();
 
@@ -135,7 +136,7 @@ export default function SuperAdminLayout() {
                         size="sm"
                         className={`text-gray-400 hover:text-red-400 hover:bg-gray-800 ${sidebarOpen ? "w-full justify-start" : "w-full justify-center"
                             }`}
-                        onClick={() => signOut()}
+                        onClick={async () => { await signOut(); navigate("/superadmin/login", { replace: true }); }}
                     >
                         <LogOut className="w-4 h-4" />
                         {sidebarOpen && <span className="ml-2 text-sm">Sign Out</span>}

@@ -9,7 +9,7 @@ export default function DailyStatsBar() {
 
     const stats = [
         { key: "todayAttendance", label: "Today's Check-ins", icon: CalendarCheck, color: "text-violet-600", bg: "bg-violet-50" },
-        { key: "todayRevenue", label: `Today's Revenue`, icon: DollarSign, color: "text-emerald-600", bg: "bg-emerald-50", suffix: ` ${club?.currencyName || ""}` },
+        { key: "todayRevenue", label: "Today's Revenue", icon: DollarSign, color: "text-emerald-600", bg: "bg-emerald-50", prefix: "₹" },
         { key: "totalActiveMembers", label: "Active Members", icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
         { key: "lowStockCount", label: "Low Stock Items", icon: AlertTriangle, color: "text-orange-600", bg: "bg-orange-50" },
     ] as const;
@@ -35,7 +35,7 @@ export default function DailyStatsBar() {
                                 ) : (
                                     <>
                                         <p className={`text-2xl font-bold ${isDanger ? "text-orange-600" : "text-foreground"}`}>
-                                            {val}{"suffix" in s ? s.suffix : ""}
+                                            {"prefix" in s ? s.prefix : ""}{val}
                                         </p>
                                         <p className="text-xs text-muted-foreground font-medium">{s.label}</p>
                                     </>

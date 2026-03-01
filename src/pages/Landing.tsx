@@ -1,8 +1,22 @@
+import { useEffect } from "react";
 import { useClubContext } from "@/lib/clubDetection";
 import ComingSoonPage from "@/components/ComingSoonPage";
 
 export default function Landing() {
     const { club, loading } = useClubContext();
+
+    // Listen for navigation requests posted from inside the landing page iframe.
+    // The iframe HTML uses window.parent.postMessage({type:'MNC_NAVIGATE', path:'/login'}, '*')
+    // because <a href="/login"> inside an iframe navigates the iframe itself, not the parent.
+    useEffect(() => {
+        function handler(e: MessageEvent) {
+            if (e.data?.type === "MNC_NAVIGATE" && typeof e.data.path === "string") {
+                window.location.href = e.data.path;
+            }
+        }
+        window.addEventListener("message", handler);
+        return () => window.removeEventListener("message", handler);
+    }, []);
 
     if (loading) {
         return (

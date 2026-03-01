@@ -42,6 +42,7 @@ export interface Club {
     maintenanceDueDate: Timestamp;
     monthlyFee?: number;
     kitchenPin: string;
+    adminPin?: string;
     createdAt: Timestamp;
     createdBy: string;
     referralBonusCoins?: number;

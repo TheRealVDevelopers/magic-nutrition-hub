@@ -209,7 +209,8 @@ function ClubInfoTab({ club }: { club: Club }) {
         ownerEmail: club.ownerEmail ?? "",
         ownerPhone: club.ownerPhone,
         address: club.address ?? "",
-        kitchenPin: club.kitchenPin,
+        kitchenPin: club.kitchenPin ?? "",
+        adminPin: club.adminPin ?? "",
         monthlyFee: String(club.monthlyFee ?? 20000),
         primaryColor: club.primaryColor,
         secondaryColor: club.secondaryColor || "#10B981",
@@ -220,7 +221,35 @@ function ClubInfoTab({ club }: { club: Club }) {
         club.domains?.length ? club.domains : [club.domain]
     );
     const [newDomain, setNewDomain] = useState("");
-    const [showPin, setShowPin] = useState(false);
+    const [showKitchenPin, setShowKitchenPin] = useState(false);
+    const [showAdminPin, setShowAdminPin] = useState(false);
+    const [genKitchenConfirm, setGenKitchenConfirm] = useState(false);
+    const [genAdminConfirm, setGenAdminConfirm] = useState(false);
+    const [genSaving, setGenSaving] = useState(false);
+
+    async function generateAndSavePin(type: "kitchen" | "admin") {
+        const length = type === "kitchen" ? 6 : 8;
+        const min = Math.pow(10, length - 1);
+        const max = Math.pow(10, length) - 1;
+        const newPin = String(Math.floor(min + Math.random() * (max - min + 1)));
+        setGenSaving(true);
+        try {
+            const field = type === "kitchen" ? "kitchenPin" : "adminPin";
+            await updateDoc(doc(db, "clubs", club.id), { [field]: newPin });
+            handleChange(field as keyof typeof form, newPin);
+            toast({ title: `${type === "kitchen" ? "Kitchen" : "Admin"} PIN updated`, description: `New PIN saved to Firestore.` });
+        } catch (err: unknown) {
+            toast({
+                title: "Failed to update PIN",
+                description: err instanceof Error ? err.message : "Unknown error",
+                variant: "destructive",
+            });
+        } finally {
+            setGenSaving(false);
+            if (type === "kitchen") setGenKitchenConfirm(false);
+            else setGenAdminConfirm(false);
+        }
+    }
 
     function handleChange(field: keyof typeof form, value: string) {
         setForm((prev) => ({ ...prev, [field]: value }));
@@ -252,6 +281,7 @@ function ClubInfoTab({ club }: { club: Club }) {
                     ownerPhone: form.ownerPhone,
                     address: form.address,
                     kitchenPin: form.kitchenPin,
+                    adminPin: form.adminPin,
                     monthlyFee: Number(form.monthlyFee),
                     primaryColor: form.primaryColor,
                     secondaryColor: form.secondaryColor,
@@ -309,29 +339,68 @@ function ClubInfoTab({ club }: { club: Club }) {
                     </div>
                 </div>
 
-                {/* Kitchen PIN */}
-                <div className="bg-white rounded-2xl border p-6 space-y-4">
-                    <h3 className="font-semibold">Kitchen PIN</h3>
+                {/* Access PINs */}
+                <div className="bg-white rounded-2xl border p-6 space-y-5">
+                    <h3 className="font-semibold">Access PINs</h3>
+
+                    {/* Kitchen PIN */}
                     <div className="space-y-1.5">
-                        <Label>PIN (4 digits)</Label>
+                        <Label>Kitchen PIN (6 digits)</Label>
                         <div className="flex items-center gap-2">
                             <Input
-                                type={showPin ? "text" : "password"}
+                                type={showKitchenPin ? "text" : "password"}
                                 value={form.kitchenPin}
-                                onChange={(e) => handleChange("kitchenPin", e.target.value)}
-                                maxLength={4}
-                                className="w-32"
+                                onChange={(e) => handleChange("kitchenPin", e.target.value.replace(/\D/g, "").slice(0, 6))}
+                                maxLength={6}
+                                className="w-40 font-mono tracking-widest"
+                                placeholder="------"
                             />
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-9 w-9"
-                                onClick={() => setShowPin((p) => !p)}
-                            >
-                                {showPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            <Button type="button" variant="ghost" size="icon" className="h-9 w-9" onClick={() => setShowKitchenPin((p) => !p)}>
+                                {showKitchenPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                             </Button>
+                            {genKitchenConfirm ? (
+                                <>
+                                    <Button type="button" variant="destructive" size="sm" disabled={genSaving}
+                                        onClick={() => generateAndSavePin("kitchen")}>
+                                        {genSaving ? <><Loader2 className="w-3 h-3 animate-spin mr-1" />Saving…</> : "Confirm"}
+                                    </Button>
+                                    <Button type="button" variant="ghost" size="sm" disabled={genSaving} onClick={() => setGenKitchenConfirm(false)}>Cancel</Button>
+                                </>
+                            ) : (
+                                <Button type="button" variant="outline" size="sm" onClick={() => setGenKitchenConfirm(true)}>Generate</Button>
+                            )}
                         </div>
+                        <p className="text-[11px] text-muted-foreground">Used by kitchen staff to access the Kitchen Display at <code>/kitchen</code></p>
+                    </div>
+
+                    {/* Admin PIN */}
+                    <div className="space-y-1.5">
+                        <Label>Admin PIN (8 digits)</Label>
+                        <div className="flex items-center gap-2">
+                            <Input
+                                type={showAdminPin ? "text" : "password"}
+                                value={form.adminPin}
+                                onChange={(e) => handleChange("adminPin", e.target.value.replace(/\D/g, "").slice(0, 8))}
+                                maxLength={8}
+                                className="w-48 font-mono tracking-widest"
+                                placeholder="--------"
+                            />
+                            <Button type="button" variant="ghost" size="icon" className="h-9 w-9" onClick={() => setShowAdminPin((p) => !p)}>
+                                {showAdminPin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </Button>
+                            {genAdminConfirm ? (
+                                <>
+                                    <Button type="button" variant="destructive" size="sm" disabled={genSaving}
+                                        onClick={() => generateAndSavePin("admin")}>
+                                        {genSaving ? <><Loader2 className="w-3 h-3 animate-spin mr-1" />Saving…</> : "Confirm"}
+                                    </Button>
+                                    <Button type="button" variant="ghost" size="sm" disabled={genSaving} onClick={() => setGenAdminConfirm(false)}>Cancel</Button>
+                                </>
+                            ) : (
+                                <Button type="button" variant="outline" size="sm" onClick={() => setGenAdminConfirm(true)}>Generate</Button>
+                            )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">Used by club owners to access the Admin Dashboard at <code>/admin</code> without Firebase Auth</p>
                     </div>
                 </div>
 

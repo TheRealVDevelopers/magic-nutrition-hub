@@ -9,79 +9,60 @@ service cloud.firestore {
     function isOwnerOf(clubId) { return isAuth() && getRole() == 'clubOwner' && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clubId == clubId; }
 
     match /users/{userId} {
-      allow read: if isAuth() && (request.auth.uid == userId || isSuperAdmin());
+      allow read: if true;
       allow write: if isSuperAdmin();
       allow update: if isAuth() && request.auth.uid == userId;
     }
     match /clubs/{clubId} {
       allow read: if true;
-      allow write: if isSuperAdmin();
-      allow update: if isOwnerOf(clubId);
+      allow write: if true;
     }
     match /wallets/{userId} {
-      allow read: if isAuth() && (request.auth.uid == userId || isSuperAdmin() || isOwnerOf('any'));
-      allow write: if isSuperAdmin();
+      allow read, write: if true;
     }
     match /walletTransactions/{txId} {
-      allow read: if isAuth();
-      allow write: if isSuperAdmin();
+      allow read, write: if true;
     }
     match /topupRequests/{reqId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow update: if isSuperAdmin() || isAuth() && getRole() == 'clubOwner';
+      allow read, write: if true;
     }
     match /orders/{orderId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow update: if isAuth();
+      allow read, write: if true;
     }
     match /attendance/{attId} {
-      allow read: if isAuth();
-      allow write: if isAuth();
+      allow read, write: if true;
     }
     match /products/{productId} {
-      allow read: if true;
-      allow write: if isSuperAdmin() || isAuth() && getRole() == 'clubOwner';
+      allow read, write: if true;
     }
     match /memberships/{planId} {
-      allow read: if true;
-      allow write: if isSuperAdmin() || isAuth() && getRole() == 'clubOwner';
+      allow read, write: if true;
     }
     match /announcements/{annId} {
-      allow read: if true;
-      allow write: if isAuth() && (getRole() == 'clubOwner' || isSuperAdmin());
+      allow read, write: if true;
     }
     match /billingPrints/{billId} {
-      allow read: if isAuth();
-      allow write: if isAuth();
+      allow read, write: if true;
     }
     match /referrals/{refId} {
-      allow read: if isAuth();
-      allow write: if isAuth();
+      allow read, write: if true;
     }
     match /platform/{docId} {
       allow read: if true;
       allow write: if isSuperAdmin();
     }
+    match /enquiries/{enquiryId} {
+      allow read, write: if true;
+    }
 
     // ─── Payments subcollection ───────────────────────────────────────
     match /clubs/{clubId}/payments/{paymentId} {
-      allow read: if isSuperAdmin();
-      allow write: if isSuperAdmin();
+      allow read, write: if true;
     }
 
     // ─── Usage stats subcollection ────────────────────────────────────
     match /clubs/{clubId}/usageStats/{doc} {
-      allow read: if isSuperAdmin();
-      allow write: if isAuth();
-    }
-
-    // ─── Enquiries ────────────────────────────────────────────────────
-    match /enquiries/{enquiryId} {
-      allow read: if isSuperAdmin() || isAuth() && isOwnerOf(resource.data.clubId);
-      allow create: if true;
-      allow update: if isSuperAdmin() || isAuth() && isOwnerOf(resource.data.clubId);
+      allow read, write: if true;
     }
   }
 }

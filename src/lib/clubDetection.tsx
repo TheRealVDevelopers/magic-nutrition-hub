@@ -42,7 +42,8 @@ const DEFAULT_DEV_CLUB: Club = {
     status: "active",
     maintenancePaid: true,
     maintenanceDueDate: null as any,
-    kitchenPin: "1234",
+    kitchenPin: "123456",
+    adminPin: "12345678",
     createdAt: null as any,
     createdBy: "superadmin_user_1",
 };
