@@ -66,6 +66,8 @@ const MemberAttendancePage = lazy(() => import("./pages/member/MemberAttendanceP
 // Attendance & Reception
 const AttendancePage = lazy(() => import("./pages/owner/AttendancePage"));
 const ReceptionDisplay = lazy(() => import("./pages/ReceptionDisplay"));
+const ReceptionPage = lazy(() => import("./pages/Reception"));
+const JoinPage = lazy(() => import("./pages/Join"));
 const StaffDashboard = lazy(() => import("./pages/staff/StaffDashboard"));
 
 // Orders
@@ -176,7 +178,8 @@ const App = () => (
         />
         <Route path="/kitchen" element={<KitchenDisplay />} />
         <Route path="/admin/*" element={<AdminAccess />} />
-        <Route path="/reception" element={<ReceptionDisplay />} />
+        <Route path="/reception" element={<ReceptionPage />} />
+        <Route path="/join" element={<JoinPage />} />
 
         {/* ── Super Admin routes (superadmin domain only) ─────────────── */}
         <Route

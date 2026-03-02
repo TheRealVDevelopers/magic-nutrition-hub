@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { format, subDays } from "date-fns";
-import { BarChart3, Users, CalendarCheck, Download } from "lucide-react";
+import { BarChart3, Users, CalendarCheck, Download, Printer } from "lucide-react";
 import {
     BarChart,
     Bar,
@@ -22,6 +22,8 @@ import {
     useMemberReport,
 } from "@/hooks/owner/useReports";
 import { useClubContext } from "@/lib/clubDetection";
+import DailySummaryReceipt from "@/components/receipts/DailySummaryReceipt";
+import { printReceipt } from "@/utils/printReceipt";
 
 const GREEN = "#2d9653";
 
@@ -42,10 +44,14 @@ export default function Reports() {
     const [tab, setTab] = useState<"revenue" | "attendance" | "members">("revenue");
     const [startDate, setStartDate] = useState(format(subDays(new Date(), 30), "yyyy-MM-dd"));
     const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
+    const [printDate, setPrintDate] = useState(format(new Date(), "yyyy-MM-dd"));
 
     const revReport = useRevenueReport(clubId, startDate, endDate);
     const attReport = useAttendanceReport(clubId, startDate, endDate);
     const memReport = useMemberReport(clubId);
+    // Single-day reports for the daily summary receipt
+    const dayRevReport = useRevenueReport(clubId, printDate, printDate);
+    const dayAttReport = useAttendanceReport(clubId, printDate, printDate);
 
     const currency = club?.currencyName || "Coins";
 
@@ -127,9 +133,29 @@ export default function Reports() {
                                     </p>
                                     <p className="text-xs text-muted-foreground mt-1">{revReport.data?.totalOrders ?? 0} orders</p>
                                 </div>
-                                <Button size="sm" onClick={handleExportRevenue} disabled={!revReport.data} style={{ backgroundColor: GREEN }}>
-                                    <Download className="w-4 h-4 mr-1" /> Export CSV
-                                </Button>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    {/* Print Daily Summary */}
+                                    <div className="flex items-center gap-1">
+                                        <Input
+                                            type="date"
+                                            value={printDate}
+                                            onChange={(e) => setPrintDate(e.target.value)}
+                                            className="w-[130px] h-8 text-xs"
+                                        />
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="gap-1 h-8 text-xs"
+                                            disabled={dayRevReport.isLoading || dayAttReport.isLoading}
+                                            onClick={printReceipt}
+                                        >
+                                            <Printer className="w-3.5 h-3.5" /> Print Summary
+                                        </Button>
+                                    </div>
+                                    <Button size="sm" onClick={handleExportRevenue} disabled={!revReport.data} style={{ backgroundColor: GREEN }}>
+                                        <Download className="w-4 h-4 mr-1" /> Export CSV
+                                    </Button>
+                                </div>
                             </div>
                             <div className="h-64 rounded-xl border bg-white p-4">
                                 <ResponsiveContainer width="100%" height="100%">
@@ -237,6 +263,24 @@ export default function Reports() {
                     )}
                 </div>
             )}
+
+            {/* Hidden daily summary receipt — only visible during window.print() */}
+            <div id="receipt-print-area">
+                <DailySummaryReceipt
+                    date={new Date(printDate + "T00:00:00")}
+                    totalAttendance={dayAttReport.data?.totalRecords ?? 0}
+                    totalOrders={dayRevReport.data?.totalOrders ?? 0}
+                    totalRevenue={dayRevReport.data?.totalRevenue ?? 0}
+                    totalTopUps={0}
+                    topItems={(dayRevReport.data?.topItems ?? []).map((item) => ({
+                        name: item.name,
+                        count: item.count ?? (item as any).quantity ?? 0,
+                    }))}
+                    clubName={club?.name ?? "Magic Nutrition Club"}
+                    clubPhone={club?.phone ?? club?.ownerPhone ?? ""}
+                    receiptNumber={`RPT${printDate.replace(/-/g, "")}`}
+                />
+            </div>
         </div>
     );
 }

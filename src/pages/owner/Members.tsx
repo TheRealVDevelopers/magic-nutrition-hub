@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, Eye } from "lucide-react";
+import { Plus, Search, Eye, Printer, CheckCircle } from "lucide-react";
 import { Timestamp } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useMembers, useAddMember } from "@/hooks/owner/useMembers";
 import { useClubContext } from "@/lib/clubDetection";
 import type { User } from "@/types/firestore";
+import MembershipReceipt, { type MembershipReceiptProps } from "@/components/receipts/MembershipReceipt";
+import { printReceipt } from "@/utils/printReceipt";
 
 type FilterTab = "all" | "active" | "expired" | "expiring";
 
@@ -42,6 +44,7 @@ export default function Members() {
         currentWeight: "", targetWeight: "", healthConditions: "", membershipTier: "bronze" as "gold" | "silver" | "bronze",
     });
     const [formError, setFormError] = useState("");
+    const [membershipSuccess, setMembershipSuccess] = useState<MembershipReceiptProps | null>(null);
 
     const filtered = useMemo(() => {
         if (!members) return [];
@@ -67,7 +70,7 @@ export default function Members() {
         try {
             const now = new Date();
             const endDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-            await addMember.mutateAsync({
+            const result = await addMember.mutateAsync({
                 clubId: club.id,
                 member: {
                     name: formData.name.trim(),
@@ -83,9 +86,21 @@ export default function Members() {
                     ...(formData.healthConditions && { healthConditions: formData.healthConditions } as any),
                 },
             });
-            toast({ title: "Member added!", description: `${formData.name} has been registered.` });
             setDialogOpen(false);
             setFormData({ name: "", phone: "", email: "", address: "", dob: "", currentWeight: "", targetWeight: "", healthConditions: "", membershipTier: "bronze" });
+            setMembershipSuccess({
+                memberName: formData.name.trim(),
+                memberId: (result as any)?.memberId ?? "",
+                planName: formData.membershipTier,
+                amount: 0,
+                paymentMethod: "Registration",
+                startDate: now,
+                endDate,
+                clubName: club.name,
+                clubPhone: club.phone ?? club.ownerPhone ?? "",
+                date: now,
+                receiptNumber: `MBR${Date.now().toString().slice(-6)}`,
+            });
         } catch (err: any) {
             setFormError(err.message || "Failed to add member.");
             toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -239,6 +254,39 @@ export default function Members() {
                     </form>
                 </DialogContent>
             </Dialog>
+
+            {/* Member Added — Success & Print Dialog */}
+            <Dialog open={!!membershipSuccess} onOpenChange={() => setMembershipSuccess(null)}>
+                <DialogContent className="rounded-2xl max-w-sm">
+                    <DialogHeader>
+                        <DialogTitle>Member Added!</DialogTitle>
+                    </DialogHeader>
+                    {membershipSuccess && (
+                        <div className="space-y-4 pt-2">
+                            <div className="flex flex-col items-center gap-2 py-4">
+                                <CheckCircle className="w-12 h-12 text-emerald-500" />
+                                <p className="text-lg font-bold">{membershipSuccess.memberName}</p>
+                                <p className="text-sm text-muted-foreground capitalize">{membershipSuccess.planName} Membership · 30 days</p>
+                            </div>
+                            <Button
+                                className="w-full rounded-xl gap-2"
+                                style={{ backgroundColor: "#2d9653" }}
+                                onClick={printReceipt}
+                            >
+                                <Printer className="w-4 h-4" /> Print Membership Receipt
+                            </Button>
+                            <Button variant="outline" className="w-full rounded-xl" onClick={() => setMembershipSuccess(null)}>
+                                Close
+                            </Button>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Hidden receipt area */}
+            <div id="receipt-print-area">
+                {membershipSuccess && <MembershipReceipt {...membershipSuccess} />}
+            </div>
         </div>
     );
 }

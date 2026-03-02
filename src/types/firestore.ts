@@ -37,6 +37,8 @@ export interface Club {
     ownerEmail?: string;
     ownerUserId: string;
     address?: string;
+    phone?: string;
+    hours?: string;
     status: "active" | "disabled" | "suspended";
     maintenancePaid: boolean;
     maintenanceDueDate: Timestamp;
@@ -49,6 +51,7 @@ export interface Club {
     landingPageUrl: string | null;
     landingPageImages: LandingImage[];
     landingPageHistory?: LandingPageVersion[];
+    memberIdPrefix?: string;
 }
 
 // ─── Landing page version history ─────────────────────────────────────
@@ -91,6 +94,8 @@ export interface Enquiry {
     targetWeight?: number;
     healthConditions?: string;
     referredBy?: string;
+    referredByMemberId?: string;
+    notes?: string;
     status: "new" | "contacted" | "converted" | "rejected";
     createdAt: Timestamp;
 }
@@ -114,6 +119,8 @@ export type UserRole =
     | "member"
     | "kitchenDisplay";
 
+export type MemberType = 'visiting' | 'bronze' | 'silver' | 'gold' | 'platinum';
+
 export interface User {
     id: string;
     name: string;
@@ -136,6 +143,9 @@ export interface User {
     ownedClubId: string | null;
     originalClubId: string;
     referredBy: string | null;
+    referredByMemberId?: string | null;
+    memberType?: MemberType;
+    memberId?: string;
     createdAt: Timestamp;
     updatedAt: Timestamp;
 }
@@ -173,8 +183,18 @@ export interface WalletTransaction {
     | "adjustment";
     addedBy: string | null;
     note: string;
-    createdAt: Timestamp;
+    description?: string;
+    paymentMethod?: string;
+    reference?: string;
+    balanceBefore?: number;
     balanceAfter: number;
+    // Membership-specific
+    planName?: string;
+    membershipFrom?: Timestamp;
+    membershipTo?: Timestamp;
+    // Order-specific
+    orderId?: string;
+    createdAt: Timestamp;
 }
 
 // ─── /topupRequests/{requestId} ───────────────────────────────────────
@@ -186,7 +206,10 @@ export interface TopupRequest {
     clubId: string;
     requestedAmount: number;
     approvedAmount: number | null;
+    paymentMethod?: string;
+    reference?: string;
     status: "pending" | "approved" | "rejected";
+    rejectionReason?: string;
     requestedAt: Timestamp;
     resolvedAt: Timestamp | null;
     resolvedBy: string | null;
@@ -272,6 +295,7 @@ export interface Announcement {
     createdAt: Timestamp;
     expiresAt: Timestamp | null;
     isActive: boolean;
+    priority?: 'normal' | 'important' | 'urgent';
 }
 
 // ─── /referrals/{referralId} ──────────────────────────────────────────
@@ -305,4 +329,31 @@ export interface BillingPrint {
     paidFrom: "wallet" | "cash";
     printedAt: Timestamp;
     printedBy: string;
+}
+
+// ─── /volunteers/{sessionId} ──────────────────────────────────────────
+export interface VolunteerSession {
+    id: string;
+    memberId: string;
+    memberName: string;
+    memberPhoto: string;
+    clubId: string;
+    loginTime: Timestamp;
+    logoutTime: Timestamp | null;
+    totalMinutes: number | null;
+    date: string; // 'YYYY-MM-DD'
+    status: 'active' | 'completed';
+}
+
+// ─── /feedback/{feedbackId} ───────────────────────────────────────────
+export interface Feedback {
+    id: string;
+    clubId: string;
+    name?: string;
+    memberId?: string;
+    rating: number; // 1-5
+    category: 'Service' | 'Shakes' | 'Cleanliness' | 'Staff' | 'Timing' | 'Other';
+    message?: string;
+    createdAt: Timestamp;
+    source: 'reception' | 'app';
 }

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
     collection,
@@ -17,12 +17,15 @@ import {
     Scale,
     Megaphone,
     ChevronRight,
+    HandHeart,
+    X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useAuth } from "@/lib/auth";
 import { useClubContext } from "@/lib/clubDetection";
 import { db } from "@/lib/firebase";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
     useMyAttendance,
@@ -30,6 +33,8 @@ import {
 } from "@/hooks/member/useMemberAttendance";
 import { useMyWallet } from "@/hooks/member/useMemberWallet";
 import { useWeightLogs } from "@/hooks/useMemberFeatures";
+import { useCreateVolunteerSession } from "@/hooks/useVolunteers";
+import { useToast } from "@/hooks/use-toast";
 import type { User, Attendance, Announcement, Order } from "@/types/firestore";
 
 const GREEN = "#2d9653";
@@ -86,7 +91,34 @@ export default function MemberDashboard() {
     const { club } = useClubContext();
     const { text: greetingText, emoji } = getGreeting();
     const firstName = userProfile ? getFirstName(userProfile.name) : "";
-    const memberIdDisplay = userProfile ? `MNC-${userProfile.id.substring(0, 6).toUpperCase()}` : "";
+    // Use actual memberId field if present, otherwise fall back to derived ID display
+    const memberIdDisplay = (userProfile as any)?.memberId
+        ? String((userProfile as any).memberId)
+        : userProfile ? `MNC-${userProfile.id.substring(0, 6).toUpperCase()}` : "";
+    const { toast } = useToast();
+    const [showVolunteerModal, setShowVolunteerModal] = useState(false);
+    const createVolunteerSession = useCreateVolunteerSession();
+
+    const handleVolunteerScan = useCallback(async (qrContent: string) => {
+        if (!userProfile || !club) return;
+        try {
+            const parsed = JSON.parse(qrContent);
+            if (parsed.type === "volunteer-login" && parsed.clubId === club.id) {
+                await createVolunteerSession.mutateAsync({
+                    memberId: userProfile.id,
+                    memberName: userProfile.name,
+                    memberPhoto: userProfile.photo ?? "",
+                    clubId: club.id,
+                });
+                toast({ title: "✅ Volunteer session started! Thank you for helping out." });
+                setShowVolunteerModal(false);
+            } else {
+                toast({ title: "Invalid QR code", variant: "destructive" });
+            }
+        } catch {
+            toast({ title: "Invalid QR code", variant: "destructive" });
+        }
+    }, [userProfile, club, createVolunteerSession, toast]);
 
     // Wallet - use useQuery from member wallet hook
     const { data: walletData, isLoading: walletLoading } = useMyWallet(userProfile?.id ?? null);
@@ -160,288 +192,347 @@ export default function MemberDashboard() {
     }
 
     return (
-        <div
-            className="min-h-screen pb-24 px-4 pt-6 font-[Nunito,sans-serif]"
-            style={{ background: BG }}
-        >
-            <div className="max-w-lg mx-auto space-y-6">
-                {/* Greeting */}
-                <div>
-                    <h1 className="text-2xl font-bold text-slate-800">
-                        {greetingText}, {firstName} {emoji}
-                    </h1>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <Badge variant="outline" className="font-mono text-xs">
-                            {memberIdDisplay}
-                        </Badge>
-                        {membershipStatus && (
-                            <Badge
-                                variant={membershipStatus.variant}
-                                className={membershipStatus.className}
-                            >
-                                {membershipStatus.label}
+        <>
+            <div
+                className="min-h-screen pb-24 px-4 pt-6 font-[Nunito,sans-serif]"
+                style={{ background: BG }}
+            >
+
+                <div className="max-w-lg mx-auto space-y-6">
+                    {/* Greeting */}
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-800">
+                            {greetingText}, {firstName} {emoji}
+                        </h1>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <Badge variant="outline" className="font-mono text-xs">
+                                {memberIdDisplay}
                             </Badge>
-                        )}
+                            {membershipStatus && (
+                                <Badge
+                                    variant={membershipStatus.variant}
+                                    className={membershipStatus.className}
+                                >
+                                    {membershipStatus.label}
+                                </Badge>
+                            )}
+                        </div>
                     </div>
-                </div>
 
-                {/* 4 Stat Cards */}
-                <div className="grid grid-cols-2 gap-3">
-                    {/* Wallet */}
-                    <Link to="/member/wallet" className="block">
-                        {walletLoading ? (
-                            <StatCardSkeleton />
-                        ) : (
-                            <div
-                                className="rounded-2xl border border-green-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
-                                style={{ borderColor: `${GREEN}20` }}
-                            >
-                                <div className="flex items-center gap-2 text-slate-600 mb-1">
-                                    <Wallet className="w-4 h-4" style={{ color: GREEN }} />
-                                    <span className="text-sm font-medium">Wallet</span>
-                                </div>
-                                <p className="text-xl font-bold" style={{ color: GREEN }}>
-                                    {walletData?.balance?.toLocaleString() ?? 0}
-                                </p>
-                                <p className="text-xs text-slate-500 mt-0.5">
-                                    {club?.currencyName ?? "Coins"}
-                                </p>
+                    {/* Volunteer Button */}
+                    <button
+                        onClick={() => setShowVolunteerModal(true)}
+                        className="w-full flex items-center justify-between p-4 rounded-2xl border-2 border-dashed text-left hover:bg-green-50 transition-colors"
+                        style={{ borderColor: "#2d9653" }}
+                    >
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#2d9653" }}>
+                                <HandHeart className="w-5 h-5 text-white" />
                             </div>
-                        )}
-                    </Link>
-
-                    {/* Attendance */}
-                    <Link to="/member/checkin" className="block">
-                        {attendanceLoading ? (
-                            <StatCardSkeleton />
-                        ) : (
-                            <div
-                                className="rounded-2xl border border-green-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
-                                style={{ borderColor: `${GREEN}20` }}
-                            >
-                                <div className="flex items-center gap-2 text-slate-600 mb-1">
-                                    <CalendarCheck className="w-4 h-4" style={{ color: GREEN }} />
-                                    <span className="text-sm font-medium">This Month</span>
-                                </div>
-                                <p className="text-xl font-bold" style={{ color: GREEN }}>
-                                    {attendanceStats.thisMonthCount}
-                                </p>
-                                <p className="text-xs text-slate-500 mt-0.5">Check-ins</p>
+                            <div>
+                                <p className="font-bold text-gray-800">🙋 Volunteer Today</p>
+                                <p className="text-xs text-gray-500">Scan the reception QR to log your session</p>
                             </div>
-                        )}
-                    </Link>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-gray-400" />
+                    </button>
 
-                    {/* Streak */}
-                    <Link to="/member/checkin" className="block">
-                        {attendanceLoading ? (
-                            <StatCardSkeleton />
-                        ) : (
-                            <div
-                                className="rounded-2xl border border-green-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
-                                style={{ borderColor: `${GREEN}20` }}
-                            >
-                                <div className="flex items-center gap-2 text-slate-600 mb-1">
-                                    <Flame className="w-4 h-4" style={{ color: GREEN }} />
-                                    <span className="text-sm font-medium">Streak</span>
-                                </div>
-                                <p className="text-xl font-bold" style={{ color: GREEN }}>
-                                    {attendanceStats.streak}
-                                </p>
-                                <p className="text-xs text-slate-500 mt-0.5">Days</p>
-                            </div>
-                        )}
-                    </Link>
+                    {/* 4 Stat Cards */}
 
-                    {/* Weight */}
-                    <Link to="/member/progress" className="block">
-                        {weightLoading ? (
-                            <StatCardSkeleton />
-                        ) : (
-                            <div
-                                className="rounded-2xl border border-green-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
-                                style={{ borderColor: `${GREEN}20` }}
-                            >
-                                <div className="flex items-center gap-2 text-slate-600 mb-1">
-                                    <Scale className="w-4 h-4" style={{ color: GREEN }} />
-                                    <span className="text-sm font-medium">Weight</span>
-                                </div>
-                                {weightProgress ? (
-                                    <>
-                                        <p className="text-xl font-bold" style={{ color: GREEN }}>
-                                            {weightProgress.diff >= 0 ? "+" : ""}
-                                            {weightProgress.diff.toFixed(1)} kg
-                                        </p>
-                                        <p className="text-xs text-slate-500 mt-0.5">vs start</p>
-                                    </>
-                                ) : (
-                                    <>
-                                        <p className="text-sm font-medium text-slate-500">Start tracking</p>
-                                        <p className="text-xs text-slate-400 mt-0.5">Tap to add</p>
-                                    </>
-                                )}
-                            </div>
-                        )}
-                    </Link>
-                </div>
-
-                {/* Recent Announcements */}
-                <section>
-                    <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                            <Megaphone className="w-5 h-5" style={{ color: GREEN }} />
-                            Announcements
-                        </h2>
-                    </div>
-                    {announcementsLoading ? (
-                        <div className="space-y-2">
-                            <Skeleton className="h-20 rounded-xl" />
-                            <Skeleton className="h-20 rounded-xl" />
-                        </div>
-                    ) : announcements.length === 0 ? (
-                        <div className="rounded-xl border border-green-100 bg-white p-6 text-center text-slate-500 text-sm">
-                            No announcements
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            {announcements.map((a) => {
-                                const isNew =
-                                    a.createdAt?.toDate?.() &&
-                                    (Date.now() - a.createdAt.toDate().getTime()) / (1000 * 60 * 60 * 24) < 7;
-                                return (
-                                    <div
-                                        key={a.id}
-                                        className="rounded-xl border border-green-100 bg-white p-4 shadow-sm"
-                                        style={{ borderColor: `${GREEN}20` }}
-                                    >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div>
-                                                <h3 className="font-semibold text-slate-800">{a.title}</h3>
-                                                <p className="text-sm text-slate-600 mt-1 line-clamp-2">
-                                                    {a.message}
-                                                </p>
-                                                <p className="text-xs text-slate-400 mt-2">
-                                                    {a.createdAt?.toDate?.()
-                                                        ? format(a.createdAt.toDate(), "MMM d, yyyy")
-                                                        : ""}
-                                                </p>
-                                            </div>
-                                            {isNew && (
-                                                <Badge
-                                                    className="shrink-0"
-                                                    style={{ backgroundColor: GREEN, color: "white" }}
-                                                >
-                                                    New
-                                                </Badge>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                </section>
-
-                {/* Recent Orders */}
-                <section>
-                    <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-lg font-semibold text-slate-800">Recent Orders</h2>
-                        <Link
-                            to="/member/orders"
-                            className="text-sm font-medium flex items-center gap-1"
-                            style={{ color: GREEN }}
-                        >
-                            View All <ChevronRight className="w-4 h-4" />
-                        </Link>
-                    </div>
-                    {ordersLoading ? (
-                        <div className="space-y-2">
-                            <Skeleton className="h-16 rounded-xl" />
-                            <Skeleton className="h-16 rounded-xl" />
-                            <Skeleton className="h-16 rounded-xl" />
-                        </div>
-                    ) : recentOrders.length === 0 ? (
-                        <div className="rounded-xl border border-green-100 bg-white p-6 text-center text-slate-500 text-sm">
-                            No orders yet
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            {recentOrders.map((o) => (
-                                <Link
-                                    key={o.id}
-                                    to="/member/orders"
-                                    className="block rounded-xl border border-green-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+                    <div className="grid grid-cols-2 gap-3">
+                        {/* Wallet */}
+                        <Link to="/member/wallet" className="block">
+                            {walletLoading ? (
+                                <StatCardSkeleton />
+                            ) : (
+                                <div
+                                    className="rounded-2xl border border-green-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
                                     style={{ borderColor: `${GREEN}20` }}
                                 >
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="font-medium text-slate-800">
-                                                {o.items?.length ?? 0} item(s)
-                                            </p>
-                                            <p className="text-xs text-slate-500">
-                                                {o.date} • {o.status}
-                                            </p>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="font-semibold" style={{ color: GREEN }}>
-                                                {o.totalCost?.toLocaleString() ?? 0}
-                                            </p>
-                                            <p className="text-xs text-slate-500">
-                                                {club?.currencyName ?? "Coins"}
-                                            </p>
-                                        </div>
+                                    <div className="flex items-center gap-2 text-slate-600 mb-1">
+                                        <Wallet className="w-4 h-4" style={{ color: GREEN }} />
+                                        <span className="text-sm font-medium">Wallet</span>
                                     </div>
-                                </Link>
-                            ))}
-                        </div>
-                    )}
-                </section>
+                                    <p className="text-xl font-bold" style={{ color: GREEN }}>
+                                        {walletData?.balance?.toLocaleString() ?? 0}
+                                    </p>
+                                    <p className="text-xs text-slate-500 mt-0.5">
+                                        {club?.currencyName ?? "Coins"}
+                                    </p>
+                                </div>
+                            )}
+                        </Link>
 
-                {/* Membership Card */}
-                <section>
-                    <div className="flex items-center justify-between mb-3">
-                        <h2 className="text-lg font-semibold text-slate-800">Membership Card</h2>
-                        <Link
-                            to="/member/card"
-                            className="text-sm font-medium flex items-center gap-1"
-                            style={{ color: GREEN }}
-                        >
-                            Full Card <ChevronRight className="w-4 h-4" />
+                        {/* Attendance */}
+                        <Link to="/member/checkin" className="block">
+                            {attendanceLoading ? (
+                                <StatCardSkeleton />
+                            ) : (
+                                <div
+                                    className="rounded-2xl border border-green-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+                                    style={{ borderColor: `${GREEN}20` }}
+                                >
+                                    <div className="flex items-center gap-2 text-slate-600 mb-1">
+                                        <CalendarCheck className="w-4 h-4" style={{ color: GREEN }} />
+                                        <span className="text-sm font-medium">This Month</span>
+                                    </div>
+                                    <p className="text-xl font-bold" style={{ color: GREEN }}>
+                                        {attendanceStats.thisMonthCount}
+                                    </p>
+                                    <p className="text-xs text-slate-500 mt-0.5">Check-ins</p>
+                                </div>
+                            )}
+                        </Link>
+
+                        {/* Streak */}
+                        <Link to="/member/checkin" className="block">
+                            {attendanceLoading ? (
+                                <StatCardSkeleton />
+                            ) : (
+                                <div
+                                    className="rounded-2xl border border-green-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+                                    style={{ borderColor: `${GREEN}20` }}
+                                >
+                                    <div className="flex items-center gap-2 text-slate-600 mb-1">
+                                        <Flame className="w-4 h-4" style={{ color: GREEN }} />
+                                        <span className="text-sm font-medium">Streak</span>
+                                    </div>
+                                    <p className="text-xl font-bold" style={{ color: GREEN }}>
+                                        {attendanceStats.streak}
+                                    </p>
+                                    <p className="text-xs text-slate-500 mt-0.5">Days</p>
+                                </div>
+                            )}
+                        </Link>
+
+                        {/* Weight */}
+                        <Link to="/member/progress" className="block">
+                            {weightLoading ? (
+                                <StatCardSkeleton />
+                            ) : (
+                                <div
+                                    className="rounded-2xl border border-green-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+                                    style={{ borderColor: `${GREEN}20` }}
+                                >
+                                    <div className="flex items-center gap-2 text-slate-600 mb-1">
+                                        <Scale className="w-4 h-4" style={{ color: GREEN }} />
+                                        <span className="text-sm font-medium">Weight</span>
+                                    </div>
+                                    {weightProgress ? (
+                                        <>
+                                            <p className="text-xl font-bold" style={{ color: GREEN }}>
+                                                {weightProgress.diff >= 0 ? "+" : ""}
+                                                {weightProgress.diff.toFixed(1)} kg
+                                            </p>
+                                            <p className="text-xs text-slate-500 mt-0.5">vs start</p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="text-sm font-medium text-slate-500">Start tracking</p>
+                                            <p className="text-xs text-slate-400 mt-0.5">Tap to add</p>
+                                        </>
+                                    )}
+                                </div>
+                            )}
                         </Link>
                     </div>
-                    <Link to="/member/card" className="block">
-                        <div
-                            className="rounded-2xl overflow-hidden shadow-lg border border-green-200"
-                            style={{
-                                background: `linear-gradient(135deg, ${GREEN} 0%, #1e6b3a 100%)`,
-                                minHeight: 140,
-                            }}
-                        >
-                            <div className="p-5 text-white flex flex-col h-full">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="text-xs font-medium opacity-90 uppercase tracking-wider">
-                                            {club?.name ?? "Club"}
-                                        </p>
-                                        <h3 className="text-lg font-bold mt-1">{userProfile.name}</h3>
-                                        <p className="font-mono text-sm opacity-90 mt-0.5">
-                                            {memberIdDisplay}
-                                        </p>
+
+                    {/* Recent Announcements */}
+                    <section>
+                        <div className="flex items-center justify-between mb-3">
+                            <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                                <Megaphone className="w-5 h-5" style={{ color: GREEN }} />
+                                Announcements
+                            </h2>
+                        </div>
+                        {announcementsLoading ? (
+                            <div className="space-y-2">
+                                <Skeleton className="h-20 rounded-xl" />
+                                <Skeleton className="h-20 rounded-xl" />
+                            </div>
+                        ) : announcements.length === 0 ? (
+                            <div className="rounded-xl border border-green-100 bg-white p-6 text-center text-slate-500 text-sm">
+                                No announcements
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {announcements.map((a) => {
+                                    const isNew =
+                                        a.createdAt?.toDate?.() &&
+                                        (Date.now() - a.createdAt.toDate().getTime()) / (1000 * 60 * 60 * 24) < 7;
+                                    return (
+                                        <div
+                                            key={a.id}
+                                            className="rounded-xl border border-green-100 bg-white p-4 shadow-sm"
+                                            style={{ borderColor: `${GREEN}20` }}
+                                        >
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div>
+                                                    <h3 className="font-semibold text-slate-800">{a.title}</h3>
+                                                    <p className="text-sm text-slate-600 mt-1 line-clamp-2">
+                                                        {a.message}
+                                                    </p>
+                                                    <p className="text-xs text-slate-400 mt-2">
+                                                        {a.createdAt?.toDate?.()
+                                                            ? format(a.createdAt.toDate(), "MMM d, yyyy")
+                                                            : ""}
+                                                    </p>
+                                                </div>
+                                                {isNew && (
+                                                    <Badge
+                                                        className="shrink-0"
+                                                        style={{ backgroundColor: GREEN, color: "white" }}
+                                                    >
+                                                        New
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </section>
+
+                    {/* Recent Orders */}
+                    <section>
+                        <div className="flex items-center justify-between mb-3">
+                            <h2 className="text-lg font-semibold text-slate-800">Recent Orders</h2>
+                            <Link
+                                to="/member/orders"
+                                className="text-sm font-medium flex items-center gap-1"
+                                style={{ color: GREEN }}
+                            >
+                                View All <ChevronRight className="w-4 h-4" />
+                            </Link>
+                        </div>
+                        {ordersLoading ? (
+                            <div className="space-y-2">
+                                <Skeleton className="h-16 rounded-xl" />
+                                <Skeleton className="h-16 rounded-xl" />
+                                <Skeleton className="h-16 rounded-xl" />
+                            </div>
+                        ) : recentOrders.length === 0 ? (
+                            <div className="rounded-xl border border-green-100 bg-white p-6 text-center text-slate-500 text-sm">
+                                No orders yet
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {recentOrders.map((o) => (
+                                    <Link
+                                        key={o.id}
+                                        to="/member/orders"
+                                        className="block rounded-xl border border-green-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
+                                        style={{ borderColor: `${GREEN}20` }}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="font-medium text-slate-800">
+                                                    {o.items?.length ?? 0} item(s)
+                                                </p>
+                                                <p className="text-xs text-slate-500">
+                                                    {o.date} • {o.status}
+                                                </p>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="font-semibold" style={{ color: GREEN }}>
+                                                    {o.totalCost?.toLocaleString() ?? 0}
+                                                </p>
+                                                <p className="text-xs text-slate-500">
+                                                    {club?.currencyName ?? "Coins"}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+
+                    {/* Membership Card */}
+                    <section>
+                        <div className="flex items-center justify-between mb-3">
+                            <h2 className="text-lg font-semibold text-slate-800">Membership Card</h2>
+                            <Link
+                                to="/member/card"
+                                className="text-sm font-medium flex items-center gap-1"
+                                style={{ color: GREEN }}
+                            >
+                                Full Card <ChevronRight className="w-4 h-4" />
+                            </Link>
+                        </div>
+                        <Link to="/member/card" className="block">
+                            <div
+                                className="rounded-2xl overflow-hidden shadow-lg border border-green-200"
+                                style={{
+                                    background: `linear-gradient(135deg, ${GREEN} 0%, #1e6b3a 100%)`,
+                                    minHeight: 140,
+                                }}
+                            >
+                                <div className="p-5 text-white flex flex-col h-full">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="text-xs font-medium opacity-90 uppercase tracking-wider">
+                                                {club?.name ?? "Club"}
+                                            </p>
+                                            <h3 className="text-lg font-bold mt-1">{userProfile.name}</h3>
+                                            <p className="font-mono text-sm opacity-90 mt-0.5">
+                                                {memberIdDisplay}
+                                            </p>
+                                        </div>
+                                        <div className="bg-white p-1.5 rounded-lg">
+                                            <QRCodeSVG value={userProfile.id} size={56} />
+                                        </div>
                                     </div>
-                                    <div className="bg-white p-1.5 rounded-lg">
-                                        <QRCodeSVG value={userProfile.id} size={56} />
+                                    <div className="mt-auto pt-4 flex justify-between items-end">
+                                        <span className="text-xs opacity-90">Expires</span>
+                                        <span className="font-semibold">
+                                            {formatMembershipEnd(userProfile.membershipEnd)}
+                                        </span>
                                     </div>
-                                </div>
-                                <div className="mt-auto pt-4 flex justify-between items-end">
-                                    <span className="text-xs opacity-90">Expires</span>
-                                    <span className="font-semibold">
-                                        {formatMembershipEnd(userProfile.membershipEnd)}
-                                    </span>
                                 </div>
                             </div>
-                        </div>
-                    </Link>
-                </section>
+                        </Link>
+                    </section>
+                </div>
             </div>
-        </div>
+
+            {/* Volunteer Scan Modal */}
+            {
+                showVolunteerModal && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                        <div
+                            className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6 space-y-4"
+                            style={{ fontFamily: "Nunito, sans-serif" }}
+                        >
+                            <div className="flex justify-between items-center">
+                                <h2 className="text-xl font-black text-gray-800">🙋 Volunteer Login</h2>
+                                <button onClick={() => setShowVolunteerModal(false)} className="text-gray-400 hover:text-gray-600">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <div className="bg-green-50 border border-green-200 rounded-2xl p-4 space-y-2">
+                                <p className="font-bold text-green-800 text-sm">How to volunteer:</p>
+                                <ol className="text-sm text-green-700 space-y-1 list-decimal list-inside">
+                                    <li>Go to the reception display screen</li>
+                                    <li>Tap "🙋 Volunteer Login/Logout"</li>
+                                    <li>Switch to the Login tab</li>
+                                    <li>Scan the QR code shown on the screen</li>
+                                </ol>
+                            </div>
+                            <p className="text-xs text-gray-400 text-center">
+                                You'll appear as active in today's volunteer log
+                            </p>
+                            <Button
+                                variant="outline"
+                                className="w-full rounded-xl"
+                                onClick={() => setShowVolunteerModal(false)}
+                            >
+                                Got it
+                            </Button>
+                        </div>
+                    </div>
+                )}
+        </>
     );
 }

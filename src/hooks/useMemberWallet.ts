@@ -142,9 +142,9 @@ export function useRaiseTopupRequest() {
     const { club } = useClubContext();
 
     return useMutation({
-        mutationFn: async (amount: number) => {
+        mutationFn: async (data: { amount: number; paymentMethod?: string; reference?: string }) => {
             if (!firebaseUser || !userProfile || !club) throw new Error("Not ready");
-            if (amount <= 0) throw new Error("Amount must be greater than 0");
+            if (data.amount <= 0) throw new Error("Amount must be greater than 0");
 
             // Double-check no pending
             const q = query(
@@ -162,8 +162,10 @@ export function useRaiseTopupRequest() {
                 memberName: userProfile.name,
                 memberPhoto: userProfile.photo || "",
                 clubId: club.id,
-                requestedAmount: amount,
+                requestedAmount: data.amount,
                 approvedAmount: null,
+                paymentMethod: data.paymentMethod ?? "Cash",
+                reference: data.reference ?? null,
                 status: "pending",
                 requestedAt: Timestamp.now(),
                 resolvedAt: null,

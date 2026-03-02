@@ -1,7 +1,11 @@
+import { useEffect, useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { collection, query, where, getDocs, doc, addDoc, updateDoc, Timestamp, orderBy } from "firebase/firestore";
+import {
+    collection, query, where, getDocs, doc, addDoc, updateDoc,
+    onSnapshot, Timestamp, orderBy, serverTimestamp,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Wallet, WalletTransaction } from "@/types/firestore";
+import type { Wallet, WalletTransaction, TopupRequest } from "@/types/firestore";
 
 export function useWallets(clubId: string | null) {
     return useQuery({
@@ -45,6 +49,32 @@ export function useTransactions(clubId: string | null, memberId?: string) {
     });
 }
 
+// ─── Real-time pending topup requests ───────────────────────────────────────
+
+export function usePendingTopupRequests(clubId: string | null) {
+    const [requests, setRequests] = useState<TopupRequest[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!clubId) { setLoading(false); return; }
+        const q = query(
+            collection(db, "topupRequests"),
+            where("clubId", "==", clubId),
+            where("status", "==", "pending"),
+            orderBy("requestedAt", "desc")
+        );
+        const unsub = onSnapshot(q, (snap) => {
+            setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() } as TopupRequest)));
+            setLoading(false);
+        }, () => setLoading(false));
+        return () => unsub();
+    }, [clubId]);
+
+    return { requests, count: requests.length, loading };
+}
+
+// ─── Direct top-up (owner) ───────────────────────────────────────────────────
+
 export function useTopUp() {
     const qc = useQueryClient();
     return useMutation({
@@ -60,26 +90,28 @@ export function useTopUp() {
         }) => {
             const now = Timestamp.now();
             const newBalance = data.currentBalance + data.amount;
-            
-            // Update wallet balance
+
             await updateDoc(doc(db, "wallets", data.walletDocId), {
                 balance: newBalance,
-                lastUpdated: now,
+                lastUpdated: serverTimestamp(),
             });
-            
-            // Create transaction record
+
             await addDoc(collection(db, "walletTransactions"), {
                 userId: data.memberId,
                 clubId: data.clubId,
                 type: "credit",
                 amount: data.amount,
                 reason: "topup",
-                addedBy: "owner",
+                description: "Wallet Top-up by Owner",
+                paymentMethod: data.paymentMethod,
+                reference: data.reference ?? null,
                 note: [data.paymentMethod, data.reference, data.notes].filter(Boolean).join(" | "),
-                createdAt: now,
+                addedBy: "owner",
+                balanceBefore: data.currentBalance,
                 balanceAfter: newBalance,
+                createdAt: now,
             });
-            
+
             return newBalance;
         },
         onSuccess: (_, vars) => {
@@ -88,4 +120,75 @@ export function useTopUp() {
             qc.invalidateQueries({ queryKey: ["owner-transactions"] });
         },
     });
+}
+
+// ─── Approve pending request ─────────────────────────────────────────────────
+
+export function useApproveTopup() {
+    return useMutation({
+        mutationFn: async (data: {
+            request: TopupRequest;
+            approvedAmount: number;
+            walletDocId: string;
+            currentBalance: number;
+        }) => {
+            const { request, approvedAmount, walletDocId, currentBalance } = data;
+            const now = Timestamp.now();
+            const newBalance = currentBalance + approvedAmount;
+
+            await updateDoc(doc(db, "wallets", walletDocId), {
+                balance: newBalance,
+                lastUpdated: serverTimestamp(),
+            });
+
+            await addDoc(collection(db, "walletTransactions"), {
+                userId: request.memberId,
+                clubId: request.clubId,
+                type: "credit",
+                amount: approvedAmount,
+                reason: "topup",
+                description: "Wallet Top-up via Member Request",
+                paymentMethod: request.paymentMethod ?? "Cash",
+                reference: request.reference ?? null,
+                note: [request.paymentMethod, request.reference].filter(Boolean).join(" | "),
+                addedBy: "owner",
+                balanceBefore: currentBalance,
+                balanceAfter: newBalance,
+                createdAt: now,
+            });
+
+            await updateDoc(doc(db, "topupRequests", request.id), {
+                status: "approved",
+                approvedAmount,
+                resolvedAt: now,
+                resolvedBy: "owner",
+            });
+
+            return { newBalance, approvedAmount };
+        },
+    });
+}
+
+// ─── Reject pending request ──────────────────────────────────────────────────
+
+export function useRejectTopup() {
+    return useMutation({
+        mutationFn: async (data: { requestId: string; reason?: string }) => {
+            await updateDoc(doc(db, "topupRequests", data.requestId), {
+                status: "rejected",
+                rejectionReason: data.reason ?? "",
+                resolvedAt: Timestamp.now(),
+                resolvedBy: "owner",
+            });
+        },
+    });
+}
+
+// ─── Re-export wallet lookup by userId for convenience ──────────────────────
+
+export async function getWalletByUserId(memberId: string): Promise<(Wallet & { id: string }) | null> {
+    const q = query(collection(db, "wallets"), where("userId", "==", memberId));
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+    return { ...snap.docs[0].data(), id: snap.docs[0].id } as Wallet & { id: string };
 }

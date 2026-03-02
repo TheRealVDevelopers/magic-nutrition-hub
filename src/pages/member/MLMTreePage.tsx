@@ -87,7 +87,17 @@ export default function MLMTreePage() {
                                 flatList.map(user => (
                                     <div key={user.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
                                         <div className="flex items-center gap-3">
-                                            <Avatar className="h-10 w-10 border border-slate-200">
+                                            <Avatar
+                                                className="h-10 w-10 border-2"
+                                                style={{
+                                                    borderColor: user.memberType === "visiting" ? "#f59e0b"
+                                                        : user.memberType === "bronze" ? "#cd7f32"
+                                                            : user.memberType === "silver" ? "#9ca3af"
+                                                                : user.memberType === "gold" ? "#d97706"
+                                                                    : user.memberType === "platinum" ? "#6366f1"
+                                                                        : "#e2e8f0"
+                                                }}
+                                            >
                                                 {user.photo ? <AvatarImage src={user.photo} /> : <AvatarFallback className="font-bold text-xs bg-violet-100 text-violet-800">{user.name[0]}</AvatarFallback>}
                                             </Avatar>
                                             <div>
@@ -95,12 +105,37 @@ export default function MLMTreePage() {
                                                 <p className="text-xs text-slate-500">Joined {user.createdAt?.toDate().toLocaleDateString()}</p>
                                             </div>
                                         </div>
-                                        {user.membershipTier && (
-                                            <Badge variant="outline" className="capitalize text-xs">
-                                                {user.membershipTier}
-                                            </Badge>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {user.memberType && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="text-xs capitalize"
+                                                    style={{
+                                                        borderColor: user.memberType === "visiting" ? "#f59e0b"
+                                                            : user.memberType === "bronze" ? "#cd7f32"
+                                                                : user.memberType === "silver" ? "#9ca3af"
+                                                                    : user.memberType === "gold" ? "#d97706"
+                                                                        : user.memberType === "platinum" ? "#6366f1"
+                                                                            : undefined,
+                                                        color: user.memberType === "visiting" ? "#92400e"
+                                                            : user.memberType === "bronze" ? "#7c3b00"
+                                                                : user.memberType === "silver" ? "#374151"
+                                                                    : user.memberType === "gold" ? "#92400e"
+                                                                        : user.memberType === "platinum" ? "#3730a3"
+                                                                            : undefined,
+                                                    }}
+                                                >
+                                                    {user.memberType}
+                                                </Badge>
+                                            )}
+                                            {user.membershipTier && (
+                                                <Badge variant="outline" className="capitalize text-xs">
+                                                    {user.membershipTier}
+                                                </Badge>
+                                            )}
+                                        </div>
                                     </div>
+
                                 ))
                             )}
                         </div>

@@ -60,6 +60,12 @@ service cloud.firestore {
     match /upgradeRequests/{requestId} {
       allow read, write: if true;
     }
+    match /volunteers/{sessionId} {
+      allow read, write: if true;
+    }
+    match /feedback/{feedbackId} {
+      allow read, write: if true;
+    }
 
     // ─── Payments subcollection ───────────────────────────────────────
     match /clubs/{clubId}/payments/{paymentId} {

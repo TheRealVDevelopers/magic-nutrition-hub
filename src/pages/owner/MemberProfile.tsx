@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Edit, Wallet, ShoppingBag, Activity, Users, Plus, GitBranch } from "lucide-react";
+import { ArrowLeft, Edit, Wallet, ShoppingBag, Activity, Users, Plus, GitBranch, ArrowUpCircle, X } from "lucide-react";
+import { doc, updateDoc, Timestamp } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,12 +13,130 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useClubContext } from "@/lib/clubDetection";
+import { db } from "@/lib/firebase";
 import MemberForm, { type MemberFormValues } from "@/components/owner/MemberForm";
 import {
     useMemberById, useUpdateMember, useMemberWallet, useMemberTransactions,
     useMemberOrders, useMemberWeightLog, useAddWeightEntry, useMembershipPlans, useAssignMembership,
     useMemberReferrals
 } from "@/hooks/useOwner";
+import type { MemberType } from "@/types/firestore";
+
+const UPGRADE_TIERS: { value: MemberType; label: string; color: string }[] = [
+    { value: "bronze", label: "🥉 Bronze", color: "#cd7f32" },
+    { value: "silver", label: "🥈 Silver", color: "#9ca3af" },
+    { value: "gold", label: "🥇 Gold", color: "#d97706" },
+    { value: "platinum", label: "💎 Platinum", color: "#6366f1" },
+];
+
+interface UpgradeModalProps {
+    memberName: string;
+    memberPhone: string;
+    memberId: string;
+    whatsappPhone: string;
+    clubName: string;
+    onClose: () => void;
+    onDone: () => void;
+}
+
+function UpgradeMemberModal({ memberName, memberPhone, memberId, whatsappPhone, clubName, onClose, onDone }: UpgradeModalProps) {
+    const { toast } = useToast();
+    const [tier, setTier] = useState<MemberType>("bronze");
+    const [amount, setAmount] = useState("");
+    const [method, setMethod] = useState("Cash");
+    const [reference, setReference] = useState("");
+    const [loading, setLoading] = useState(false);
+
+    const handleUpgrade = useCallback(async () => {
+        if (!tier || !amount) return;
+        setLoading(true);
+        try {
+            await updateDoc(doc(db, "users", memberId), {
+                memberType: tier,
+                updatedAt: Timestamp.now(),
+            });
+            toast({ title: `✅ ${memberName} upgraded to ${tier}!` });
+            const msg = encodeURIComponent(
+                `🎉 Congratulations ${memberName}!\n\nYou've been upgraded to *${tier.toUpperCase()}* membership at *${clubName}*!\n\nPayment: ₹${amount} via ${method}${reference ? ` (Ref: ${reference})` : ""}.\n\nWelcome to the club! 💪🌿`
+            );
+            const phone = whatsappPhone.replace(/\D/g, "");
+            window.open(`https://wa.me/${phone}?text=${msg}`, "_blank");
+            onDone();
+        } catch (err: any) {
+            toast({ title: "Upgrade failed", description: err.message, variant: "destructive" });
+        } finally {
+            setLoading(false);
+        }
+    }, [tier, amount, method, reference, memberId, memberName, whatsappPhone, clubName, toast, onDone]);
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4" style={{ fontFamily: "Nunito, sans-serif" }}>
+                <div className="flex justify-between items-start">
+                    <h2 className="text-xl font-black text-gray-800">⬆️ Upgrade to Member</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                    <p className="font-bold text-gray-800">{memberName}</p>
+                    <p className="text-sm text-gray-500">{memberPhone}</p>
+                </div>
+
+                <div className="space-y-3">
+                    <div>
+                        <Label className="font-semibold">Membership Tier</Label>
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                            {UPGRADE_TIERS.map((t) => (
+                                <button
+                                    key={t.value}
+                                    onClick={() => setTier(t.value)}
+                                    className={`p-3 rounded-xl border-2 font-bold text-sm transition-all ${tier === t.value ? "border-current shadow-md" : "border-gray-200 text-gray-500"
+                                        }`}
+                                    style={{ color: tier === t.value ? t.color : undefined, borderColor: tier === t.value ? t.color : undefined }}
+                                >
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div>
+                        <Label className="font-semibold">Payment Amount (₹)</Label>
+                        <Input className="mt-1 rounded-xl" type="number" placeholder="e.g. 1500" value={amount} onChange={(e) => setAmount(e.target.value)} />
+                    </div>
+
+                    <div>
+                        <Label className="font-semibold">Payment Method</Label>
+                        <Select value={method} onValueChange={setMethod}>
+                            <SelectTrigger className="mt-1 rounded-xl"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                                {["Cash", "UPI", "Card", "Bank Transfer", "Other"].map((m) => (
+                                    <SelectItem key={m} value={m}>{m}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div>
+                        <Label className="font-semibold">Reference No. <span className="font-normal text-gray-400">(optional)</span></Label>
+                        <Input className="mt-1 rounded-xl" placeholder="UPI/Transaction ID" value={reference} onChange={(e) => setReference(e.target.value)} />
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                        <Button variant="outline" onClick={onClose} className="flex-1 rounded-xl">Cancel</Button>
+                        <Button
+                            onClick={handleUpgrade}
+                            disabled={!amount || loading}
+                            className="flex-1 rounded-xl text-white"
+                            style={{ backgroundColor: "#2d9653" }}
+                        >
+                            {loading ? "Upgrading..." : "✅ Confirm Upgrade"}
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
 
 export default function OwnerMemberProfile() {
     const { id } = useParams<{ id: string }>();
@@ -36,9 +155,12 @@ export default function OwnerMemberProfile() {
 
     const [editOpen, setEditOpen] = useState(false);
     const [assignOpen, setAssignOpen] = useState(false);
+    const [upgradeOpen, setUpgradeOpen] = useState(false);
     const [selectedPlan, setSelectedPlan] = useState("");
     const [weightInput, setWeightInput] = useState("");
     const [weightNote, setWeightNote] = useState("");
+
+    const isVisiting = (member as any)?.memberType === "visiting";
 
     if (isLoading) return <div className="space-y-4"><Skeleton className="h-48 rounded-2xl" /><Skeleton className="h-64 rounded-2xl" /></div>;
     if (!member) return <div className="text-center py-16 text-muted-foreground">Member not found</div>;
@@ -91,11 +213,31 @@ export default function OwnerMemberProfile() {
                         <h2 className="text-2xl font-black text-wellness-forest">{member.name}</h2>
                         <p className="text-sm text-muted-foreground">{member.phone} • {member.email}</p>
                         <div className="flex flex-wrap gap-2 justify-center sm:justify-start mt-2">
+                            {(member as any).memberType && (
+                                <Badge
+                                    className="capitalize"
+                                    style={(member as any).memberType === "visiting" ? { backgroundColor: "#fef3c7", color: "#92400e", border: "1px solid #fcd34d" } : {}}
+                                >
+                                    {(member as any).memberType}
+                                </Badge>
+                            )}
                             {member.membershipTier && <Badge className="capitalize">{member.membershipTier}</Badge>}
                             <Badge variant={member.status === "active" ? "outline" : "destructive"}>{member.status}</Badge>
+                            {(member as any).memberId && (
+                                <Badge variant="outline" className="font-mono text-xs">{(member as any).memberId}</Badge>
+                            )}
                         </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap justify-center sm:justify-start">
+                        {isVisiting && (
+                            <Button
+                                onClick={() => setUpgradeOpen(true)}
+                                className="text-white font-bold"
+                                style={{ backgroundColor: "#d97706" }}
+                            >
+                                <ArrowUpCircle className="w-4 h-4 mr-2" /> Upgrade to Member
+                            </Button>
+                        )}
                         <Button variant="outline" onClick={() => setEditOpen(true)}><Edit className="w-4 h-4 mr-2" /> Edit</Button>
                         <Button onClick={() => setAssignOpen(true)}>Assign Plan</Button>
                     </div>
@@ -262,6 +404,19 @@ export default function OwnerMemberProfile() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            {/* Upgrade to Member Modal */}
+            {upgradeOpen && (
+                <UpgradeMemberModal
+                    memberName={member.name}
+                    memberPhone={member.phone}
+                    memberId={member.id}
+                    whatsappPhone={member.phone}
+                    clubName={club?.name ?? ""}
+                    onClose={() => setUpgradeOpen(false)}
+                    onDone={() => setUpgradeOpen(false)}
+                />
+            )}
         </div>
     );
 }

@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Wallet as WalletIcon, Search, ArrowUpCircle, TrendingUp } from "lucide-react";
+import { useState, useMemo, useRef } from "react";
+import { Wallet as WalletIcon, Search, ArrowUpCircle, TrendingUp, Printer, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -25,6 +25,8 @@ import { useClubContext } from "@/lib/clubDetection";
 import { useToast } from "@/hooks/use-toast";
 import type { Wallet } from "@/types/firestore";
 import type { User } from "@/types/firestore";
+import TopUpReceipt, { type TopUpReceiptProps } from "@/components/receipts/TopUpReceipt";
+import { printReceipt } from "@/utils/printReceipt";
 
 type SortOption = "lowest" | "highest" | "name";
 
@@ -46,6 +48,8 @@ export default function Wallet() {
     const [paymentMethod, setPaymentMethod] = useState("Cash");
     const [reference, setReference] = useState("");
     const [notes, setNotes] = useState("");
+    const [successReceipt, setSuccessReceipt] = useState<TopUpReceiptProps | null>(null);
+    const receiptRef = useRef<TopUpReceiptProps | null>(null);
 
     const memberMap = useMemo(() => {
         const m = new Map<string, User>();
@@ -105,6 +109,7 @@ export default function Wallet() {
         }
         if (!clubId) return;
         try {
+            const balanceBefore = selected.balance;
             await topUp.mutateAsync({
                 memberId: selected.userId,
                 walletDocId: selected.id,
@@ -113,13 +118,38 @@ export default function Wallet() {
                 paymentMethod,
                 reference: reference || undefined,
                 notes: notes || undefined,
-                currentBalance: selected.balance,
+                currentBalance: balanceBefore,
             });
-            toast({ title: "Top up successful!", description: `₹${amt} added to wallet.` });
-            setDialogOpen(false);
+            const receiptData: TopUpReceiptProps = {
+                memberName: selected.member?.name ?? "Member",
+                memberId: (selected.member as any)?.memberId ?? "",
+                amount: amt,
+                paymentMethod,
+                reference: reference || undefined,
+                balanceBefore,
+                balanceAfter: balanceBefore + amt,
+                clubName: club?.name ?? "Magic Nutrition Club",
+                clubPhone: club?.phone ?? club?.ownerPhone ?? "",
+                date: new Date(),
+                receiptNumber: `WTU${Date.now().toString().slice(-6)}`,
+            };
+            receiptRef.current = receiptData;
+            setSuccessReceipt(receiptData);
         } catch (err: any) {
             toast({ title: "Error", description: err.message, variant: "destructive" });
         }
+    };
+
+    const handlePrintTopUp = () => {
+        if (receiptRef.current) {
+            printReceipt();
+        }
+    };
+
+    const closeDialog = () => {
+        setDialogOpen(false);
+        setSuccessReceipt(null);
+        receiptRef.current = null;
     };
 
     const currentBalance = selected?.balance ?? 0;
@@ -268,135 +298,167 @@ export default function Wallet() {
                 </div>
             )}
 
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            {/* Hidden receipt area — only visible during window.print() */}
+            <div id="receipt-print-area">
+                {successReceipt && <TopUpReceipt {...successReceipt} />}
+            </div>
+
+            <Dialog open={dialogOpen} onOpenChange={closeDialog}>
                 <DialogContent className="rounded-2xl max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Top Up Wallet</DialogTitle>
+                        <DialogTitle>{successReceipt ? "Top Up Successful" : "Top Up Wallet"}</DialogTitle>
                     </DialogHeader>
-                    <div className="space-y-4 pt-2">
-                        {selected ? (
-                            <div>
-                                <Label>Member</Label>
-                                <p className="font-medium mt-1">
-                                    {selected.member?.name ?? "Unknown"}
+
+                    {/* Success state */}
+                    {successReceipt ? (
+                        <div className="space-y-4 pt-2">
+                            <div className="flex flex-col items-center gap-2 py-4">
+                                <CheckCircle className="w-12 h-12 text-emerald-500" />
+                                <p className="text-lg font-bold text-emerald-700">₹{successReceipt.amount.toFixed(2)} Added!</p>
+                                <p className="text-sm text-muted-foreground text-center">
+                                    {successReceipt.memberName} · {successReceipt.paymentMethod}
                                 </p>
+                                <div className="text-sm text-center space-y-0.5 mt-1">
+                                    <p className="text-muted-foreground">Bal: ₹{successReceipt.balanceBefore} → <span className="font-bold text-emerald-700">₹{successReceipt.balanceAfter}</span></p>
+                                </div>
                             </div>
-                        ) : (
+                            <Button
+                                className="w-full rounded-xl gap-2"
+                                style={{ backgroundColor: "#2d9653" }}
+                                onClick={handlePrintTopUp}
+                            >
+                                <Printer className="w-4 h-4" /> Print Receipt
+                            </Button>
+                            <Button variant="outline" className="w-full rounded-xl" onClick={closeDialog}>
+                                Close
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="space-y-4 pt-2">
+                            {selected ? (
+                                <div>
+                                    <Label>Member</Label>
+                                    <p className="font-medium mt-1">
+                                        {selected.member?.name ?? "Unknown"}
+                                    </p>
+                                </div>
+                            ) : (
+                                <div>
+                                    <Label>Select member</Label>
+                                    <Select
+                                        value={selected?.userId ?? ""}
+                                        onValueChange={(v) => {
+                                            const w = walletsWithMembers.find(
+                                                (x) => x.userId === v
+                                            );
+                                            setSelected(w ?? null);
+                                        }}
+                                    >
+                                        <SelectTrigger className="rounded-xl mt-1">
+                                            <SelectValue placeholder="Choose member" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {walletsWithMembers.map((w) => (
+                                                <SelectItem
+                                                    key={w.id}
+                                                    value={w.userId}
+                                                >
+                                                    {w.member?.name ?? w.userId}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            )}
+
                             <div>
-                                <Label>Select member</Label>
+                                <Label>Amount (₹) *</Label>
+                                <Input
+                                    type="number"
+                                    min={1}
+                                    placeholder="Enter amount"
+                                    value={amount}
+                                    onChange={(e) => setAmount(e.target.value)}
+                                    className="rounded-xl mt-1"
+                                />
+                            </div>
+
+                            <div>
+                                <Label>Payment method</Label>
                                 <Select
-                                    value={selected?.userId ?? ""}
-                                    onValueChange={(v) => {
-                                        const w = walletsWithMembers.find(
-                                            (x) => x.userId === v
-                                        );
-                                        setSelected(w ?? null);
-                                    }}
+                                    value={paymentMethod}
+                                    onValueChange={setPaymentMethod}
                                 >
                                     <SelectTrigger className="rounded-xl mt-1">
-                                        <SelectValue placeholder="Choose member" />
+                                        <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {walletsWithMembers.map((w) => (
-                                            <SelectItem
-                                                key={w.id}
-                                                value={w.userId}
-                                            >
-                                                {w.member?.name ?? w.userId}
-                                            </SelectItem>
-                                        ))}
+                                        <SelectItem value="Cash">Cash</SelectItem>
+                                        <SelectItem value="UPI">UPI</SelectItem>
+                                        <SelectItem value="Card">Card</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
-                        )}
 
-                        <div>
-                            <Label>Amount (₹) *</Label>
-                            <Input
-                                type="number"
-                                min={1}
-                                placeholder="Enter amount"
-                                value={amount}
-                                onChange={(e) => setAmount(e.target.value)}
-                                className="rounded-xl mt-1"
-                            />
-                        </div>
+                            <div>
+                                <Label>Reference number (optional)</Label>
+                                <Input
+                                    placeholder="e.g. UPI ref"
+                                    value={reference}
+                                    onChange={(e) => setReference(e.target.value)}
+                                    className="rounded-xl mt-1"
+                                />
+                            </div>
 
-                        <div>
-                            <Label>Payment method</Label>
-                            <Select
-                                value={paymentMethod}
-                                onValueChange={setPaymentMethod}
+                            <div>
+                                <Label>Notes (optional)</Label>
+                                <Input
+                                    placeholder="Any notes"
+                                    value={notes}
+                                    onChange={(e) => setNotes(e.target.value)}
+                                    className="rounded-xl mt-1"
+                                />
+                            </div>
+
+                            {selected && (
+                                <div className="flex justify-between text-sm py-2 border-t">
+                                    <span className="text-muted-foreground">
+                                        Current balance:
+                                    </span>
+                                    <span className="font-semibold">
+                                        ₹{currentBalance.toLocaleString()}
+                                    </span>
+                                </div>
+                            )}
+                            {selected && amount && (
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">
+                                        New balance:
+                                    </span>
+                                    <span
+                                        className="font-bold"
+                                        style={{ color: "#2d9653" }}
+                                    >
+                                        ₹{newBalance.toLocaleString()}
+                                    </span>
+                                </div>
+                            )}
+
+                            <Button
+                                className="w-full rounded-xl"
+                                style={{ backgroundColor: "#2d9653" }}
+                                onClick={handleTopUp}
+                                disabled={
+                                    topUp.isPending ||
+                                    !selected ||
+                                    !amount ||
+                                    parseFloat(amount) <= 0
+                                }
                             >
-                                <SelectTrigger className="rounded-xl mt-1">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Cash">Cash</SelectItem>
-                                    <SelectItem value="UPI">UPI</SelectItem>
-                                    <SelectItem value="Card">Card</SelectItem>
-                                </SelectContent>
-                            </Select>
+                                {topUp.isPending ? "Processing..." : "Confirm Top Up"}
+                            </Button>
                         </div>
-
-                        <div>
-                            <Label>Reference number (optional)</Label>
-                            <Input
-                                placeholder="e.g. UPI ref"
-                                value={reference}
-                                onChange={(e) => setReference(e.target.value)}
-                                className="rounded-xl mt-1"
-                            />
-                        </div>
-
-                        <div>
-                            <Label>Notes (optional)</Label>
-                            <Input
-                                placeholder="Any notes"
-                                value={notes}
-                                onChange={(e) => setNotes(e.target.value)}
-                                className="rounded-xl mt-1"
-                            />
-                        </div>
-
-                        {selected && (
-                            <div className="flex justify-between text-sm py-2 border-t">
-                                <span className="text-muted-foreground">
-                                    Current balance:
-                                </span>
-                                <span className="font-semibold">
-                                    ₹{currentBalance.toLocaleString()}
-                                </span>
-                            </div>
-                        )}
-                        {selected && amount && (
-                            <div className="flex justify-between text-sm">
-                                <span className="text-muted-foreground">
-                                    New balance:
-                                </span>
-                                <span
-                                    className="font-bold"
-                                    style={{ color: "#2d9653" }}
-                                >
-                                    ₹{newBalance.toLocaleString()}
-                                </span>
-                            </div>
-                        )}
-
-                        <Button
-                            className="w-full rounded-xl"
-                            style={{ backgroundColor: "#2d9653" }}
-                            onClick={handleTopUp}
-                            disabled={
-                                topUp.isPending ||
-                                !selected ||
-                                !amount ||
-                                parseFloat(amount) <= 0
-                            }
-                        >
-                            {topUp.isPending ? "Processing..." : "Confirm Top Up"}
-                        </Button>
-                    </div>
+                    )}
                 </DialogContent>
             </Dialog>
         </div>

@@ -1,0 +1,107 @@
+import { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+    collection, doc, addDoc, updateDoc, onSnapshot,
+    query, where, Timestamp,
+} from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { useClubContext } from "@/lib/clubDetection";
+import type { VolunteerSession } from "@/types/firestore";
+
+function todayStr(): string {
+    return new Date().toISOString().slice(0, 10);
+}
+
+// ─── useActiveVolunteers (real-time) ────────────────────────────────────
+
+export function useActiveVolunteers() {
+    const { club } = useClubContext();
+    const [sessions, setSessions] = useState<VolunteerSession[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!club?.id) return;
+        const q = query(
+            collection(db, "volunteers"),
+            where("clubId", "==", club.id),
+            where("date", "==", todayStr()),
+            where("status", "==", "active")
+        );
+        const unsub = onSnapshot(q, (snap) => {
+            setSessions(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as VolunteerSession));
+            setLoading(false);
+        });
+        return () => unsub();
+    }, [club?.id]);
+
+    return { sessions, loading };
+}
+
+// ─── useVolunteerLog (for admin) ─────────────────────────────────────────
+
+export function useVolunteerLog(date: string) {
+    const { club } = useClubContext();
+    return useQuery({
+        queryKey: ["volunteers", "log", club?.id, date],
+        queryFn: async () => {
+            const { getDocs } = await import("firebase/firestore");
+            const snap = await getDocs(
+                query(
+                    collection(db, "volunteers"),
+                    where("clubId", "==", club!.id),
+                    where("date", "==", date)
+                )
+            );
+            return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as VolunteerSession);
+        },
+        enabled: !!club?.id,
+    });
+}
+
+// ─── useCreateVolunteerSession ───────────────────────────────────────────
+
+export function useCreateVolunteerSession() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async (input: {
+            memberId: string;
+            memberName: string;
+            memberPhoto: string;
+            clubId: string;
+        }) => {
+            const now = Timestamp.now();
+            const ref = await addDoc(collection(db, "volunteers"), {
+                memberId: input.memberId,
+                memberName: input.memberName,
+                memberPhoto: input.memberPhoto,
+                clubId: input.clubId,
+                loginTime: now,
+                logoutTime: null,
+                totalMinutes: null,
+                date: todayStr(),
+                status: "active",
+            } satisfies Omit<VolunteerSession, "id">);
+            return ref.id;
+        },
+        onSuccess: () => qc.invalidateQueries({ queryKey: ["volunteers"] }),
+    });
+}
+
+// ─── useCompleteVolunteerSession ─────────────────────────────────────────
+
+export function useCompleteVolunteerSession() {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ sessionId, loginTime }: { sessionId: string; loginTime: Timestamp }) => {
+            const now = Timestamp.now();
+            const totalMinutes = Math.round((now.toMillis() - loginTime.toMillis()) / 60000);
+            await updateDoc(doc(db, "volunteers", sessionId), {
+                logoutTime: now,
+                totalMinutes,
+                status: "completed",
+            });
+            return totalMinutes;
+        },
+        onSuccess: () => qc.invalidateQueries({ queryKey: ["volunteers"] }),
+    });
+}

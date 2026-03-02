@@ -6,6 +6,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useClubContext } from "@/lib/clubDetection";
+import { generateMemberId, generatePrefixFromName } from "@/utils/generateMemberId";
 import type {
     User, Wallet, WalletTransaction, TopupRequest, MembershipPlan,
     Attendance, Order, Product, Announcement, Club, Referral
@@ -74,11 +75,17 @@ export function useAddMember() {
             name: string; phone: string; email?: string;
             dob?: Date | null; anniversary?: Date | null;
             photo?: string; referredBy?: string | null;
+            referredByMemberId?: string | null;
+            memberType?: string;
         }) => {
             if (!club) throw new Error("Club not loaded");
             const batch = writeBatch(db);
             const now = Timestamp.now();
             const memberId = "member_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+
+            // Generate member ID (PREFIX-LETTER-NUMBER)
+            const prefix = club.memberIdPrefix || generatePrefixFromName(club.name);
+            const generatedMemberId = await generateMemberId(club.id, prefix);
 
             // Determine treePath from referrer
             let treePath = memberId;
@@ -101,6 +108,9 @@ export function useAddMember() {
                 anniversary: input.anniversary ? Timestamp.fromDate(input.anniversary) : null,
                 qrCode: "", isClubOwner: false, ownedClubId: null,
                 originalClubId: club.id, referredBy: parentUserId,
+                referredByMemberId: input.referredByMemberId || null,
+                memberType: input.memberType || null,
+                memberId: generatedMemberId,
                 createdAt: now, updatedAt: now,
             };
             batch.set(doc(db, "users", memberId), userData);
@@ -140,13 +150,15 @@ export function useAddMember() {
             }
 
             await batch.commit();
-            return memberId;
+            return { memberId, generatedMemberId };
         },
         onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "members"] }),
     });
 }
 
+
 // ─── useUpdateMember ────────────────────────────────────────────────────
+
 
 export function useUpdateMember() {
     const qc = useQueryClient();

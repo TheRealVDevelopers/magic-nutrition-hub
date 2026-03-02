@@ -7,6 +7,8 @@ import { AuthProvider } from "@/lib/auth";
 import { seedSuperAdminIfNeeded } from "@/lib/seedSuperAdmin";
 import App from "./App.tsx";
 import "./index.css";
+import "./styles/print.css";
+
 
 // Fire-and-forget — runs once ever, fails silently, never delays app startup
 seedSuperAdminIfNeeded();
