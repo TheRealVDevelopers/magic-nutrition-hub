@@ -32,6 +32,7 @@ const memberNavItems = [
   { title: "Dashboard", path: "/member/dashboard", icon: LayoutDashboard },
   { title: "My Profile", path: "/member/profile", icon: Users },
   { title: "My Wallet", path: "/member/wallet", icon: Wallet },
+  { title: "Attendance", path: "/member/attendance", icon: CalendarCheck },
   { title: "Todays Menu", path: "/member/menu", icon: ShoppingCart },
   { title: "My Network", path: "/member/tree", icon: Network },
   { title: "My Card", path: "/member/card", icon: CreditCard },

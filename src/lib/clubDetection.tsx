@@ -63,9 +63,42 @@ export function isSuperAdminDomain(): boolean {
     return SUPERADMIN_DOMAINS.includes(window.location.hostname);
 }
 
+// ─── Module-level club cache ─────────────────────────────────────────────
+// Persists across re-renders and page navigations within the same tab session.
+
+let _cachedClub: Club | null | undefined = undefined; // undefined = not yet fetched
+
+const SESSION_KEY = "mnc_club_v2";
+
+function saveClubToSession(club: Club | null) {
+    try {
+        if (club) sessionStorage.setItem(SESSION_KEY, JSON.stringify(club));
+        else sessionStorage.removeItem(SESSION_KEY);
+    } catch { /* ignore quota errors */ }
+}
+
+function loadClubFromSession(): Club | null {
+    try {
+        const raw = sessionStorage.getItem(SESSION_KEY);
+        return raw ? (JSON.parse(raw) as Club) : null;
+    } catch {
+        return null;
+    }
+}
+
 // ─── Detection logic ────────────────────────────────────────────────────
 
 export async function detectClub(): Promise<Club | null> {
+    // Return module-level cache immediately if already fetched this session
+    if (_cachedClub !== undefined) return _cachedClub;
+
+    // Check sessionStorage next — survives page refreshes within same tab
+    const sessionClub = loadClubFromSession();
+    if (sessionClub) {
+        _cachedClub = sessionClub;
+        return sessionClub;
+    }
+
     const hostname = window.location.hostname;
 
     // Superadmin/dev domains — skip club detection entirely
@@ -77,15 +110,22 @@ export async function detectClub(): Promise<Club | null> {
                 const docRef = doc(db, "clubs", devClubId);
                 const docSnap = await getDoc(docRef);
                 if (docSnap.exists()) {
-                    return { id: docSnap.id, ...docSnap.data() } as Club;
+                    const club = { id: docSnap.id, ...docSnap.data() } as Club;
+                    _cachedClub = club;
+                    saveClubToSession(club);
+                    return club;
                 }
             } catch {
                 // fallback to default dev club
             }
-            return { ...DEFAULT_DEV_CLUB, id: devClubId };
+            const fallback = { ...DEFAULT_DEV_CLUB, id: devClubId };
+            _cachedClub = fallback;
+            saveClubToSession(fallback);
+            return fallback;
         }
 
         // For magic-nutrition-club.web.app — no club needed
+        _cachedClub = null;
         return null;
     }
 
@@ -95,14 +135,27 @@ export async function detectClub(): Promise<Club | null> {
         const q = query(clubsRef, where("domain", "==", hostname));
         const snapshot = await getDocs(q);
 
-        if (snapshot.empty) return null;
+        if (snapshot.empty) {
+            _cachedClub = null;
+            return null;
+        }
 
         const clubDoc = snapshot.docs[0];
-        return { id: clubDoc.id, ...clubDoc.data() } as Club;
+        const club = { id: clubDoc.id, ...clubDoc.data() } as Club;
+        _cachedClub = club;
+        saveClubToSession(club);
+        return club;
     } catch (error) {
         console.error("Error detecting club:", error);
+        _cachedClub = null;
         return null;
     }
+}
+
+// Call this when club data is mutated (e.g. PIN regenerated) to force re-fetch
+export function invalidateClubCache() {
+    _cachedClub = undefined;
+    try { sessionStorage.removeItem(SESSION_KEY); } catch { /* noop */ }
 }
 
 // ─── React hook ─────────────────────────────────────────────────────────

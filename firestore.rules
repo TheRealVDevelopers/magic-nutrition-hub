@@ -54,6 +54,12 @@ service cloud.firestore {
     match /enquiries/{enquiryId} {
       allow read, write: if true;
     }
+    match /inventory/{itemId} {
+      allow read, write: if true;
+    }
+    match /upgradeRequests/{requestId} {
+      allow read, write: if true;
+    }
 
     // ─── Payments subcollection ───────────────────────────────────────
     match /clubs/{clubId}/payments/{paymentId} {

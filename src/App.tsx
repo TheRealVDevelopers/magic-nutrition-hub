@@ -1,7 +1,7 @@
 import React, { Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import Layout from "./components/Layout";
 import SuperAdminLayout from "./components/superadmin/SuperAdminLayout";
 import { ProtectedRoute, RoleRoute } from "./components/ProtectedRoute";
@@ -9,6 +9,7 @@ import { useAuth, getDashboardPath } from "@/lib/auth";
 import { useClubContext, isSuperAdminDomain } from "@/lib/clubDetection";
 import ErrorBoundary from "./components/ErrorBoundary";
 import PageSkeleton from "./components/PageSkeleton";
+import MemberLayout from "./components/member/MemberLayout";
 
 // ─── Lazy Loaded Pages ──────────────────────────────────────────────────
 const Landing = lazy(() => import("./pages/Landing"));
@@ -37,6 +38,7 @@ const PlatformTree = lazy(() => import("./pages/superadmin/PlatformTree"));
 const SuperAdminSettings = lazy(() => import("./pages/superadmin/SuperAdminSettings"));
 const SuperAdminEnquiries = lazy(() => import("./pages/superadmin/Enquiries"));
 const PlatformSettings = lazy(() => import("./pages/superadmin/PlatformSettings"));
+const UpgradeRequests = lazy(() => import("./pages/superadmin/UpgradeRequests"));
 
 // PIN-gated pages (club domain only)
 const AdminAccess = lazy(() => import("./pages/AdminAccess"));
@@ -52,8 +54,14 @@ const DownlineClubs = lazy(() => import("./pages/owner/DownlineClubs"));
 const ClubSettingsPage = lazy(() => import("./pages/owner/ClubSettingsPage"));
 
 // Member pages
+const MemberLogin = lazy(() => import("./pages/member/MemberLogin"));
+const MemberDashboardNew = lazy(() => import("./pages/member/MemberDashboard"));
+const MemberProfilePageNew = lazy(() => import("./pages/member/MemberProfilePage"));
+const MemberAnnouncementsPage = lazy(() => import("./pages/member/MemberAnnouncements"));
+const MemberNetworkPage = lazy(() => import("./pages/member/MemberNetwork"));
 const MemberWalletPage = lazy(() => import("./pages/member/WalletPage"));
 const MemberCheckInPage = lazy(() => import("./pages/member/CheckInPage"));
+const MemberAttendancePage = lazy(() => import("./pages/member/MemberAttendancePage"));
 
 // Attendance & Reception
 const AttendancePage = lazy(() => import("./pages/owner/AttendancePage"));
@@ -119,13 +127,13 @@ function HomeRedirect() {
     return <Navigate to="/superadmin/login" replace />;
   }
 
-  // Club domain — logged in via Firebase Auth → go to dashboard
-  if (firebaseUser && role) {
-    return <Navigate to={getDashboardPath(role)} replace />;
-  }
-
-  // Club domain — not logged in → show landing page
+  // Club domain — always show landing page regardless of Firebase Auth state.
+  // PIN-based access is used here; Firebase Auth roles are irrelevant on club domains.
   return <Landing />;
+}
+
+function MemberLayoutOutlet() {
+  return <MemberLayout><Outlet /></MemberLayout>;
 }
 
 // ─── App ─────────────────────────────────────────────────────────────────
@@ -194,6 +202,7 @@ const App = () => (
           <Route path="tree" element={<PlatformTree />} />
           <Route path="enquiries" element={<SuperAdminEnquiries />} />
           <Route path="settings" element={<PlatformSettings />} />
+          <Route path="upgrade-requests" element={<UpgradeRequests />} />
           <Route path="legacy-settings" element={<SuperAdminSettings />} />
         </Route>
 
@@ -240,26 +249,33 @@ const App = () => (
           <Route path="orders" element={<OrderEntryPage />} />
         </Route>
 
-        {/* ── Member routes ──────────────────────────────────────────── */}
+        {/* ── Member login (public — no auth required) ────────────── */}
+        <Route path="/member/login" element={<MemberLogin />} />
+
+        {/* ── Member routes (Firebase Auth protected, MemberLayout) ── */}
         <Route
           path="/member/*"
           element={
             <ProtectedRoute>
               <RoleRoute roles={["member"]}>
-                <Layout />
+                <MemberLayoutOutlet />
               </RoleRoute>
             </ProtectedRoute>
           }
         >
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="profile" element={<MemberProfile />} />
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<MemberDashboardNew />} />
+          <Route path="profile" element={<MemberProfilePageNew />} />
           <Route path="wallet" element={<MemberWalletPage />} />
           <Route path="checkin" element={<MemberCheckInPage />} />
+          <Route path="attendance" element={<MemberAttendancePage />} />
           <Route path="menu" element={<TodaysMenuPage />} />
           <Route path="orders" element={<MemberOrdersPage />} />
           <Route path="card" element={<MemberCardPage />} />
           <Route path="tree" element={<MLMTreePage />} />
+          <Route path="network" element={<MemberNetworkPage />} />
           <Route path="progress" element={<ProgressPage />} />
+          <Route path="announcements" element={<MemberAnnouncementsPage />} />
         </Route>
 
         {/* ── Catch-all ──────────────────────────────────────────────── */}

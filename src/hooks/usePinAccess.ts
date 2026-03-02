@@ -38,12 +38,16 @@ interface PinAccessResult {
 
 export function usePinAccess(type: PinType): PinAccessResult {
     const { club, loading: clubLoading } = useClubContext();
-    const [isVerified, setIsVerified] = useState(false);
-    const [isLoading, setIsLoading] = useState(true);
-
     const clubId = club?.id ?? null;
 
-    // On mount: check localStorage PIN against Firestore
+    // Optimistically seed from localStorage — no loading flash if PIN is stored
+    const _storedPinAtMount = clubId ? localStorage.getItem(getStorageKey(clubId, type)) : null;
+    const [isVerified, setIsVerified] = useState(!!_storedPinAtMount);
+    // Start loading=false if we already have both club data AND a stored PIN,
+    // so the dashboard renders immediately. Otherwise show loading until resolved.
+    const [isLoading, setIsLoading] = useState(clubLoading || (!clubId && !_storedPinAtMount));
+
+    // Background verification — revoke access if PIN is stale, but never block render
     useEffect(() => {
         if (clubLoading) return;
         if (!clubId) {
@@ -61,29 +65,27 @@ export function usePinAccess(type: PinType): PinAccessResult {
             return;
         }
 
+        // We already set isVerified=true optimistically above.
+        // Now verify in the background — revoke only if the PIN has changed.
         fetchClubPin(clubId, type)
             .then((currentPin) => {
                 if (cancelled) return;
-                if (currentPin && storedPin.trim() === currentPin) {
-                    setIsVerified(true);
-                } else {
+                if (!currentPin || storedPin.trim() !== currentPin) {
+                    // PIN changed on server — revoke silently
                     localStorage.removeItem(key);
                     setIsVerified(false);
                 }
+                // else: PIN still valid, isVerified stays true
             })
-            .catch((err) => {
-                console.error(`PIN validation failed (${type}):`, err);
-                if (!cancelled) {
-                    // On error, trust the cached PIN so the user isn't locked out
-                    // when offline or if there's a transient Firestore issue
-                    setIsVerified(true);
-                }
+            .catch(() => {
+                // Network/Firestore error — keep access, don't lock user out
             })
             .finally(() => {
                 if (!cancelled) setIsLoading(false);
             });
 
         return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [clubId, clubLoading, type]);
 
     async function verify(pin: string): Promise<boolean> {

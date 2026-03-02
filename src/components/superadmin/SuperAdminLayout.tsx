@@ -10,6 +10,7 @@ import {
     Shield,
     Settings,
     MessageSquare,
+    Store,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
@@ -20,6 +21,7 @@ const baseNavItems = [
     { title: "Clubs", path: "/superadmin/clubs", icon: Building2 },
     { title: "Enquiries", path: "/superadmin/enquiries", icon: MessageSquare },
     { title: "Platform Tree", path: "/superadmin/tree", icon: GitBranch },
+    { title: "Club Requests", path: "/superadmin/upgrade-requests", icon: Store },
     { title: "Settings", path: "/superadmin/settings", icon: Settings },
 ];
 

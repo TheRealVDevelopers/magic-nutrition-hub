@@ -42,7 +42,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     }
 
     if (!firebaseUser) {
-        return <Navigate to={LOGIN_PATH} state={{ from: location }} replace />;
+        const redirectTo = location.pathname.startsWith("/member") ? "/member/login" : LOGIN_PATH;
+        return <Navigate to={redirectTo} state={{ from: location }} replace />;
     }
 
     // If role hasn't loaded yet but user is authenticated, wait

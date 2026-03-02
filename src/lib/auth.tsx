@@ -5,6 +5,7 @@ import {
     useEffect,
     ReactNode,
 } from "react";
+import { invalidateClubCache } from "@/lib/clubDetection";
 import {
     signInWithEmailAndPassword,
     signOut as firebaseSignOut,
@@ -26,9 +27,42 @@ interface AuthContextType {
     signOut: () => Promise<void>;
 }
 
+// ─── Profile cache ───────────────────────────────────────────────────────
+// Module-level cache — survives re-renders, cleared on sign-out.
+
+let _cachedProfile: User | null = null;
+const PROFILE_CACHE_KEY = "mnc_user_profile_v2";
+
+function saveProfileToStorage(profile: User | null) {
+    try {
+        if (profile) localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(profile));
+        else localStorage.removeItem(PROFILE_CACHE_KEY);
+    } catch { /* ignore */ }
+}
+
+function loadProfileFromStorage(): User | null {
+    try {
+        const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+        return raw ? (JSON.parse(raw) as User) : null;
+    } catch {
+        return null;
+    }
+}
+
 // ─── Helper: fetch user profile from Firestore ──────────────────────────
 
 async function fetchUserProfile(uid: string): Promise<User | null> {
+    // Return memory cache if uid matches
+    if (_cachedProfile && _cachedProfile.id === uid) {
+        return _cachedProfile;
+    }
+    // Check localStorage next
+    const stored = loadProfileFromStorage();
+    if (stored && stored.id === uid) {
+        _cachedProfile = stored;
+        return stored;
+    }
+    // Fetch from Firestore
     try {
         const userDocRef = doc(db, "users", uid);
         const userSnap = await getDoc(userDocRef);
@@ -37,7 +71,10 @@ async function fetchUserProfile(uid: string): Promise<User | null> {
             return null;
         }
 
-        return { id: userSnap.id, ...userSnap.data() } as User;
+        const profile = { id: userSnap.id, ...userSnap.data() } as User;
+        _cachedProfile = profile;
+        saveProfileToStorage(profile);
+        return profile;
     } catch (error) {
         console.error("Error fetching user profile:", error);
         return null;
@@ -138,35 +175,33 @@ export function useAuth() {
 // ─── Provider ───────────────────────────────────────────────────────────
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+    // Seed state from localStorage immediately — avoids blank screen on return visits
+    const _storedProfile = loadProfileFromStorage();
     const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-    const [userProfile, setUserProfile] = useState<User | null>(null);
-    const [role, setRole] = useState<UserRole | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [userProfile, setUserProfile] = useState<User | null>(_storedProfile);
+    const [role, setRole] = useState<UserRole | null>(_storedProfile?.role ?? null);
+    // If we have a cached profile, start loading=false optimistically.
+    // onAuthStateChanged will correct it if the session has expired.
+    const [loading, setLoading] = useState(!_storedProfile);
 
     useEffect(() => {
-        console.log("AuthProvider mounted, listening to onAuthStateChanged");
         const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-            console.log("onAuthStateChanged triggered:", fbUser ? `User: ${fbUser.uid}` : "No User");
             setFirebaseUser(fbUser);
 
             if (fbUser) {
-                try {
-                    console.log("Fetching profile for", fbUser.uid);
-                    const profile = await fetchUserProfile(fbUser.uid);
-                    console.log("Fetched profile:", profile);
-                    setUserProfile(profile);
-                    setRole(profile?.role ?? null);
-                } catch (err) {
-                    console.error("fetchUserProfile failed", err);
-                    setUserProfile(null);
-                    setRole(null);
-                }
+                // fetchUserProfile uses cache — instant if uid matches stored profile
+                const profile = await fetchUserProfile(fbUser.uid).catch(() => null);
+                setUserProfile(profile);
+                setRole(profile?.role ?? null);
+                if (profile) saveProfileToStorage(profile);
             } else {
+                // Signed out — clear everything
+                _cachedProfile = null;
+                saveProfileToStorage(null);
                 setUserProfile(null);
                 setRole(null);
             }
 
-            console.log("Setting Auth loading to false");
             setLoading(false);
         });
 
@@ -182,6 +217,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const handleSignOut = async () => {
         await signOutUser();
+        _cachedProfile = null;
+        saveProfileToStorage(null);
+        invalidateClubCache();
         setUserProfile(null);
         setRole(null);
     };
