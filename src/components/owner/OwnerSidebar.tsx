@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useClubContext } from "@/lib/clubDetection";
 import { usePinAccess } from "@/hooks/usePinAccess";
+import { usePendingTopupRequests } from "@/hooks/owner/useWallet";
 import { Button } from "@/components/ui/button";
 
 interface OwnerSidebarProps {
@@ -26,20 +27,20 @@ interface OwnerSidebarProps {
 }
 
 const NAV_ITEMS = [
-    { label: "Dashboard",      slug: "dashboard",     icon: LayoutDashboard },
-    { label: "Members",        slug: "members",       icon: Users },
-    { label: "Attendance",     slug: "attendance",    icon: CalendarCheck },
-    { label: "Wallet",         slug: "wallet",        icon: Wallet },
-    { label: "Orders",         slug: "orders",        icon: ShoppingCart },
-    { label: "Menu",           slug: "menu",          icon: UtensilsCrossed },
-    { label: "Announcements",  slug: "announcements", icon: Megaphone },
-    { label: "Enquiries",      slug: "enquiries",     icon: ClipboardList },
-    { label: "Reports",        slug: "reports",       icon: BarChart3 },
-    { label: "Settings",       slug: "settings",      icon: Settings },
-    { label: "Club Network",   slug: "tree",          icon: GitBranch },
+    { label: "Dashboard", slug: "dashboard", icon: LayoutDashboard },
+    { label: "Members", slug: "members", icon: Users },
+    { label: "Attendance", slug: "attendance", icon: CalendarCheck },
+    { label: "Wallet", slug: "wallet", icon: Wallet },
+    { label: "Orders", slug: "orders", icon: ShoppingCart },
+    { label: "Menu", slug: "menu", icon: UtensilsCrossed },
+    { label: "Announcements", slug: "announcements", icon: Megaphone },
+    { label: "Enquiries", slug: "enquiries", icon: ClipboardList },
+    { label: "Reports", slug: "reports", icon: BarChart3 },
+    { label: "Settings", slug: "settings", icon: Settings },
+    { label: "Club Network", slug: "tree", icon: GitBranch },
 ] as const;
 
-const ACCENT       = "#2d9653";
+const ACCENT = "#2d9653";
 const ACCENT_HOVER = "#e6f7ed";
 const BORDER_COLOR = "#e0f0e9";
 
@@ -48,6 +49,7 @@ export default function OwnerSidebar({ base, open, onClose }: OwnerSidebarProps)
     const navigate = useNavigate();
     const { club } = useClubContext();
     const { logout } = usePinAccess("admin");
+    const { count: pendingWalletCount } = usePendingTopupRequests(club?.id ?? null);
 
     function handleLock() {
         logout();
@@ -145,7 +147,18 @@ export default function OwnerSidebar({ base, open, onClose }: OwnerSidebarProps)
                                     className="w-4 h-4 flex-shrink-0"
                                     style={{ color: active ? "#fff" : ACCENT }}
                                 />
-                                <span className="truncate">{label}</span>
+                                <span className="truncate flex-1">{label}</span>
+                                {slug === "wallet" && pendingWalletCount > 0 && (
+                                    <span
+                                        className="ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-black leading-none"
+                                        style={{
+                                            backgroundColor: active ? "rgba(255,255,255,0.3)" : "#ef4444",
+                                            color: "#fff",
+                                        }}
+                                    >
+                                        {pendingWalletCount}
+                                    </span>
+                                )}
                             </Link>
                         );
                     })}

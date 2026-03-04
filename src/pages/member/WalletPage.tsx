@@ -10,6 +10,7 @@ import {
     useMyWallet,
     useMyTransactions,
     useMyPendingRequest,
+    useMyLatestRequest,
 } from "@/hooks/useMemberWallet";
 
 export default function WalletPage() {
@@ -17,6 +18,7 @@ export default function WalletPage() {
     const { wallet, loading: walletLoading } = useMyWallet();
     const { transactions, loadMore, hasMore, loading: txLoading } = useMyTransactions();
     const { pendingRequest, hasPending } = useMyPendingRequest();
+    const { latestRequest } = useMyLatestRequest();
 
     const currencyName = club?.currencyName || "Coins";
     const primaryColor = club?.primaryColor || "#8B5CF6";
@@ -67,9 +69,9 @@ export default function WalletPage() {
                     </div>
                 )}
 
-                {/* Pending Banner */}
-                {hasPending && pendingRequest && (
-                    <PendingRequestBanner request={pendingRequest} currencyName={currencyName} />
+                {/* Pending / Resolved Banner */}
+                {latestRequest && (
+                    <PendingRequestBanner request={latestRequest} currencyName={currencyName} />
                 )}
 
                 {/* Add Coins Button */}

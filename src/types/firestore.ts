@@ -146,6 +146,13 @@ export interface User {
     referredByMemberId?: string | null;
     memberType?: MemberType;
     memberId?: string;
+    // Weight tracking
+    startingWeight?: number;
+    currentWeight?: number;
+    targetWeight?: number;
+    lastWeighIn?: Timestamp | null;
+    badges?: string[];
+    totalWeighIns?: number;
     createdAt: Timestamp;
     updatedAt: Timestamp;
 }
@@ -156,6 +163,20 @@ export interface WeightLog {
     weight: number;
     date: Timestamp;
     notes: string;
+}
+
+// ─── /weighIns/{weighInId} ────────────────────────────────────────────
+export interface WeighIn {
+    id: string;
+    memberId: string;
+    clubId: string;
+    weight: number;
+    date: string;                   // "2026-03-05" ISO date string
+    previousWeight: number | null;
+    change: number | null;          // positive = lost weight, negative = gained
+    notes: string;
+    recordedBy: "owner" | "member";
+    createdAt: Timestamp;
 }
 
 // ─── /wallets/{userId} ────────────────────────────────────────────────
@@ -248,10 +269,12 @@ export interface Order {
     staffId: string;
     items: OrderItem[];
     totalCost: number;
-    status: "pending" | "preparing" | "served";
+    status: "pending" | "preparing" | "served" | "cancelled";
     rating: number | null;
     ratingNote: string | null;
-    date: string;
+    date: string; // YYYY-MM-DD
+    notes?: string;
+    walletDeducted?: boolean;
     createdAt: Timestamp;
     servedAt: Timestamp | null;
 }
@@ -261,13 +284,16 @@ export interface Product {
     id: string;
     clubId: string;
     name: string;
-    category: "shake" | "supplement" | "snack" | "other";
+    category: "shake" | "supplement" | "snack" | "other" | string;
     price: number;
+    description?: string;
     stock: number;
     lowStockThreshold: number;
     expiryDate: Timestamp | null;
     photo: string;
     isAvailableToday: boolean;
+    availableDate?: string | null; // YYYY-MM-DD
+    isDeleted?: boolean;
     createdAt: Timestamp;
     updatedAt: Timestamp;
 }
@@ -291,11 +317,13 @@ export interface Announcement {
     clubId: string;
     title: string;
     message: string;
-    postedBy: string;
+    priority: "normal" | "important" | "urgent";
+    sentTo: string;
+    isPinned: boolean;
+    scheduledFor: Timestamp | null;
     createdAt: Timestamp;
-    expiresAt: Timestamp | null;
-    isActive: boolean;
-    priority?: 'normal' | 'important' | 'urgent';
+    createdBy: string;
+    readBy: string[];
 }
 
 // ─── /referrals/{referralId} ──────────────────────────────────────────

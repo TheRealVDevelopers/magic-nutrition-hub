@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useClubContext } from "@/lib/clubDetection";
@@ -25,6 +26,7 @@ export default function Settings() {
     const [phone, setPhone] = useState("");
     const [email, setEmail] = useState("");
     const [lowBalanceThreshold, setLowBalanceThreshold] = useState(100);
+    const [weighInDays, setWeighInDays] = useState<number[]>([]);
     const [plans, setPlans] = useState<(MembershipPlan & { id: string })[]>([]);
     const [plansLoading, setPlansLoading] = useState(true);
     const [profileSaving, setProfileSaving] = useState(false);
@@ -43,6 +45,7 @@ export default function Settings() {
             setPhone(club.ownerPhone || "");
             setEmail(club.ownerEmail || "");
             setLowBalanceThreshold((club as any).lowBalanceThreshold ?? 100);
+            setWeighInDays((club as any).weighInDays ?? []);
         }
     }, [club]);
 
@@ -84,8 +87,8 @@ export default function Settings() {
         if (!clubId) return;
         setWalletSaving(true);
         try {
-            await updateDoc(doc(db, "clubs", clubId), { lowBalanceThreshold });
-            toast({ title: "Wallet settings saved!" });
+            await updateDoc(doc(db, "clubs", clubId), { lowBalanceThreshold, weighInDays });
+            toast({ title: "Settings saved!" });
         } catch (e: any) {
             toast({ title: "Error", description: e.message, variant: "destructive" });
         } finally {
@@ -197,9 +200,9 @@ export default function Settings() {
             </section>
 
             <section className="space-y-4">
-                <h2 className="text-lg font-semibold">Wallet Settings</h2>
-                <div className="flex items-center gap-4 max-w-xs">
-                    <div className="flex-1">
+                <h2 className="text-lg font-semibold">Other Settings</h2>
+                <div className="grid gap-6">
+                    <div className="flex flex-col gap-2 max-w-xs">
                         <Label>Low balance threshold (₹)</Label>
                         <Input
                             type="number"
@@ -208,10 +211,47 @@ export default function Settings() {
                             min={0}
                         />
                     </div>
-                    <Button onClick={handleSaveWallet} disabled={walletSaving} style={{ backgroundColor: GREEN }} className="mt-6">
-                        <Save className="w-4 h-4 mr-2" /> {walletSaving ? "Saving…" : "Save"}
-                    </Button>
+
+                    <div className="flex flex-col gap-2">
+                        <Label>Weigh-in Schedule</Label>
+                        <p className="text-xs text-muted-foreground mb-1">Select the days of the week when members should weigh in.</p>
+                        <div className="flex flex-wrap gap-4">
+                            {[
+                                { label: "Sun", value: 0 },
+                                { label: "Mon", value: 1 },
+                                { label: "Tue", value: 2 },
+                                { label: "Wed", value: 3 },
+                                { label: "Thu", value: 4 },
+                                { label: "Fri", value: 5 },
+                                { label: "Sat", value: 6 },
+                            ].map((day) => (
+                                <div key={day.value} className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id={`day-${day.value}`}
+                                        checked={weighInDays.includes(day.value)}
+                                        onCheckedChange={(checked) => {
+                                            if (checked) {
+                                                setWeighInDays([...weighInDays, day.value]);
+                                            } else {
+                                                setWeighInDays(weighInDays.filter(d => d !== day.value));
+                                            }
+                                        }}
+                                    />
+                                    <label
+                                        htmlFor={`day-${day.value}`}
+                                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                    >
+                                        {day.label}
+                                    </label>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
+
+                <Button onClick={handleSaveWallet} disabled={walletSaving} style={{ backgroundColor: GREEN }} className="mt-4">
+                    <Save className="w-4 h-4 mr-2" /> {walletSaving ? "Saving…" : "Save Settings"}
+                </Button>
             </section>
 
             <Dialog open={planDialogOpen} onOpenChange={setPlanDialogOpen}>

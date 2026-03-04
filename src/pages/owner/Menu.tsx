@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from "react";
-import { UtensilsCrossed, Plus, Pencil, Trash2 } from "lucide-react";
+import { useState, useMemo, useEffect, useRef } from "react";
+import { UtensilsCrossed, Plus, Pencil, Trash2, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -154,8 +154,8 @@ function MenuCard({
     return (
         <div className="bg-white rounded-2xl p-5 border shadow-sm">
             <div className="flex gap-4">
-                <div className="w-16 h-16 rounded-xl flex items-center justify-center text-2xl font-bold shrink-0 overflow-hidden" style={{ backgroundColor: "#e8f5e9", color: "#2d9653" }}>
-                    {item.photo ? <img src={item.photo} alt="" className="w-full h-full object-cover" /> : initial}
+                <div className="w-16 h-16 rounded-xl flex items-center justify-center text-3xl shrink-0 overflow-hidden" style={{ backgroundColor: "#e8f5e9", color: "#2d9653" }}>
+                    {item.photo ? <img src={item.photo} alt="" className="w-full h-full object-cover" /> : getCategoryEmoji(item.category)}
                 </div>
                 <div className="flex-1 min-w-0">
                     <p className="font-bold truncate">{item.name}</p>
@@ -177,6 +177,13 @@ function MenuCard({
             </div>
         </div>
     );
+}
+
+function getCategoryEmoji(cat: string) {
+    if (cat === "shake") return "🥤";
+    if (cat === "supplement") return "💊";
+    if (cat === "snack") return "🍿";
+    return "🍽️";
 }
 
 function ItemDialog({
@@ -201,6 +208,9 @@ function ItemDialog({
     const [price, setPrice] = useState("");
     const [description, setDescription] = useState("");
     const [available, setAvailable] = useState(true);
+    const [photoFile, setPhotoFile] = useState<File | null>(null);
+    const [photoPreview, setPhotoPreview] = useState<string>("");
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     const isEdit = !!item;
 
@@ -210,6 +220,9 @@ function ItemDialog({
         setPrice("");
         setDescription("");
         setAvailable(true);
+        setPhotoFile(null);
+        setPhotoPreview("");
+        if (fileInputRef.current) fileInputRef.current.value = "";
     };
 
     useEffect(() => {
@@ -218,7 +231,10 @@ function ItemDialog({
                 setName(item.name);
                 setCategory(item.category);
                 setPrice(String(item.price));
+                setDescription(item.description || "");
                 setAvailable(item.isAvailableToday ?? true);
+                setPhotoFile(null);
+                setPhotoPreview(item.photo || "");
             } else reset();
         }
     }, [open, item]);
@@ -236,7 +252,7 @@ function ItemDialog({
 
         if (isEdit && item) {
             updateItem.mutate(
-                { itemId: item.id, data: { name: name.trim(), category, price: p, isAvailableToday: available } },
+                { clubId, itemId: item.id, data: { name: name.trim(), category, price: p, description, isAvailableToday: available }, photoFile },
                 {
                     onSuccess: () => {
                         toast({ title: "Item updated" });
@@ -247,7 +263,7 @@ function ItemDialog({
             );
         } else {
             addItem.mutate(
-                { clubId, item: { name: name.trim(), category, price: p, isAvailableToday: available } },
+                { clubId, item: { name: name.trim(), category, price: p, description, isAvailableToday: available }, photoFile },
                 {
                     onSuccess: () => {
                         toast({ title: "Item added" });
@@ -266,7 +282,37 @@ function ItemDialog({
                 <DialogHeader>
                     <DialogTitle>{isEdit ? "Edit Item" : "Add Item"}</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4">
+                <div className="space-y-4 max-h-[70vh] overflow-y-auto px-1 py-1">
+                    {/* Image Upload */}
+                    <div className="flex flex-col items-center gap-3">
+                        <div
+                            className="w-24 h-24 rounded-2xl border-2 border-dashed flex items-center justify-center overflow-hidden cursor-pointer relative bg-slate-50 hover:bg-slate-100 transition-colors"
+                            onClick={() => fileInputRef.current?.click()}
+                        >
+                            {photoPreview ? (
+                                <img src={photoPreview} alt="Preview" className="w-full h-full object-cover" />
+                            ) : (
+                                <div className="text-center">
+                                    <ImageIcon className="w-8 h-8 mx-auto text-slate-300" />
+                                </div>
+                            )}
+                        </div>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            ref={fileInputRef}
+                            className="hidden"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                    setPhotoFile(file);
+                                    setPhotoPreview(URL.createObjectURL(file));
+                                }
+                            }}
+                        />
+                        <p className="text-xs text-muted-foreground">Tap to upload photo</p>
+                    </div>
+
                     <div>
                         <Label>Name *</Label>
                         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Item name" className="min-h-[48px] mt-1" />

@@ -1,49 +1,86 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { collection, query, where, getDocs, doc, addDoc, deleteDoc, updateDoc, Timestamp, orderBy } from "firebase/firestore";
+import { useEffect, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+    collection,
+    query,
+    where,
+    orderBy,
+    onSnapshot,
+    addDoc,
+    deleteDoc,
+    doc,
+    serverTimestamp,
+    Timestamp,
+} from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Announcement } from "@/types/firestore";
 
 export function useAnnouncements(clubId: string | null) {
-    return useQuery({
-        queryKey: ["owner-announcements", clubId],
-        enabled: !!clubId,
-        queryFn: async () => {
-            const q = query(collection(db, "announcements"), where("clubId", "==", clubId), orderBy("createdAt", "desc"));
-            const snap = await getDocs(q);
-            return snap.docs.map(d => ({ id: d.id, ...d.data() } as Announcement));
-        },
-    });
+    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!clubId) {
+            setAnnouncements([]);
+            setLoading(false);
+            return;
+        }
+
+        const q = query(
+            collection(db, "announcements"),
+            where("clubId", "==", clubId),
+            orderBy("createdAt", "desc")
+        );
+
+        const unsub = onSnapshot(
+            q,
+            (snap) => {
+                const results = snap.docs.map(
+                    (d) => ({ id: d.id, ...d.data() } as Announcement)
+                );
+                setAnnouncements(results);
+                setLoading(false);
+            },
+            (err) => {
+                setError(err.message);
+                setLoading(false);
+            }
+        );
+
+        return () => unsub();
+    }, [clubId]);
+
+    return { announcements, loading, error };
 }
 
-export function useSendAnnouncement() {
+export function useSendAnnouncement(clubId: string | null) {
     const qc = useQueryClient();
+
     return useMutation({
-        mutationFn: async (data: { clubId: string; title: string; message: string; priority?: string }) => {
+        mutationFn: async (data: Omit<Announcement, "id" | "clubId" | "createdAt" | "createdBy" | "readBy">) => {
+            if (!clubId) throw new Error("No club ID");
+
             await addDoc(collection(db, "announcements"), {
-                clubId: data.clubId,
-                title: data.title,
-                message: data.message,
-                postedBy: "owner",
-                createdAt: Timestamp.now(),
-                expiresAt: null,
-                isActive: true,
-                priority: data.priority || "normal",
+                ...data,
+                clubId,
+                createdBy: "owner",
+                createdAt: serverTimestamp(),
+                readBy: [],
             });
         },
-        onSuccess: (_, vars) => {
-            qc.invalidateQueries({ queryKey: ["owner-announcements", vars.clubId] });
+        onSuccess: () => {
+            // Invalidate if needed, though onSnapshot handles real-time lists
+            qc.invalidateQueries({ queryKey: ["owner-announcements"] });
         },
     });
 }
 
 export function useDeleteAnnouncement() {
-    const qc = useQueryClient();
     return useMutation({
-        mutationFn: async (annId: string) => {
-            await deleteDoc(doc(db, "announcements", annId));
-        },
-        onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ["owner-announcements"] });
+        mutationFn: async (announcementId: string) => {
+            if (!announcementId) throw new Error("No announcement ID");
+            await deleteDoc(doc(db, "announcements", announcementId));
         },
     });
 }

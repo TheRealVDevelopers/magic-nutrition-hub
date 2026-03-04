@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Edit, Wallet, ShoppingBag, Activity, Users, Plus, GitBranch, ArrowUpCircle, X } from "lucide-react";
+import { ArrowLeft, Edit, Wallet, ShoppingBag, Activity, Users, Plus, GitBranch, ArrowUpCircle, X, Scale } from "lucide-react";
 import { doc, updateDoc, Timestamp } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,9 +17,10 @@ import { db } from "@/lib/firebase";
 import MemberForm, { type MemberFormValues } from "@/components/owner/MemberForm";
 import {
     useMemberById, useUpdateMember, useMemberWallet, useMemberTransactions,
-    useMemberOrders, useMemberWeightLog, useAddWeightEntry, useMembershipPlans, useAssignMembership,
+    useMemberOrders, useMembershipPlans, useAssignMembership,
     useMemberReferrals
 } from "@/hooks/useOwner";
+import { useWeighIns, useRecordWeighIn } from "@/hooks/owner/useWeighIns";
 import type { MemberType } from "@/types/firestore";
 
 const UPGRADE_TIERS: { value: MemberType; label: string; color: string }[] = [
@@ -146,16 +147,17 @@ export default function OwnerMemberProfile() {
     const { data: wallet } = useMemberWallet(id || "");
     const { data: transactions } = useMemberTransactions(id || "");
     const { data: orders } = useMemberOrders(id || "");
-    const { data: weightLog } = useMemberWeightLog(id || "");
+    const { data: weightLog } = useWeighIns(club?.id || null, id || "");
     const { data: referrals } = useMemberReferrals(id || "");
     const { data: plans } = useMembershipPlans();
     const updateMember = useUpdateMember();
-    const addWeight = useAddWeightEntry();
+    const recordWeighIn = useRecordWeighIn();
     const assignPlan = useAssignMembership();
 
     const [editOpen, setEditOpen] = useState(false);
     const [assignOpen, setAssignOpen] = useState(false);
     const [upgradeOpen, setUpgradeOpen] = useState(false);
+    const [weighInOpen, setWeighInOpen] = useState(false);
     const [selectedPlan, setSelectedPlan] = useState("");
     const [weightInput, setWeightInput] = useState("");
     const [weightNote, setWeightNote] = useState("");
@@ -188,11 +190,23 @@ export default function OwnerMemberProfile() {
 
     const handleAddWeight = async () => {
         const w = parseFloat(weightInput);
-        if (isNaN(w)) return;
+        if (isNaN(w) || !club) return;
         try {
-            await addWeight.mutateAsync({ memberId: member.id, weight: w, notes: weightNote });
+            await recordWeighIn.mutateAsync({
+                memberId: member.id,
+                clubId: club.id,
+                weight: w,
+                notes: weightNote,
+                recordedBy: "owner",
+                previousWeight: member.currentWeight ?? null,
+                startingWeight: member.startingWeight ?? 0,
+                targetWeight: member.targetWeight ?? 0,
+                existingBadges: member.badges || [],
+                totalWeighIns: member.totalWeighIns || 0,
+            });
             toast({ title: "Weight entry added!" });
             setWeightInput(""); setWeightNote("");
+            setWeighInOpen(false);
         } catch (err: any) { toast({ title: "Error", description: err.message, variant: "destructive" }); }
     };
 
@@ -307,22 +321,40 @@ export default function OwnerMemberProfile() {
 
                 {/* Progress */}
                 <TabsContent value="progress" className="mt-6 space-y-4">
-                    <div className="flex items-center gap-4">
-                        <Input type="number" placeholder="Weight (kg)" value={weightInput} onChange={(e) => setWeightInput(e.target.value)} className="w-32" />
-                        <Input placeholder="Notes" value={weightNote} onChange={(e) => setWeightNote(e.target.value)} className="flex-1" />
-                        <Button size="sm" onClick={handleAddWeight} disabled={addWeight.isPending}><Plus className="w-4 h-4 mr-1" /> Add</Button>
+                    <div className="flex items-center justify-between mb-2">
+                        <h3 className="font-bold text-lg">Weigh-In History</h3>
+                        <Button size="sm" onClick={() => setWeighInOpen(true)} className="bg-emerald-600 hover:bg-emerald-700">
+                            <Scale className="w-4 h-4 mr-1" /> Record Weight
+                        </Button>
                     </div>
+
                     {weightLog && weightLog.length > 0 ? (
                         <div className="space-y-2">
                             {weightLog.map((w: any) => (
-                                <div key={w.id} className="flex items-center justify-between p-3 rounded-xl border bg-white text-sm">
-                                    <p className="font-medium">{w.weight} kg</p>
-                                    <p className="text-xs text-muted-foreground">{w.date?.toDate?.().toLocaleDateString()}</p>
+                                <div key={w.id} className="flex flex-col p-4 rounded-xl border bg-white shadow-sm space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-baseline gap-2">
+                                            <p className="font-bold text-lg text-slate-800">{w.weight} kg</p>
+                                            {w.change !== 0 && (
+                                                <span className={`text-xs font-semibold px-2 py-0.5 rounded ${w.change > 0 ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                                                    {w.change > 0 ? "↓" : "↑"} {Math.abs(w.change)} kg
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-slate-500 font-medium">{w.date?.toDate?.().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                    </div>
+                                    {w.notes && (
+                                        <p className="text-sm text-slate-600 bg-slate-50 p-2 rounded-lg border border-slate-100">{w.notes}</p>
+                                    )}
                                 </div>
                             ))}
                         </div>
                     ) : (
-                        <p className="text-sm text-muted-foreground text-center py-8">No weight entries yet</p>
+                        <div className="text-center py-12 px-4 border border-dashed rounded-2xl bg-white">
+                            <Scale className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+                            <h3 className="text-sm font-bold text-slate-900">No Weigh-Ins</h3>
+                            <p className="text-xs text-slate-500 mt-1">Record the first weigh-in to start tracking progress.</p>
+                        </div>
                     )}
                 </TabsContent>
 
@@ -405,18 +437,42 @@ export default function OwnerMemberProfile() {
                 </DialogContent>
             </Dialog>
 
-            {/* Upgrade to Member Modal */}
+            {/* Upgrade Status Modal */}
             {upgradeOpen && (
                 <UpgradeMemberModal
+                    clubName={club?.name || ""}
+                    whatsappPhone={member.phone}
                     memberName={member.name}
                     memberPhone={member.phone}
                     memberId={member.id}
-                    whatsappPhone={member.phone}
-                    clubName={club?.name ?? ""}
                     onClose={() => setUpgradeOpen(false)}
                     onDone={() => setUpgradeOpen(false)}
                 />
             )}
+
+            {/* Weigh-In Dialog */}
+            <Dialog open={weighInOpen} onOpenChange={setWeighInOpen}>
+                <DialogContent>
+                    <DialogHeader><DialogTitle>Record Today's Weight</DialogTitle></DialogHeader>
+                    <div className="space-y-4 mt-4">
+                        <div className="space-y-2">
+                            <Label>Weight (kg)</Label>
+                            <Input type="number" step="0.1" placeholder="e.g. 75.5" value={weightInput} onChange={(e) => setWeightInput(e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Notes (optional)</Label>
+                            <Input placeholder="How are you feeling?" value={weightNote} onChange={(e) => setWeightNote(e.target.value)} />
+                        </div>
+                        <Button
+                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white"
+                            onClick={handleAddWeight}
+                            disabled={!weightInput || recordWeighIn.isPending}
+                        >
+                            {recordWeighIn.isPending ? "Saving..." : "Save Weigh-in"}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

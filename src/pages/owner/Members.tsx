@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Search, Eye, Printer, CheckCircle } from "lucide-react";
+import { Plus, Search, Eye, Printer, CheckCircle, Scale, Trophy } from "lucide-react";
 import { Timestamp } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,7 @@ import { useClubContext } from "@/lib/clubDetection";
 import type { User } from "@/types/firestore";
 import MembershipReceipt, { type MembershipReceiptProps } from "@/components/receipts/MembershipReceipt";
 import { printReceipt } from "@/utils/printReceipt";
+import BulkWeighIn from "@/components/owner/BulkWeighIn";
 
 type FilterTab = "all" | "active" | "expired" | "expiring";
 
@@ -39,6 +40,7 @@ export default function Members() {
     const [search, setSearch] = useState("");
     const [filter, setFilter] = useState<FilterTab>("all");
     const [dialogOpen, setDialogOpen] = useState(false);
+    const [weighInOpen, setWeighInOpen] = useState(false);
     const [formData, setFormData] = useState({
         name: "", phone: "", email: "", address: "", dob: "",
         currentWeight: "", targetWeight: "", healthConditions: "", membershipTier: "bronze" as "gold" | "silver" | "bronze",
@@ -120,11 +122,19 @@ export default function Members() {
 
     return (
         <div className="space-y-6 animate-fade-in" style={{ fontFamily: "'Nunito', sans-serif" }}>
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <h1 className="text-2xl font-black" style={{ color: "#2d9653" }}>Members</h1>
-                <Button className="gap-2 min-h-[48px] px-4" style={{ backgroundColor: "#2d9653" }} onClick={() => setDialogOpen(true)}>
-                    <Plus className="w-4 h-4" /> Add Member
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" className="gap-2 min-h-[48px] px-4 border-amber-500 text-amber-600 hover:bg-amber-50" onClick={() => navigate("/owner/leaderboard")}>
+                        <Trophy className="w-4 h-4" /> Leaderboard
+                    </Button>
+                    <Button variant="outline" className="gap-2 min-h-[48px] px-4 border-emerald-600 text-emerald-700 hover:bg-emerald-50" onClick={() => setWeighInOpen(true)}>
+                        <Scale className="w-4 h-4" /> Record Weigh-Ins
+                    </Button>
+                    <Button className="gap-2 min-h-[48px] px-4" style={{ backgroundColor: "#2d9653" }} onClick={() => setDialogOpen(true)}>
+                        <Plus className="w-4 h-4" /> Add Member
+                    </Button>
+                </div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3">
@@ -287,6 +297,8 @@ export default function Members() {
             <div id="receipt-print-area">
                 {membershipSuccess && <MembershipReceipt {...membershipSuccess} />}
             </div>
+
+            <BulkWeighIn open={weighInOpen} onClose={() => setWeighInOpen(false)} />
         </div>
     );
 }

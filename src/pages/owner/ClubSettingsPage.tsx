@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Eye, EyeOff, Save, Trash2, Plus, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,23 @@ export default function ClubSettingsPage() {
     // Referral Settings
     const [referralBonusCoins, setReferralBonusCoins] = useState(club?.referralBonusCoins ?? 50);
 
+    // Weigh-in days
+    const ALL_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const;
+    const DAY_LABELS: Record<string, string> = { monday: "Mon", tuesday: "Tue", wednesday: "Wed", thursday: "Thu", friday: "Fri", saturday: "Sat", sunday: "Sun" };
+    const [weighInDays, setWeighInDays] = useState<string[]>((club as any)?.weighInDays ?? []);
+
+    const toggleWeighDay = (day: string) => {
+        setWeighInDays(prev => prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]);
+    };
+
+    const handleSaveWeighInDays = () => {
+        if (!club) return;
+        updateSettings.mutate({ clubId: club.id, data: { weighInDays } }, {
+            onSuccess: () => toast({ title: "Weigh-in schedule saved!" }),
+            onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),
+        });
+    };
+
     const handleToggleProduct = (productId: string) => {
         const updated = selectedIds.includes(productId)
             ? selectedIds.filter((id) => id !== productId)
@@ -94,12 +111,13 @@ export default function ClubSettingsPage() {
             <h1 className="text-2xl font-black text-wellness-forest">Club Settings</h1>
 
             <Tabs defaultValue="special">
-                <TabsList>
+                <TabsList className="flex-wrap">
                     <TabsTrigger value="special">Today's Special</TabsTrigger>
                     <TabsTrigger value="announcements">Announcements</TabsTrigger>
                     <TabsTrigger value="kitchen">Kitchen PIN</TabsTrigger>
                     <TabsTrigger value="profile">Club Profile</TabsTrigger>
                     <TabsTrigger value="referrals">Referrals</TabsTrigger>
+                    <TabsTrigger value="weighin">Weigh-in</TabsTrigger>
                 </TabsList>
 
                 {/* Today's Special */}
@@ -231,6 +249,40 @@ export default function ClubSettingsPage() {
                         </div>
                         <Button onClick={handleSaveReferralSettings} disabled={updateSettings.isPending} className="w-full">
                             <Save className="w-4 h-4 mr-2" /> {updateSettings.isPending ? "Saving…" : "Save Settings"}
+                        </Button>
+                    </div>
+                </TabsContent>
+
+                {/* Weigh-in Schedule */}
+                <TabsContent value="weighin" className="mt-6">
+                    <div className="max-w-lg bg-white rounded-2xl border p-6 space-y-4">
+                        <div>
+                            <h3 className="text-sm font-bold text-slate-900">Weigh-in Days</h3>
+                            <p className="text-xs text-muted-foreground mt-1">Select which days members do weigh-in</p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {ALL_DAYS.map(day => (
+                                <button
+                                    key={day}
+                                    onClick={() => toggleWeighDay(day)}
+                                    className="px-4 py-2 rounded-full text-sm font-bold transition-all"
+                                    style={{
+                                        backgroundColor: weighInDays.includes(day) ? "#2d9653" : "transparent",
+                                        color: weighInDays.includes(day) ? "#fff" : "#6b7280",
+                                        border: weighInDays.includes(day) ? "2px solid #2d9653" : "2px solid #d1d5db",
+                                    }}
+                                >
+                                    {DAY_LABELS[day]}
+                                </button>
+                            ))}
+                        </div>
+                        {weighInDays.length > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                                Members weigh in on: {weighInDays.map(d => DAY_LABELS[d]).join(", ")}
+                            </p>
+                        )}
+                        <Button onClick={handleSaveWeighInDays} disabled={updateSettings.isPending} className="w-full" style={{ backgroundColor: "#2d9653" }}>
+                            <Save className="w-4 h-4 mr-2" /> {updateSettings.isPending ? "Saving…" : "Save Schedule"}
                         </Button>
                     </div>
                 </TabsContent>

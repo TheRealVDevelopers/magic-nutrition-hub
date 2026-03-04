@@ -44,7 +44,7 @@ export function useTransactions(clubId: string | null, memberId?: string) {
                 q = query(collection(db, "walletTransactions"), where("clubId", "==", clubId), orderBy("createdAt", "desc"));
             }
             const snap = await getDocs(q);
-            return snap.docs.map(d => ({ id: d.id, ...d.data() } as WalletTransaction));
+            return snap.docs.map(d => ({ ...(d.data() as Record<string, unknown>), id: d.id } as WalletTransaction));
         },
     });
 }

@@ -41,21 +41,33 @@ function AnnouncementBanner({ clubId }: { clubId: string }) {
 
     if (!announcements.length) return null;
 
-    const ann = announcements[0];
+    const highestPriority = announcements.reduce((acc, ann) => {
+        if (acc === "urgent" || ann.priority === "urgent") return "urgent";
+        if (acc === "important" || ann.priority === "important") return "important";
+        return "normal";
+    }, "normal");
+
     const priorityStyles: Record<string, string> = {
         normal: "bg-green-600 text-white",
         important: "bg-amber-400 text-amber-900",
         urgent: "bg-red-500 text-white",
     };
-    const style = priorityStyles[ann.priority ?? "normal"] ?? priorityStyles.normal;
+    const style = priorityStyles[highestPriority] ?? priorityStyles.normal;
 
     return (
         <div className={`${style} px-6 py-3 flex items-center gap-3 overflow-hidden`}>
             <span className="text-lg shrink-0">📢</span>
-            <div className="overflow-hidden w-full">
-                <div className="font-black text-sm whitespace-nowrap animate-marquee">
-                    <span className="font-bold mr-4">{ann.title}:</span>
-                    {ann.message}
+            <div className="overflow-hidden w-full flex">
+                <div className="font-black text-sm whitespace-nowrap animate-marquee flex gap-16">
+                    {announcements.map(ann => (
+                        <div key={ann.id} className="inline-flex items-center">
+                            <span className="font-bold mr-2 uppercase tracking-wide opacity-90">
+                                {ann.priority === "urgent" ? "🚨 " : ann.priority === "important" ? "⚠️ " : ""}
+                                {ann.title}:
+                            </span>
+                            <span className="font-medium">{ann.message}</span>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>

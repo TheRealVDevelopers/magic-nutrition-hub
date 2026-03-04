@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
     CalendarCheck,
@@ -6,6 +6,7 @@ import {
     Download,
     ChevronLeft,
     ChevronRight,
+    Scale,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -29,6 +30,7 @@ import {
     CardTitle,
 } from "@/components/ui/card";
 import type { Attendance } from "@/types/firestore";
+import { getNextWeighIn } from "@/utils/getNextWeighIn";
 import {
     addMonths,
     subMonths,
@@ -145,12 +147,28 @@ export default function MemberAttendancePage() {
         );
     }
 
+    const nextWeighIn = (club as any)?.weighInDays ? getNextWeighIn((club as any).weighInDays) : null;
+
     return (
         <div
             className="min-h-screen p-4 pb-20"
             style={{ backgroundColor: BG, fontFamily: "Nunito, sans-serif" }}
         >
             <div className="max-w-lg mx-auto space-y-6">
+
+                {/* Banner - Next Weigh-in */}
+                {nextWeighIn && (
+                    <div className="w-full bg-emerald-50 border border-emerald-200 text-emerald-800 p-3 rounded-xl flex items-center justify-between shadow-sm">
+                        <div className="flex items-center gap-2">
+                            <Scale className="w-4 h-4 text-emerald-600" />
+                            <span className="text-sm font-semibold">Next Weigh-in:</span>
+                        </div>
+                        <span className="text-sm font-bold">
+                            {nextWeighIn.daysUntil === 0 ? "Today" : nextWeighIn.daysUntil === 1 ? "Tomorrow" : `${nextWeighIn.dayName}, ${format(nextWeighIn.date, "MMM d")}`}
+                        </span>
+                    </div>
+                )}
+
                 {/* Section 1 - QR Code */}
                 <div className="flex flex-col items-center pt-2">
                     <div className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
@@ -328,11 +346,10 @@ export default function MemberAttendancePage() {
                                                 }}
                                             >
                                                 <span
-                                                    className={`text-sm font-medium ${
-                                                        isCurrentMonth
+                                                    className={`text-sm font-medium ${isCurrentMonth
                                                             ? "text-foreground"
                                                             : "text-muted-foreground"
-                                                    }`}
+                                                        }`}
                                                 >
                                                     {format(day, "d")}
                                                 </span>
@@ -376,9 +393,9 @@ export default function MemberAttendancePage() {
                                                 <p className="text-xs text-muted-foreground">
                                                     {a.checkInTime?.toDate?.()
                                                         ? format(
-                                                              a.checkInTime.toDate(),
-                                                              "h:mm a"
-                                                          )
+                                                            a.checkInTime.toDate(),
+                                                            "h:mm a"
+                                                        )
                                                         : "—"}
                                                 </p>
                                             </div>

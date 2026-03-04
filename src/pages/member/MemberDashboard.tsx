@@ -10,16 +10,7 @@ import {
 } from "firebase/firestore";
 import { useQuery } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
-import {
-    Wallet,
-    CalendarCheck,
-    Flame,
-    Scale,
-    Megaphone,
-    ChevronRight,
-    HandHeart,
-    X,
-} from "lucide-react";
+import { Wallet, CalendarCheck, Flame, Scale, Megaphone, ChevronRight, HandHeart, X, RefreshCw } from "lucide-react";
 import { format } from "date-fns";
 import { useAuth } from "@/lib/auth";
 import { useClubContext } from "@/lib/clubDetection";
@@ -27,15 +18,14 @@ import { db } from "@/lib/firebase";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-    useMyAttendance,
-    computeAttendanceStats,
-} from "@/hooks/member/useMemberAttendance";
-import { useMyWallet } from "@/hooks/member/useMemberWallet";
+import { useMyAttendance, computeAttendanceStats } from "@/hooks/member/useMemberAttendance";
+import { useMyWallet } from "@/hooks/useMemberWallet";
 import { useWeightLogs } from "@/hooks/useMemberFeatures";
 import { useCreateVolunteerSession } from "@/hooks/useVolunteers";
+import { useMyAnnouncements } from "@/hooks/member/useMemberAnnouncements";
 import { useToast } from "@/hooks/use-toast";
 import type { User, Attendance, Announcement, Order } from "@/types/firestore";
+import { getNextWeighIn } from "@/utils/getNextWeighIn";
 
 const GREEN = "#2d9653";
 const BG = "#f8fffe";
@@ -120,8 +110,8 @@ export default function MemberDashboard() {
         }
     }, [userProfile, club, createVolunteerSession, toast]);
 
-    // Wallet - use useQuery from member wallet hook
-    const { data: walletData, isLoading: walletLoading } = useMyWallet(userProfile?.id ?? null);
+    // Wallet - real-time via onSnapshot
+    const { wallet: walletData, loading: walletLoading } = useMyWallet();
 
     // Attendance - for this month count and streak
     const { data: attendanceList = [], isLoading: attendanceLoading } = useMyAttendance(
@@ -148,22 +138,14 @@ export default function MemberDashboard() {
         return { first: firstWeight, last: lastWeight, diff };
     }, [weightLogs]);
 
-    // Announcements (latest 2)
-    const { data: announcements = [], isLoading: announcementsLoading } = useQuery({
-        queryKey: ["member-dashboard-announcements", club?.id],
-        enabled: !!club?.id,
-        queryFn: async () => {
-            const q = query(
-                collection(db, "announcements"),
-                where("clubId", "==", club!.id),
-                orderBy("createdAt", "desc"),
-                limit(5)
-            );
-            const snap = await getDocs(q);
-            const all = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Announcement));
-            return all.filter((a) => a.isActive !== false).slice(0, 2);
-        },
-    });
+    // Announcements (latest 2 using centralized hook)
+    const { announcements: allAnnouncements, loading: announcementsLoading } = useMyAnnouncements(
+        club?.id ?? null,
+        userProfile?.id ?? null,
+        userProfile?.memberType,
+        userProfile?.membershipTier
+    );
+    const announcements = useMemo(() => allAnnouncements?.slice(0, 2) || [], [allAnnouncements]);
 
     // Recent orders (last 3)
     const { data: recentOrders = [], isLoading: ordersLoading } = useQuery({
@@ -182,6 +164,10 @@ export default function MemberDashboard() {
     });
 
     const membershipStatus = userProfile ? getMembershipStatus(userProfile) : null;
+    const nextWeighIn = useMemo(() => {
+        if (!club || !(club as any).weighInDays) return null;
+        return getNextWeighIn((club as any).weighInDays);
+    }, [club]);
 
     if (!userProfile) {
         return (
@@ -216,6 +202,13 @@ export default function MemberDashboard() {
                                     {membershipStatus.label}
                                 </Badge>
                             )}
+                            {membershipStatus && membershipStatus.label !== "Active" && (
+                                <Link to="/member/profile">
+                                    <Badge className="gap-1 cursor-pointer bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200">
+                                        <RefreshCw className="w-3 h-3" /> Renew
+                                    </Badge>
+                                </Link>
+                            )}
                         </div>
                     </div>
 
@@ -236,6 +229,38 @@ export default function MemberDashboard() {
                         </div>
                         <ChevronRight className="w-5 h-5 text-gray-400" />
                     </button>
+
+                    {/* Next Weigh-in Card */}
+                    {nextWeighIn && (
+                        <div
+                            className="w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-colors relative overflow-hidden"
+                            style={{
+                                borderColor: nextWeighIn.daysUntil === 0 ? "#2d9653" : nextWeighIn.daysUntil === 1 ? "#f59e0b" : "#e5e7eb",
+                                backgroundColor: nextWeighIn.daysUntil === 0 ? "#ecfdf5" : nextWeighIn.daysUntil === 1 ? "#fffbeb" : "#f9fafb"
+                            }}
+                        >
+                            <div className="flex items-center gap-3">
+                                <div
+                                    className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm"
+                                    style={{
+                                        backgroundColor: nextWeighIn.daysUntil === 0 ? "#2d9653" : nextWeighIn.daysUntil === 1 ? "#f59e0b" : "#9ca3af"
+                                    }}
+                                >
+                                    <Scale className="w-5 h-5 text-white" />
+                                </div>
+                                <div>
+                                    <p className="font-bold" style={{ color: nextWeighIn.daysUntil === 0 ? "#065f46" : nextWeighIn.daysUntil === 1 ? "#92400e" : "#374151" }}>
+                                        {nextWeighIn.daysUntil === 0 ? "⚖️ Weigh-in is Today!" :
+                                            nextWeighIn.daysUntil === 1 ? "⚖️ Weigh-in is Tomorrow!" :
+                                                "⚖️ Next Weigh-in"}
+                                    </p>
+                                    <p className="text-xs" style={{ color: nextWeighIn.daysUntil === 0 ? "#047857" : nextWeighIn.daysUntil === 1 ? "#b45309" : "#6b7280" }}>
+                                        {nextWeighIn.dayName}, {format(nextWeighIn.date, "MMM d")}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* 4 Stat Cards */}
 
@@ -344,6 +369,13 @@ export default function MemberDashboard() {
                                 <Megaphone className="w-5 h-5" style={{ color: GREEN }} />
                                 Announcements
                             </h2>
+                            <Link
+                                to="/member/announcements"
+                                className="text-sm font-medium flex items-center gap-1"
+                                style={{ color: GREEN }}
+                            >
+                                View All <ChevronRight className="w-4 h-4" />
+                            </Link>
                         </div>
                         {announcementsLoading ? (
                             <div className="space-y-2">

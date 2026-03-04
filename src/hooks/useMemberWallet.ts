@@ -134,6 +134,34 @@ export function useMyPendingRequest() {
     return { pendingRequest, hasPending: !!pendingRequest, loading };
 }
 
+// ─── useMyLatestRequest (real-time — for showing approved/rejected banners) ──
+
+export function useMyLatestRequest() {
+    const { firebaseUser } = useAuth();
+    const [latestRequest, setLatestRequest] = useState<TopupRequest | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!firebaseUser) return;
+        const q = query(
+            collection(db, "topupRequests"),
+            where("memberId", "==", firebaseUser.uid),
+            orderBy("requestedAt", "desc"),
+            limit(1)
+        );
+        const unsub = onSnapshot(q, (snap) => {
+            setLatestRequest(snap.docs.length > 0
+                ? ({ id: snap.docs[0].id, ...snap.docs[0].data() } as TopupRequest)
+                : null);
+            setLoading(false);
+        });
+        return () => unsub();
+    }, [firebaseUser]);
+
+    return { latestRequest, loading };
+}
+
+
 // ─── useRaiseTopupRequest ───────────────────────────────────────────────
 
 export function useRaiseTopupRequest() {

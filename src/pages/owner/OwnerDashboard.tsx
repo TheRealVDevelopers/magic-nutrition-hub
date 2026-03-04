@@ -13,10 +13,11 @@ import {
     useTodayAttendance,
     useRecentOrders,
 } from "@/hooks/useOwner";
+import { useDrasticChanges } from "@/hooks/owner/useWeighIns";
 
 function getGreeting(): string {
     const h = new Date().getHours();
-    if (h >= 5  && h < 12) return "Good morning";
+    if (h >= 5 && h < 12) return "Good morning";
     if (h >= 12 && h < 17) return "Good afternoon";
     if (h >= 17 && h < 21) return "Good evening";
     return "Good night";
@@ -30,6 +31,7 @@ export default function OwnerDashboard() {
     const { data: lowStock, isLoading: lowStockLoading } = useLowStockProducts();
     const { data: todayAttendance, isLoading: attendLoading } = useTodayAttendance();
     const { data: recentOrders, isLoading: ordersLoading } = useRecentOrders();
+    const { data: drasticChanges } = useDrasticChanges(club?.id || null);
 
     const greeting = getGreeting();
     const clubName = club?.name ?? "Club";
@@ -54,7 +56,7 @@ export default function OwnerDashboard() {
 
             {/* Pending Topups Alert */}
             {pendingTopups.length > 0 && (
-                <div className="flex items-center justify-between p-4 rounded-2xl bg-amber-50 border border-amber-200">
+                <div className="flex items-center justify-between p-4 rounded-2xl bg-amber-50 border border-amber-200 shadow-sm animate-pulse-fade">
                     <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
                             <AlertTriangle className="w-5 h-5 text-amber-600" />
@@ -69,11 +71,42 @@ export default function OwnerDashboard() {
                     <Button
                         size="sm"
                         variant="outline"
-                        className="border-amber-300 text-amber-700 flex-shrink-0"
-                        onClick={() => navigate("/wallet")}
+                        className="border-amber-300 text-amber-700 flex-shrink-0 bg-white"
+                        onClick={() => navigate("/wallet-approvals")}
                     >
                         Review Now <ArrowRight className="w-4 h-4 ml-1" />
                     </Button>
+                </div>
+            )}
+
+            {/* Drastic Change Alerts */}
+            {drasticChanges && drasticChanges.length > 0 && (
+                <div className="flex flex-col gap-2">
+                    {drasticChanges.map((alert, i) => (
+                        <div key={`${alert.memberId}-${i}`} className={`flex items-center justify-between p-4 rounded-2xl border shadow-sm ${alert.type === 'gained' ? 'bg-orange-50 border-orange-200' : 'bg-rose-50 border-rose-200'}`}>
+                            <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 flex-shrink-0 rounded-full flex items-center justify-center font-bold shadow-sm ${alert.type === 'gained' ? 'bg-orange-100 text-orange-700' : 'bg-rose-100 text-rose-700'}`}>
+                                    !
+                                </div>
+                                <div>
+                                    <p className={`text-sm font-bold ${alert.type === 'gained' ? 'text-orange-900' : 'text-rose-900'}`}>
+                                        {alert.memberName} {alert.type === 'gained' ? 'gained weight rapidly' : 'lost weight too fast'}
+                                    </p>
+                                    <p className={`text-xs ${alert.type === 'gained' ? 'text-orange-700' : 'text-rose-700'}`}>
+                                        Weight changed by {Math.abs(alert.change)} kg in the last 7 days.
+                                    </p>
+                                </div>
+                            </div>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className={`flex-shrink-0 bg-white ${alert.type === 'gained' ? 'border-orange-300 text-orange-700' : 'border-rose-300 text-rose-700'}`}
+                                onClick={() => navigate(`/owner/members/${alert.memberId}`)}
+                            >
+                                View Profile
+                            </Button>
+                        </div>
+                    ))}
                 </div>
             )}
 
@@ -182,7 +215,52 @@ export default function OwnerDashboard() {
                         <p className="text-xs text-gray-400 py-4 text-center font-medium">No orders yet</p>
                     )}
                 </div>
+
+                {/* Active Announcements */}
+                <ActiveAnnouncementsWidget clubId={club?.id} />
             </div>
+        </div>
+    );
+}
+
+// Widget to fetch and display active announcements
+import { useAnnouncements } from "@/hooks/owner/useAnnouncements";
+import { Megaphone } from "lucide-react";
+
+function ActiveAnnouncementsWidget({ clubId }: { clubId?: string }) {
+    const { announcements, loading } = useAnnouncements(clubId ?? null);
+
+    const recent = announcements?.slice(0, 5) || [];
+
+    return (
+        <div className="bg-white rounded-2xl border p-5 space-y-3">
+            <h3 className="text-sm font-bold flex items-center gap-2">
+                <Megaphone className="w-4 h-4 text-emerald-600" /> Recent Announcements
+            </h3>
+            {loading ? (
+                <Skeleton className="h-20" />
+            ) : recent.length > 0 ? (
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {recent.map((a) => (
+                        <div key={a.id} className="flex flex-col p-2 rounded-lg bg-emerald-50/50 border border-emerald-100/50 text-sm gap-1">
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="font-bold text-gray-900 truncate">{a.title}</span>
+                                <Badge variant="outline" className={`text-[10px] h-4 px-1 rounded-sm border-0 ${a.priority === 'urgent' ? 'bg-red-100 text-red-700' :
+                                        a.priority === 'important' ? 'bg-yellow-100 text-yellow-700' : 'bg-emerald-100 text-emerald-700'
+                                    }`}>
+                                    {a.priority}
+                                </Badge>
+                            </div>
+                            <div className="flex items-center justify-between text-xs text-gray-500 font-medium">
+                                <span>{a.readBy?.length || 0} reads</span>
+                                <span>{a.createdAt?.toDate?.()?.toLocaleDateString?.([], { month: 'short', day: 'numeric' }) ?? ""}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : (
+                <p className="text-xs text-gray-400 py-4 text-center font-medium">No active announcements</p>
+            )}
         </div>
     );
 }

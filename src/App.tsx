@@ -10,6 +10,7 @@ import { useClubContext, isSuperAdminDomain } from "@/lib/clubDetection";
 import ErrorBoundary from "./components/ErrorBoundary";
 import PageSkeleton from "./components/PageSkeleton";
 import MemberLayout from "./components/member/MemberLayout";
+import OfflineIndicator from "./components/OfflineIndicator";
 
 // ─── Lazy Loaded Pages ──────────────────────────────────────────────────
 const Landing = lazy(() => import("./pages/Landing"));
@@ -52,6 +53,7 @@ const WalletApprovalsPage = lazy(() => import("./pages/owner/WalletApprovalsPage
 const OwnerVolunteersPage = lazy(() => import("./pages/owner/VolunteersPage"));
 const DownlineClubs = lazy(() => import("./pages/owner/DownlineClubs"));
 const ClubSettingsPage = lazy(() => import("./pages/owner/ClubSettingsPage"));
+const OwnerLeaderboard = lazy(() => import("./pages/owner/Leaderboard"));
 
 // Member pages
 const MemberLogin = lazy(() => import("./pages/member/MemberLogin"));
@@ -62,6 +64,7 @@ const MemberNetworkPage = lazy(() => import("./pages/member/MemberNetwork"));
 const MemberWalletPage = lazy(() => import("./pages/member/WalletPage"));
 const MemberCheckInPage = lazy(() => import("./pages/member/CheckInPage"));
 const MemberAttendancePage = lazy(() => import("./pages/member/MemberAttendancePage"));
+const MemberLeaderboard = lazy(() => import("./pages/member/LeaderboardPage"));
 
 // Attendance & Reception
 const AttendancePage = lazy(() => import("./pages/owner/AttendancePage"));
@@ -74,7 +77,7 @@ const StaffDashboard = lazy(() => import("./pages/staff/StaffDashboard"));
 const OrdersManagementPage = lazy(() => import("./pages/owner/OrdersManagementPage"));
 const OrderEntryPage = lazy(() => import("./pages/staff/OrderEntryPage"));
 const TodaysMenuPage = lazy(() => import("./pages/member/TodaysMenuPage"));
-const MemberOrdersPage = lazy(() => import("./pages/member/OrdersPage"));
+const MemberOrdersPage = lazy(() => import("./pages/member/MemberOrdersPage"));
 
 // Billing
 const OwnerBillingPage = lazy(() => import("./pages/owner/BillingPage"));
@@ -156,6 +159,7 @@ function MemberLayoutOutlet() {
 
 const App = () => (
   <ErrorBoundary>
+    <OfflineIndicator />
     <Toaster />
     <Sonner />
     <Suspense fallback={<PageSkeleton />}>
@@ -234,6 +238,7 @@ const App = () => (
           <Route path="orders" element={<OrdersManagementPage />} />
           <Route path="downline" element={<DownlineClubs />} />
           <Route path="settings" element={<ClubSettingsPage />} />
+          <Route path="leaderboard" element={<OwnerLeaderboard />} />
         </Route>
 
         {/* ── Staff routes ───────────────────────────────────────────── */}
@@ -278,6 +283,7 @@ const App = () => (
           <Route path="tree" element={<MLMTreePage />} />
           <Route path="network" element={<MemberNetworkPage />} />
           <Route path="progress" element={<ProgressPage />} />
+          <Route path="leaderboard" element={<MemberLeaderboard />} />
           <Route path="announcements" element={<MemberAnnouncementsPage />} />
         </Route>
 

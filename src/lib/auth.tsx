@@ -25,6 +25,8 @@ interface AuthContextType {
     loading: boolean;
     signIn: (email: string, password: string) => Promise<User>;
     signOut: () => Promise<void>;
+    /** Force re-fetch the user profile from Firestore (busts cache). */
+    refreshProfile: () => Promise<void>;
 }
 
 // ─── Profile cache ───────────────────────────────────────────────────────
@@ -160,6 +162,7 @@ const AuthContext = createContext<AuthContextType>({
     signOut: async () => {
         throw new Error("AuthProvider not initialised");
     },
+    refreshProfile: async () => { },
 });
 
 // ─── React hook ─────────────────────────────────────────────────────────
@@ -224,6 +227,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setRole(null);
     };
 
+    const handleRefreshProfile = async () => {
+        if (!firebaseUser) return;
+        // Bust the memory cache so fetchUserProfile actually hits Firestore
+        _cachedProfile = null;
+        localStorage.removeItem(PROFILE_CACHE_KEY);
+        const profile = await fetchUserProfile(firebaseUser.uid).catch(() => null);
+        // fetchUserProfile re-populates cache internally but we busted it, so do a direct fetch
+        try {
+            const snap = await getDoc(doc(db, "users", firebaseUser.uid));
+            if (snap.exists()) {
+                const fresh = { id: snap.id, ...snap.data() } as User;
+                _cachedProfile = fresh;
+                saveProfileToStorage(fresh);
+                setUserProfile(fresh);
+                setRole(fresh.role ?? null);
+            }
+        } catch { /* ignore */ }
+    };
+
     return (
         <AuthContext.Provider
             value={{
@@ -233,6 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 loading,
                 signIn: handleSignIn,
                 signOut: handleSignOut,
+                refreshProfile: handleRefreshProfile,
             }}
         >
             {children}

@@ -2,6 +2,7 @@ import { useState, ReactNode } from "react";
 import { Menu } from "lucide-react";
 import { useLocation } from "react-router-dom";
 import OwnerSidebar from "./OwnerSidebar";
+import InstallPrompt from "../InstallPrompt";
 
 interface OwnerLayoutProps {
     children: ReactNode;
@@ -56,6 +57,7 @@ export default function OwnerLayout({ children }: OwnerLayoutProps) {
                     {children}
                 </main>
             </div>
+            <InstallPrompt />
         </div>
     );
 }
