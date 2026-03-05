@@ -88,20 +88,20 @@ export function useRenewMembership() {
             const nowTs = Timestamp.now();
 
             // 1. Deduct wallet
-            await updateDoc(doc(db, "wallets", walletDocId), {
+            await updateDoc(doc(db, `clubs/${club.id}/members/${firebaseUser.uid}/wallet`, "data"), {
                 balance: newBalance,
                 lastUpdated: serverTimestamp(),
             });
 
             // 2. Update member profile
-            await updateDoc(doc(db, "users", firebaseUser.uid), {
+            await updateDoc(doc(db, `clubs/${club.id}/members`, firebaseUser.uid), {
                 membershipTier: plan.name.toLowerCase(),
                 membershipStart: Timestamp.fromDate(startDate),
                 membershipEnd: Timestamp.fromDate(endDate),
             });
 
             // 3. Write transaction
-            await addDoc(collection(db, "walletTransactions"), {
+            await addDoc(collection(db, `clubs/${club.id}/members/${firebaseUser.uid}/transactions`), {
                 userId: firebaseUser.uid,
                 clubId: club.id,
                 type: "debit",

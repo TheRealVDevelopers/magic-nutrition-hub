@@ -16,7 +16,7 @@ export function generatePrefixFromName(clubName: string): string {
 
 export async function generateMemberId(clubId: string, prefix: string): Promise<string> {
     const snap = await getDocs(
-        query(collection(db, "users"), where("clubId", "==", clubId), where("role", "==", "member"))
+        query(collection(db, `clubs/${clubId}/members`))
     );
 
     let highestLetter = "A";

@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { collection, getDocs, query, where, orderBy, addDoc, updateDoc, doc, Timestamp, limit, getDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, orderBy, addDoc, updateDoc, doc, Timestamp, limit, getDoc, setDoc } from "firebase/firestore";
 import { useQuery } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
 import { db } from "@/lib/firebase";
@@ -30,8 +30,7 @@ function AnnouncementBanner({ clubId }: { clubId: string }) {
         queryFn: async () => {
             const snap = await getDocs(
                 query(
-                    collection(db, "announcements"),
-                    where("clubId", "==", clubId),
+                    collection(db, `clubs/${clubId}/announcements`),
                     where("isActive", "==", true),
                     orderBy("createdAt", "desc")
                 )
@@ -84,8 +83,7 @@ function TodaysShakes({ clubId }: { clubId: string }) {
         queryFn: async () => {
             const snap = await getDocs(
                 query(
-                    collection(db, "products"),
-                    where("clubId", "==", clubId),
+                    collection(db, `clubs/${clubId}/menu`),
                     where("isAvailableToday", "==", true)
                 )
             );
@@ -279,9 +277,7 @@ function WeighInModal({ clubId, onClose }: { clubId: string; onClose: () => void
             // Search by name (case-insensitive client-side filtering)
             const snap = await getDocs(
                 query(
-                    collection(db, "users"),
-                    where("clubId", "==", clubId),
-                    where("role", "==", "member"),
+                    collection(db, `clubs/${clubId}/members`),
                     limit(50)
                 )
             );
@@ -305,12 +301,12 @@ function WeighInModal({ clubId, onClose }: { clubId: string; onClose: () => void
             const change = previousWeight != null ? previousWeight - newWeight : null;
 
             // Save to weighIns collection
-            await addDoc(collection(db, "weighIns"), {
+            await setDoc(doc(db, `clubs/${clubId}/members/${selectedMember.id}/weighIns`, "wl_" + Date.now()), {
                 memberId: selectedMember.id,
                 memberName: selectedMember.name,
                 clubId,
                 weight: newWeight,
-                date: todayStr(),
+                date: Timestamp.now(),  // use Timestamp for consistency
                 previousWeight,
                 change,
                 notes,
@@ -319,7 +315,7 @@ function WeighInModal({ clubId, onClose }: { clubId: string; onClose: () => void
             });
 
             // Update member's currentWeight
-            await updateDoc(doc(db, "users", selectedMember.id), {
+            await updateDoc(doc(db, `clubs/${clubId}/members`, selectedMember.id), {
                 currentWeight: newWeight,
                 lastWeighIn: Timestamp.now(),
             });

@@ -9,30 +9,30 @@ import type { WeightLog, Referral, User } from "@/types/firestore";
 // ─── WEIGHT PROGRESS ────────────────────────────────────────────────────────
 
 export function useWeightLogs() {
-    const { firebaseUser } = useAuth();
+    const { userProfile } = useAuth();
     return useQuery({
-        queryKey: ["weightLogs", firebaseUser?.uid],
+        queryKey: ["weightLogs", userProfile?.id],
         queryFn: async () => {
-            if (!firebaseUser) return [];
+            if (!userProfile) return [];
             const snap = await getDocs(
-                query(collection(db, "users", firebaseUser.uid, "weightLog"), orderBy("date", "desc"))
+                query(collection(db, `clubs/${userProfile.clubId}/members/${userProfile.id}/weighIns`), orderBy("date", "desc"))
             );
             return snap.docs.map(d => ({ id: d.id, ...d.data() } as WeightLog));
         },
-        enabled: !!firebaseUser,
+        enabled: !!userProfile,
     });
 }
 
 export function useAddWeightLog() {
     const qc = useQueryClient();
-    const { firebaseUser } = useAuth();
+    const { userProfile } = useAuth();
 
     return useMutation({
         mutationFn: async ({ weight, date, notes }: { weight: number, date: string, notes: string }) => {
-            if (!firebaseUser) throw new Error("Not auth");
+            if (!userProfile) throw new Error("Not auth");
             const id = "wl_" + Date.now();
             const d = new Date(date);
-            await setDoc(doc(db, "users", firebaseUser.uid, "weightLog", id), {
+            await setDoc(doc(db, `clubs/${userProfile.clubId}/members/${userProfile.id}/weighIns`, id), {
                 id,
                 weight,
                 date: Timestamp.fromDate(d),
@@ -46,29 +46,21 @@ export function useAddWeightLog() {
 // ─── BIRTHDAY & ANNIVERSARY POPUP LOGIC ────────────────────────────────────────
 
 export function useBirthdayAnniversaryCheck() {
-    const { firebaseUser } = useAuth();
+    const { userProfile } = useAuth();
     const [peopleToCelebrate, setPeopleToCelebrate] = useState<{ birthdays: User[], anniversaries: User[] } | null>(null);
 
     useEffect(() => {
-        if (!firebaseUser) return;
+        if (!userProfile) return;
 
         // Check if shown this session
         if (sessionStorage.getItem("birthdaysShown")) return;
 
         const checkDates = async () => {
             try {
-                const rootSnap = await getDoc(doc(db, "users", firebaseUser.uid));
-                if (!rootSnap.exists()) return;
-                const rootUser = { id: rootSnap.id, ...rootSnap.data() } as User;
-
                 const allUsersSnap = await getDocs(
-                    query(collection(db, "users"), where("originalClubId", "==", rootUser.originalClubId))
+                    query(collection(db, `clubs/${userProfile.clubId}/members`))
                 );
-                const allUsers = allUsersSnap.docs.map(d => ({ id: d.id, ...d.data() } as User));
-
-                // Filter users in my tree (either they are under me, or I am under them, or direct parent)
-                // A simple approach: just check people in my club
-                const myClubUsers = allUsers.filter(u => u.clubId === rootUser.clubId);
+                const myClubUsers = allUsersSnap.docs.map(d => ({ id: d.id, ...d.data() } as User));
 
                 const today = new Date();
                 const currentMonth = today.getMonth();
@@ -93,7 +85,7 @@ export function useBirthdayAnniversaryCheck() {
         };
 
         checkDates();
-    }, [firebaseUser]);
+    }, [userProfile]);
 
     const dismiss = () => {
         sessionStorage.setItem("birthdaysShown", "true");
@@ -108,13 +100,13 @@ export function useBirthdayAnniversaryCheck() {
 // ─── REFERRALS ────────────────────────────────────────────────────────
 
 export function useReferralsList() {
-    const { firebaseUser } = useAuth();
+    const { userProfile } = useAuth();
     return useQuery({
-        queryKey: ["referrals", firebaseUser?.uid],
+        queryKey: ["referrals", userProfile?.id],
         queryFn: async () => {
-            if (!firebaseUser) return [];
+            if (!userProfile) return [];
             const snap = await getDocs(
-                query(collection(db, "referrals"), where("referrerId", "==", firebaseUser.uid))
+                query(collection(db, `clubs/${userProfile.clubId}/referrals`), where("referrerId", "==", userProfile.id))
             );
 
             const refs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Referral));
@@ -122,7 +114,7 @@ export function useReferralsList() {
             // Fetch details of those users
             const detailed = [];
             for (const r of refs) {
-                const uSnap = await getDoc(doc(db, "users", r.referredId));
+                const uSnap = await getDoc(doc(db, `clubs/${userProfile.clubId}/members`, r.referredId));
                 if (uSnap.exists()) {
                     detailed.push({
                         ...r,
@@ -132,6 +124,6 @@ export function useReferralsList() {
             }
             return detailed;
         },
-        enabled: !!firebaseUser,
+        enabled: !!userProfile,
     });
 }

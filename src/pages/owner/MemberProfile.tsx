@@ -36,11 +36,12 @@ interface UpgradeModalProps {
     memberId: string;
     whatsappPhone: string;
     clubName: string;
+    clubId: string;
     onClose: () => void;
     onDone: () => void;
 }
 
-function UpgradeMemberModal({ memberName, memberPhone, memberId, whatsappPhone, clubName, onClose, onDone }: UpgradeModalProps) {
+function UpgradeMemberModal({ memberName, memberPhone, memberId, whatsappPhone, clubName, clubId, onClose, onDone }: UpgradeModalProps) {
     const { toast } = useToast();
     const [tier, setTier] = useState<MemberType>("bronze");
     const [amount, setAmount] = useState("");
@@ -52,7 +53,7 @@ function UpgradeMemberModal({ memberName, memberPhone, memberId, whatsappPhone, 
         if (!tier || !amount) return;
         setLoading(true);
         try {
-            await updateDoc(doc(db, "users", memberId), {
+            await updateDoc(doc(db, `clubs/${clubId}/members`, memberId), {
                 memberType: tier,
                 updatedAt: Timestamp.now(),
             });
@@ -68,7 +69,7 @@ function UpgradeMemberModal({ memberName, memberPhone, memberId, whatsappPhone, 
         } finally {
             setLoading(false);
         }
-    }, [tier, amount, method, reference, memberId, memberName, whatsappPhone, clubName, toast, onDone]);
+    }, [tier, amount, method, reference, memberId, clubId, memberName, whatsappPhone, clubName, toast, onDone]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -441,6 +442,7 @@ export default function OwnerMemberProfile() {
             {upgradeOpen && (
                 <UpgradeMemberModal
                     clubName={club?.name || ""}
+                    clubId={club?.id || ""}
                     whatsappPhone={member.phone}
                     memberName={member.name}
                     memberPhone={member.phone}

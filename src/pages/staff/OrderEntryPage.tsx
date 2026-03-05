@@ -12,7 +12,7 @@ import { useClubMembers } from "@/hooks/useOwner";
 import { useAllClubProducts, usePlaceOrder } from "@/hooks/useOrders";
 import ProductCard from "@/components/orders/ProductCard";
 import type { Product, User as UserType } from "@/types/firestore";
-import { collection, getDocs, query, where } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 interface CartItem { product: Product; quantity: number; }
@@ -36,8 +36,10 @@ export default function OrderEntryPage() {
     // Load member balance
     const selectMember = async (member: UserType) => {
         setSelectedMember(member);
-        const snap = await getDocs(query(collection(db, "wallets"), where("userId", "==", member.id)));
-        setMemberBalance(snap.docs[0]?.data()?.balance || 0);
+        if (club) {
+            const walletSnap = await getDoc(doc(db, `clubs/${club.id}/members/${member.id}/wallet`, "data"));
+            setMemberBalance(walletSnap.exists() ? (walletSnap.data().balance ?? 0) : 0);
+        }
         setStep(2);
     };
 

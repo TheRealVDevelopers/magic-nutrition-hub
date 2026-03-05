@@ -12,7 +12,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
     collection,
     query,
-    where,
     getDocs,
     orderBy,
 } from "firebase/firestore";
@@ -113,9 +112,7 @@ export default function MemberAttendancePage() {
         enabled: !!userProfile?.id && !!club?.id,
         queryFn: async () => {
             const q = query(
-                collection(db, "attendance"),
-                where("userId", "==", userProfile!.id),
-                where("clubId", "==", club!.id),
+                collection(db, `clubs/${club!.id}/members/${userProfile!.id}/attendance`),
                 orderBy("date", "desc")
             );
             const snap = await getDocs(q);
@@ -347,8 +344,8 @@ export default function MemberAttendancePage() {
                                             >
                                                 <span
                                                     className={`text-sm font-medium ${isCurrentMonth
-                                                            ? "text-foreground"
-                                                            : "text-muted-foreground"
+                                                        ? "text-foreground"
+                                                        : "text-muted-foreground"
                                                         }`}
                                                 >
                                                     {format(day, "d")}

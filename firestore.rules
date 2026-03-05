@@ -2,67 +2,184 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Super Admins — root level
-    match /superAdmins/{uid} {
-      allow read, write: if true;
+    // ═══════════════════════════════════════════════════════════
+    // Helper functions
+    // ═══════════════════════════════════════════════════════════
+
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // Clubs — public read for domain detection
+    function isSuperAdmin() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+    }
+
+    function isClubOwner(clubId) {
+      return isSignedIn()
+        && get(/databases/$(database)/documents/clubs/$(clubId)).data.ownerUserId == request.auth.uid;
+    }
+
+    function isOwnerOrSuperAdmin(clubId) {
+      return isSuperAdmin() || isClubOwner(clubId);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Platform-level collections (root)
+    // ═══════════════════════════════════════════════════════════
+
+    // Platform config — only super admin can write
+    match /platform/{doc} {
+      allow read:  if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    // Super Admins registry
+    match /superAdmins/{uid} {
+      allow read:  if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    // Upgrade requests — anyone signed in can create, super admin manages
+    match /upgradeRequests/{requestId} {
+      allow read:  if isSuperAdmin();
+      allow write: if isSignedIn();
+    }
+
+    // Billing print records — authenticated users
+    match /billingPrints/{printId} {
+      allow read, write: if isSignedIn();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // Clubs (multi-tenancy root)
+    // ═══════════════════════════════════════════════════════════
+
     match /clubs/{clubId} {
-      allow read: if true;
-      allow write: if true;
+      // Public read needed for domain detection & club listing
+      allow read:  if true;
+      // Only owner or super admin can update club settings
+      allow create: if isSuperAdmin();
+      allow update: if isOwnerOrSuperAdmin(clubId);
+      allow delete: if isSuperAdmin();
 
+      // ───────────────────────────────────────────────────────
       // Owner profile
+      // ───────────────────────────────────────────────────────
       match /owner/{doc} {
-        allow read, write: if true;
+        allow read:  if isSignedIn();
+        allow write: if isOwnerOrSuperAdmin(clubId);
       }
 
+      // ───────────────────────────────────────────────────────
       // Members
+      // ───────────────────────────────────────────────────────
       match /members/{memberId} {
-        allow read, write: if true;
+        // Any authenticated user can read (needed for member lookup)
+        allow read: if isSignedIn();
+        // Owner/superAdmin can create/delete members
+        // Members can update their own doc (profile edits)
+        allow create: if isOwnerOrSuperAdmin(clubId);
+        allow update: if isSignedIn();
+        allow delete: if isOwnerOrSuperAdmin(clubId);
 
-        // Member subcollections
+        // ── Member wallet ──
         match /wallet/{doc} {
-          allow read, write: if true;
+          allow read:  if isSignedIn();
+          allow write: if isSignedIn();
         }
+
+        // ── Member transactions ──
         match /transactions/{txnId} {
-          allow read, write: if true;
+          allow read:  if isSignedIn();
+          allow write: if isSignedIn();
         }
+
+        // ── Member weigh-ins ──
         match /weighIns/{weighInId} {
-          allow read, write: if true;
+          allow read:  if isSignedIn();
+          allow write: if isSignedIn();
         }
-        match /attendance/{date} {
-          allow read, write: if true;
+
+        // ── Member attendance ──
+        match /attendance/{attId} {
+          allow read:  if isSignedIn();
+          allow write: if isSignedIn();
         }
+
+        // ── Member notifications ──
         match /notifications/{notifId} {
-          allow read, write: if true;
+          allow read:  if isSignedIn();
+          allow write: if isOwnerOrSuperAdmin(clubId);
         }
       }
 
-      // Club subcollections
+      // ───────────────────────────────────────────────────────
+      // Club-level subcollections
+      // ───────────────────────────────────────────────────────
+
+      // Enquiries — public can create (landing page form), auth users read
       match /enquiries/{enquiryId} {
-        allow read, write: if true;
+        allow read:   if isSignedIn();
+        allow create: if true;
+        allow update, delete: if isOwnerOrSuperAdmin(clubId);
       }
+
+      // Orders — authenticated users can CRUD
       match /orders/{orderId} {
-        allow read, write: if true;
+        allow read:  if isSignedIn();
+        allow write: if isSignedIn();
       }
+
+      // Menu items — everyone reads, only owner/admin writes
       match /menu/{itemId} {
-        allow read, write: if true;
+        allow read:  if isSignedIn();
+        allow write: if isOwnerOrSuperAdmin(clubId);
       }
+
+      // Announcements — members read, owner/admin writes
       match /announcements/{announcementId} {
-        allow read, write: if true;
+        // Members need to update readBy array
+        allow read:   if isSignedIn();
+        allow create: if isOwnerOrSuperAdmin(clubId);
+        allow update: if isSignedIn();
+        allow delete: if isOwnerOrSuperAdmin(clubId);
       }
+
+      // Volunteer sessions — authenticated users
       match /volunteers/{sessionId} {
-        allow read, write: if true;
+        allow read:  if isSignedIn();
+        allow write: if isSignedIn();
       }
+
+      // Feedback — owner reads, members write
       match /feedback/{feedbackId} {
-        allow read, write: if true;
+        allow read:  if isOwnerOrSuperAdmin(clubId);
+        allow write: if isSignedIn();
       }
+
+      // Top-up requests — authenticated users
       match /topupRequests/{requestId} {
-        allow read, write: if true;
+        allow read:  if isSignedIn();
+        allow write: if isSignedIn();
       }
+
+      // Membership plans — members read, owner/admin manages
+      match /memberships/{planId} {
+        allow read:  if isSignedIn();
+        allow write: if isOwnerOrSuperAdmin(clubId);
+      }
+
+      // Inventory — owner/admin manages
       match /inventory/{itemId} {
-        allow read, write: if true;
+        allow read:  if isSignedIn();
+        allow write: if isOwnerOrSuperAdmin(clubId);
+      }
+
+      // Usage stats — owner/admin reads, system writes
+      match /usageStats/{doc} {
+        allow read:  if isOwnerOrSuperAdmin(clubId);
+        allow write: if isSignedIn();
       }
     }
   }

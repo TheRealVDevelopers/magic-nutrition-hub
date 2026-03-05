@@ -170,7 +170,7 @@ function KitchenApp({ onLock }: { onLock: () => void }) {
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto">
-                {tab === "orders" && <OrdersTab clock={clock} clubName={club?.name ?? ""} />}
+                {tab === "orders" && <OrdersTab clock={clock} clubName={club?.name ?? ""} clubId={club?.id ?? ""} />}
                 {tab === "specials" && <SpecialsTab />}
                 {tab === "inventory" && <InventoryTab />}
             </div>
@@ -191,7 +191,7 @@ function KitchenApp({ onLock }: { onLock: () => void }) {
 // TAB 1: ORDERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-function OrdersTab({ clock, clubName }: { clock: Date; clubName: string }) {
+function OrdersTab({ clock, clubName, clubId }: { clock: Date; clubName: string; clubId: string }) {
     const { orders, loading } = useKitchenOrders();
     const { summary } = useTodayOrdersSummary();
     const updateStatus = useUpdateOrderStatus();
@@ -212,7 +212,7 @@ function OrdersTab({ clock, clubName }: { clock: Date; clubName: string }) {
     const completedCount = (summary?.statusCounts?.served ?? 0);
 
     const handleStatus = useCallback((orderId: string, newStatus: "preparing" | "served") => {
-        updateStatus.mutate({ orderId, newStatus });
+        updateStatus.mutate({ clubId, orderId, newStatus });
         if (newStatus === "served") {
             playOrderReady();
             setRecentlyReady((prev) => new Set(prev).add(orderId));
@@ -396,7 +396,7 @@ function useClubProducts() {
 
     useEffect(() => {
         if (!club) return;
-        const q = query(collection(db, "products"), where("clubId", "==", club.id));
+        const q = query(collection(db, `clubs/${club.id}/menu`));
         const unsub = onSnapshot(q, (snap) => {
             setProducts(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Product)));
             setLoading(false);
@@ -408,6 +408,7 @@ function useClubProducts() {
 }
 
 function SpecialsTab() {
+    const { club } = useClubContext();
     const { products, loading } = useClubProducts();
     const [togglingId, setTogglingId] = useState<string | null>(null);
 
@@ -417,13 +418,13 @@ function SpecialsTab() {
     const handleToggle = async (product: Product) => {
         setTogglingId(product.id);
         try {
-            await updateDoc(doc(db, "products", product.id), { isAvailableToday: !product.isAvailableToday });
+            await updateDoc(doc(db, `clubs/${club!.id}/menu`, product.id), { isAvailableToday: !product.isAvailableToday });
         } catch { /* ignore */ }
         setTogglingId(null);
     };
 
     const handleBulk = async (available: boolean) => {
-        await Promise.all(products.map((p) => updateDoc(doc(db, "products", p.id), { isAvailableToday: available })));
+        await Promise.all(products.map((p) => updateDoc(doc(db, `clubs/${club!.id}/menu`, p.id), { isAvailableToday: available })));
     };
 
     if (loading) {
@@ -499,7 +500,7 @@ function useInventory(clubId: string | null) {
 
     useEffect(() => {
         if (!clubId) { setLoading(false); return; }
-        const q = query(collection(db, "inventory"), where("clubId", "==", clubId));
+        const q = query(collection(db, `clubs/${clubId}/inventory`));
         const unsub = onSnapshot(q, (snap) => {
             setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() } as InventoryItem)));
             setLoading(false);
@@ -539,9 +540,9 @@ function InventoryTab() {
         try {
             const data = { ...form, name: form.name.trim(), clubId: club.id, lastUpdated: Timestamp.now() };
             if (editItem) {
-                await updateDoc(doc(db, "inventory", editItem.id), data);
+                await updateDoc(doc(db, `clubs/${club.id}/inventory`, editItem.id), data);
             } else {
-                await addDoc(collection(db, "inventory"), data);
+                await addDoc(collection(db, `clubs/${club.id}/inventory`), data);
             }
             setDialogOpen(false);
         } catch { /* ignore */ }
@@ -550,12 +551,12 @@ function InventoryTab() {
 
     const handleDelete = async (id: string) => {
         if (!confirm("Delete this item?")) return;
-        await deleteDoc(doc(db, "inventory", id));
+        await deleteDoc(doc(db, `clubs/${club!.id}/inventory`, id));
     };
 
     const adjustStock = async (item: InventoryItem, delta: number) => {
         const newVal = Math.max(0, item.currentStock + delta);
-        await updateDoc(doc(db, "inventory", item.id), { currentStock: newVal, lastUpdated: Timestamp.now() });
+        await updateDoc(doc(db, `clubs/${item.clubId}/inventory`, item.id), { currentStock: newVal, lastUpdated: Timestamp.now() });
     };
 
     if (loading) {

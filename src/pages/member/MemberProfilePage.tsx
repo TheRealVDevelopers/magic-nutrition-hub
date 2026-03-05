@@ -89,7 +89,7 @@ export default function MemberProfilePage() {
         if (!profile?.id || !firebaseUser) return;
         setSaving(true);
         try {
-            const userRef = doc(db, "users", profile.id);
+            const userRef = doc(db, `clubs/${club!.id}/members`, profile.id);
             const updates: Record<string, any> = {
                 name: editName,
                 phone: editPhone,

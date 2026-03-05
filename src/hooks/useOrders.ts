@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-    collection, doc, getDocs, updateDoc, writeBatch,
-    query, where, orderBy, limit, startAfter, onSnapshot,
+    collection, doc, getDocs, getDoc, updateDoc, writeBatch,
+    query, where, orderBy, limit, startAfter, onSnapshot, collectionGroup,
     Timestamp, QueryDocumentSnapshot,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -23,8 +23,7 @@ export function useTodaysSpecialProducts() {
     useEffect(() => {
         if (!club) return;
         const q = query(
-            collection(db, "products"),
-            where("clubId", "==", club.id),
+            collection(db, `clubs/${club.id}/menu`),
             where("isAvailableToday", "==", true)
         );
         const unsub = onSnapshot(q,
@@ -44,7 +43,7 @@ export function useAllClubProducts() {
     return useQuery({
         queryKey: ["orders", "products", club?.id],
         queryFn: async () => {
-            const snap = await getDocs(query(collection(db, "products"), where("clubId", "==", club!.id)));
+            const snap = await getDocs(query(collection(db, `clubs/${club!.id}/menu`)));
             return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Product);
         },
         enabled: !!club,
@@ -67,21 +66,22 @@ export function usePlaceOrder() {
             if (!club) throw new Error("Club not loaded");
 
             // Read wallet
-            const walletSnap = await getDocs(query(collection(db, "wallets"), where("userId", "==", memberId)));
-            if (walletSnap.empty) throw new Error("Wallet not found");
-            const walletDoc = walletSnap.docs[0];
+            const walletRef = doc(db, `clubs/${club.id}/members/${memberId}/wallet`, "data");
+            const walletSnap = await getDoc(walletRef);
+            if (!walletSnap.exists()) throw new Error("Wallet not found");
+            const walletDoc = walletSnap;
             const currentBalance = walletDoc.data().balance as number;
             if (currentBalance < totalCost) throw new Error(`Insufficient ${club.currencyName} balance`);
 
             // Read product stocks for deduction
             const productsToUpdate = [];
             for (const item of items) {
-                const prodSnap = await getDocs(query(collection(db, "products"), where("id", "==", item.productId)));
-                if (!prodSnap.empty) {
-                    const pDoc = prodSnap.docs[0];
+                const prodSnap = await getDoc(doc(db, `clubs/${club.id}/menu`, item.productId));
+                if (prodSnap.exists()) {
+                    const pDoc = prodSnap;
                     const currentStock = pDoc.data().stock as number;
                     productsToUpdate.push({
-                        docRef: doc(db, "products", pDoc.id),
+                        docRef: pDoc.ref,
                         newStock: Math.max(0, currentStock - item.quantity),
                     });
                 }
@@ -93,7 +93,7 @@ export function usePlaceOrder() {
             const newBalance = currentBalance - totalCost;
 
             // 1. Create order
-            batch.set(doc(db, "orders", orderId), {
+            batch.set(doc(db, `clubs/${club.id}/orders`, orderId), {
                 id: orderId, memberId, memberName, memberPhoto,
                 clubId: club.id, staffId, items, totalCost,
                 status: "pending", rating: null, ratingNote: null,
@@ -101,13 +101,13 @@ export function usePlaceOrder() {
             } as Order);
 
             // 2. Deduct wallet
-            batch.update(doc(db, "wallets", walletDoc.id), {
+            batch.update(walletRef, {
                 balance: newBalance,
                 lastUpdated: Timestamp.now(),
             });
 
             // 3. Create wallet transaction
-            batch.set(doc(db, "walletTransactions", txId), {
+            batch.set(doc(db, `clubs/${club.id}/members/${memberId}/transactions`, txId), {
                 id: txId, userId: memberId, clubId: club.id,
                 type: "debit", amount: totalCost,
                 reason: "shake_order", addedBy: staffId,
@@ -136,10 +136,10 @@ export function usePlaceOrder() {
 export function useUpdateOrderStatus() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: async ({ orderId, newStatus }: { orderId: string; newStatus: "preparing" | "served" }) => {
+        mutationFn: async ({ clubId, orderId, newStatus }: { clubId: string; orderId: string; newStatus: "preparing" | "served" }) => {
             const updates: Record<string, unknown> = { status: newStatus };
             if (newStatus === "served") updates.servedAt = Timestamp.now();
-            await updateDoc(doc(db, "orders", orderId), updates);
+            await updateDoc(doc(db, `clubs/${clubId}/orders`, orderId), updates);
         },
         onSuccess: () => qc.invalidateQueries({ queryKey: ["orders"] }),
     });
@@ -150,8 +150,8 @@ export function useUpdateOrderStatus() {
 export function useSubmitRating() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: async ({ orderId, rating, ratingNote }: { orderId: string; rating: number; ratingNote: string }) => {
-            await updateDoc(doc(db, "orders", orderId), { rating, ratingNote });
+        mutationFn: async ({ clubId, orderId, rating, ratingNote }: { clubId: string; orderId: string; rating: number; ratingNote: string }) => {
+            await updateDoc(doc(db, `clubs/${clubId}/orders`, orderId), { rating, ratingNote });
         },
         onSuccess: () => qc.invalidateQueries({ queryKey: ["orders"] }),
     });
@@ -174,7 +174,7 @@ export function useMyOrders() {
         const fetchFirst = async () => {
             try {
                 const q = query(
-                    collection(db, "orders"),
+                    collectionGroup(db, "orders"),
                     where("memberId", "==", firebaseUser.uid),
                     orderBy("createdAt", "desc"),
                     limit(PAGE_SIZE)
@@ -192,7 +192,7 @@ export function useMyOrders() {
     const loadMore = useCallback(async () => {
         if (!firebaseUser || !lastDoc || !hasMore) return;
         const q = query(
-            collection(db, "orders"),
+            collectionGroup(db, "orders"),
             where("memberId", "==", firebaseUser.uid),
             orderBy("createdAt", "desc"),
             startAfter(lastDoc),
@@ -216,7 +216,7 @@ export function useMyUnratedOrders() {
         queryFn: async () => {
             const snap = await getDocs(
                 query(
-                    collection(db, "orders"),
+                    collectionGroup(db, "orders"),
                     where("memberId", "==", firebaseUser!.uid),
                     where("status", "==", "served"),
                     where("rating", "==", null)
@@ -239,8 +239,7 @@ export function useKitchenOrders() {
     useEffect(() => {
         if (!club) return;
         const q = query(
-            collection(db, "orders"),
-            where("clubId", "==", club.id),
+            collection(db, `clubs/${club.id}/orders`),
             where("date", "==", today()),
             where("status", "in", ["pending", "preparing"]),
             orderBy("createdAt", "asc")
@@ -265,8 +264,7 @@ export function useTodayOrdersSummary() {
     useEffect(() => {
         if (!club) return;
         const q = query(
-            collection(db, "orders"),
-            where("clubId", "==", club.id),
+            collection(db, `clubs/${club.id}/orders`),
             where("date", "==", today())
         );
         const unsub = onSnapshot(q,
@@ -302,7 +300,7 @@ export function useAllTodayOrders() {
         queryKey: ["orders", "today", club?.id],
         queryFn: async () => {
             const snap = await getDocs(
-                query(collection(db, "orders"), where("clubId", "==", club!.id), where("date", "==", today()), orderBy("createdAt", "desc"))
+                query(collection(db, `clubs/${club!.id}/orders`), where("date", "==", today()), orderBy("createdAt", "desc"))
             );
             return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Order);
         },

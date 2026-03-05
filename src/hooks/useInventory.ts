@@ -25,7 +25,7 @@ export function useClubProducts() {
         queryKey: ["inventory", "products", club?.id],
         queryFn: async () => {
             const snap = await getDocs(
-                query(collection(db, "products"), where("clubId", "==", club!.id), orderBy("createdAt", "desc"))
+                query(collection(db, `clubs/${club!.id}/menu`), orderBy("createdAt", "desc"))
             );
             return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Product);
         },
@@ -36,10 +36,12 @@ export function useClubProducts() {
 // ─── useProductById ────────────────────────────────────────────────────
 
 export function useProductById(productId: string) {
+    const { club } = useClubContext();
     return useQuery({
-        queryKey: ["inventory", "product", productId],
+        queryKey: ["inventory", "product", club?.id, productId],
         queryFn: async () => {
-            const snap = await getDoc(doc(db, "products", productId));
+            if (!club) throw new Error("Club not loaded");
+            const snap = await getDoc(doc(db, `clubs/${club.id}/menu`, productId));
             if (!snap.exists()) throw new Error("Product not found");
             return { id: snap.id, ...snap.data() } as Product;
         },
@@ -57,10 +59,7 @@ export function useLowStockProducts() {
 
     useState(() => {
         if (!club) return;
-        const q = query(
-            collection(db, "products"),
-            where("clubId", "==", club.id)
-        );
+        const q = query(collection(db, `clubs/${club.id}/menu`));
         const unsub = onSnapshot(q, (snap) => {
             const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Product);
             // Filter here because Firestore doesn't allow `stock <= lowStockThreshold` (two fields comparing) in query
@@ -84,9 +83,7 @@ export function useExpiringProducts(daysAhead: number = 7) {
     return useQuery({
         queryKey: ["inventory", "expiring", club?.id, daysAhead],
         queryFn: async () => {
-            const snap = await getDocs(
-                query(collection(db, "products"), where("clubId", "==", club!.id))
-            );
+            const snap = await getDocs(query(collection(db, `clubs/${club!.id}/menu`)));
             const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Product);
             const now = new Date();
             const cutoff = new Date();
@@ -109,9 +106,7 @@ export function useExpiredProducts() {
     return useQuery({
         queryKey: ["inventory", "expired", club?.id],
         queryFn: async () => {
-            const snap = await getDocs(
-                query(collection(db, "products"), where("clubId", "==", club!.id))
-            );
+            const snap = await getDocs(query(collection(db, `clubs/${club!.id}/menu`)));
             const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Product);
             const now = new Date();
 
@@ -141,7 +136,7 @@ export function useAddProduct() {
                 createdAt: Timestamp.now(),
                 updatedAt: Timestamp.now(),
             };
-            await setDoc(doc(db, "products", id), prod);
+            await setDoc(doc(db, `clubs/${club.id}/menu`, id), prod);
             return id;
         },
         onSuccess: () => {
@@ -155,10 +150,12 @@ export function useAddProduct() {
 
 export function useUpdateProduct() {
     const qc = useQueryClient();
+    const { club } = useClubContext();
 
     return useMutation({
         mutationFn: async ({ productId, data }: { productId: string; data: Partial<Product> }) => {
-            await updateDoc(doc(db, "products", productId), {
+            if (!club) throw new Error("Club not loaded");
+            await updateDoc(doc(db, `clubs/${club.id}/menu`, productId), {
                 ...data,
                 updatedAt: Timestamp.now(),
             });
@@ -175,23 +172,25 @@ export function useUpdateProduct() {
 export function useRestockProduct() {
     const qc = useQueryClient();
     const { firebaseUser } = useAuth();
+    const { club } = useClubContext();
 
     return useMutation({
         mutationFn: async ({ productId, currentStock, addedQty, note }: {
             productId: string; currentStock: number; addedQty: number; note: string;
         }) => {
             if (!firebaseUser) throw new Error("User not found");
+            if (!club) throw new Error("Club not loaded");
             const newStock = currentStock + addedQty;
             const logId = "rstk_" + Date.now();
 
             // Update product stock
-            await updateDoc(doc(db, "products", productId), {
+            await updateDoc(doc(db, `clubs/${club.id}/menu`, productId), {
                 stock: newStock,
                 updatedAt: Timestamp.now(),
             });
 
             // Add restock log
-            await setDoc(doc(db, `products/${productId}/restockLog`, logId), {
+            await setDoc(doc(db, `clubs/${club.id}/menu/${productId}/restockLog`, logId), {
                 id: logId,
                 quantity: addedQty,
                 date: Timestamp.now(),
@@ -209,10 +208,12 @@ export function useRestockProduct() {
 
 export function useToggleTodaysSpecial() {
     const qc = useQueryClient();
+    const { club } = useClubContext();
 
     return useMutation({
         mutationFn: async ({ productId, isActive }: { productId: string; isActive: boolean }) => {
-            await updateDoc(doc(db, "products", productId), {
+            if (!club) throw new Error("Club not loaded");
+            await updateDoc(doc(db, `clubs/${club.id}/menu`, productId), {
                 isAvailableToday: isActive,
                 updatedAt: Timestamp.now(),
             });

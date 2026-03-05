@@ -1,7 +1,7 @@
 import { useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import {
-    collection,
+    collectionGroup,
     query,
     where,
     getDocs,
@@ -98,7 +98,6 @@ export default function MemberDashboard() {
                     memberId: userProfile.id,
                     memberName: userProfile.name,
                     memberPhoto: userProfile.photo ?? "",
-                    clubId: club.id,
                 });
                 toast({ title: "✅ Volunteer session started! Thank you for helping out." });
                 setShowVolunteerModal(false);
@@ -153,7 +152,7 @@ export default function MemberDashboard() {
         enabled: !!userProfile?.id,
         queryFn: async () => {
             const q = query(
-                collection(db, "orders"),
+                collectionGroup(db, "orders"),
                 where("memberId", "==", userProfile!.id),
                 orderBy("createdAt", "desc"),
                 limit(3)

@@ -12,6 +12,10 @@ function todayStr(): string {
     return new Date().toISOString().slice(0, 10);
 }
 
+function volunteersPath(clubId: string) {
+    return `clubs/${clubId}/volunteers`;
+}
+
 // ─── useActiveVolunteers (real-time) ────────────────────────────────────
 
 export function useActiveVolunteers() {
@@ -22,8 +26,7 @@ export function useActiveVolunteers() {
     useEffect(() => {
         if (!club?.id) return;
         const q = query(
-            collection(db, "volunteers"),
-            where("clubId", "==", club.id),
+            collection(db, volunteersPath(club.id)),
             where("date", "==", todayStr()),
             where("status", "==", "active")
         );
@@ -47,8 +50,7 @@ export function useVolunteerLog(date: string) {
             const { getDocs } = await import("firebase/firestore");
             const snap = await getDocs(
                 query(
-                    collection(db, "volunteers"),
-                    where("clubId", "==", club!.id),
+                    collection(db, volunteersPath(club!.id)),
                     where("date", "==", date)
                 )
             );
@@ -62,19 +64,20 @@ export function useVolunteerLog(date: string) {
 
 export function useCreateVolunteerSession() {
     const qc = useQueryClient();
+    const { club } = useClubContext();
     return useMutation({
         mutationFn: async (input: {
             memberId: string;
             memberName: string;
             memberPhoto: string;
-            clubId: string;
         }) => {
+            if (!club?.id) throw new Error("Club not loaded");
             const now = Timestamp.now();
-            const ref = await addDoc(collection(db, "volunteers"), {
+            const ref = await addDoc(collection(db, volunteersPath(club.id)), {
                 memberId: input.memberId,
                 memberName: input.memberName,
                 memberPhoto: input.memberPhoto,
-                clubId: input.clubId,
+                clubId: club.id,
                 loginTime: now,
                 logoutTime: null,
                 totalMinutes: null,
@@ -91,11 +94,13 @@ export function useCreateVolunteerSession() {
 
 export function useCompleteVolunteerSession() {
     const qc = useQueryClient();
+    const { club } = useClubContext();
     return useMutation({
         mutationFn: async ({ sessionId, loginTime }: { sessionId: string; loginTime: Timestamp }) => {
+            if (!club?.id) throw new Error("Club not loaded");
             const now = Timestamp.now();
             const totalMinutes = Math.round((now.toMillis() - loginTime.toMillis()) / 60000);
-            await updateDoc(doc(db, "volunteers", sessionId), {
+            await updateDoc(doc(db, volunteersPath(club.id), sessionId), {
                 logoutTime: now,
                 totalMinutes,
                 status: "completed",

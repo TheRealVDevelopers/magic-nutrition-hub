@@ -14,14 +14,15 @@ import type { Wallet, WalletTransaction, TopupRequest } from "@/types/firestore"
 
 export function useMyWallet() {
     const { firebaseUser } = useAuth();
+    const { club } = useClubContext();
     const [wallet, setWallet] = useState<Wallet | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!firebaseUser) return;
+        if (!firebaseUser || !club) return;
         const unsub = onSnapshot(
-            doc(db, "wallets", firebaseUser.uid),
+            doc(db, `clubs/${club.id}/members/${firebaseUser.uid}/wallet`, "data"),
             (snap) => {
                 if (snap.exists()) setWallet(snap.data() as Wallet);
                 else setWallet(null);
@@ -30,7 +31,7 @@ export function useMyWallet() {
             (err) => { setError(err.message); setLoading(false); }
         );
         return () => unsub();
-    }, [firebaseUser]);
+    }, [firebaseUser, club]);
 
     return { wallet, loading, error };
 }
@@ -41,6 +42,7 @@ const PAGE_SIZE = 20;
 
 export function useMyTransactions() {
     const { firebaseUser } = useAuth();
+    const { club } = useClubContext();
     const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
     const [loading, setLoading] = useState(true);
     const [hasMore, setHasMore] = useState(true);
@@ -49,12 +51,11 @@ export function useMyTransactions() {
 
     // Initial load
     useEffect(() => {
-        if (!firebaseUser) return;
+        if (!firebaseUser || !club) return;
         const fetchFirst = async () => {
             try {
                 const q = query(
-                    collection(db, "walletTransactions"),
-                    where("userId", "==", firebaseUser.uid),
+                    collection(db, `clubs/${club.id}/members/${firebaseUser.uid}/transactions`),
                     orderBy("createdAt", "desc"),
                     limit(PAGE_SIZE)
                 );
@@ -70,11 +71,10 @@ export function useMyTransactions() {
     }, [firebaseUser]);
 
     const loadMore = useCallback(async () => {
-        if (!firebaseUser || !lastDoc || !hasMore) return;
+        if (!firebaseUser || !club || !lastDoc || !hasMore) return;
         try {
             const q = query(
-                collection(db, "walletTransactions"),
-                where("userId", "==", firebaseUser.uid),
+                collection(db, `clubs/${club.id}/members/${firebaseUser.uid}/transactions`),
                 orderBy("createdAt", "desc"),
                 startAfter(lastDoc),
                 limit(PAGE_SIZE)
@@ -85,7 +85,7 @@ export function useMyTransactions() {
             setLastDoc(snap.docs[snap.docs.length - 1] || null);
             setHasMore(snap.docs.length === PAGE_SIZE);
         } catch (err: any) { setError(err.message); }
-    }, [firebaseUser, lastDoc, hasMore]);
+    }, [firebaseUser, club, lastDoc, hasMore]);
 
     return { transactions, loadMore, hasMore, loading, error };
 }
@@ -94,19 +94,21 @@ export function useMyTransactions() {
 
 export function useMyTopupRequests() {
     const { firebaseUser } = useAuth();
+    const { club } = useClubContext();
     return useQuery({
-        queryKey: ["member", "topupRequests", firebaseUser?.uid],
+        queryKey: ["member", "topupRequests", club?.id, firebaseUser?.uid],
         queryFn: async () => {
+            if (!club) return [];
             const snap = await getDocs(
                 query(
-                    collection(db, "topupRequests"),
+                    collection(db, `clubs/${club.id}/topupRequests`),
                     where("memberId", "==", firebaseUser!.uid),
                     orderBy("requestedAt", "desc")
                 )
             );
             return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as TopupRequest);
         },
-        enabled: !!firebaseUser,
+        enabled: !!firebaseUser && !!club,
     });
 }
 
@@ -114,13 +116,14 @@ export function useMyTopupRequests() {
 
 export function useMyPendingRequest() {
     const { firebaseUser } = useAuth();
+    const { club } = useClubContext();
     const [pendingRequest, setPendingRequest] = useState<TopupRequest | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!firebaseUser) return;
+        if (!firebaseUser || !club) return;
         const q = query(
-            collection(db, "topupRequests"),
+            collection(db, `clubs/${club.id}/topupRequests`),
             where("memberId", "==", firebaseUser.uid),
             where("status", "==", "pending")
         );
@@ -129,7 +132,7 @@ export function useMyPendingRequest() {
             setLoading(false);
         });
         return () => unsub();
-    }, [firebaseUser]);
+    }, [firebaseUser, club]);
 
     return { pendingRequest, hasPending: !!pendingRequest, loading };
 }
@@ -138,13 +141,14 @@ export function useMyPendingRequest() {
 
 export function useMyLatestRequest() {
     const { firebaseUser } = useAuth();
+    const { club } = useClubContext();
     const [latestRequest, setLatestRequest] = useState<TopupRequest | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!firebaseUser) return;
+        if (!firebaseUser || !club) return;
         const q = query(
-            collection(db, "topupRequests"),
+            collection(db, `clubs/${club.id}/topupRequests`),
             where("memberId", "==", firebaseUser.uid),
             orderBy("requestedAt", "desc"),
             limit(1)
@@ -156,7 +160,7 @@ export function useMyLatestRequest() {
             setLoading(false);
         });
         return () => unsub();
-    }, [firebaseUser]);
+    }, [firebaseUser, club]);
 
     return { latestRequest, loading };
 }
@@ -176,7 +180,7 @@ export function useRaiseTopupRequest() {
 
             // Double-check no pending
             const q = query(
-                collection(db, "topupRequests"),
+                collection(db, `clubs/${club.id}/topupRequests`),
                 where("memberId", "==", firebaseUser.uid),
                 where("status", "==", "pending")
             );
@@ -184,7 +188,7 @@ export function useRaiseTopupRequest() {
             if (existing.size > 0) throw new Error("You already have a pending request");
 
             const id = "topup_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
-            await setDoc(doc(db, "topupRequests", id), {
+            await setDoc(doc(db, `clubs/${club.id}/topupRequests`, id), {
                 id,
                 memberId: firebaseUser.uid,
                 memberName: userProfile.name,

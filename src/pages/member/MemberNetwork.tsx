@@ -59,9 +59,8 @@ export default function MemberNetwork() {
         queryFn: async () => {
             if (!userProfile?.id || !club?.id) return [];
             const q = query(
-                collection(db, "users"),
-                where("referredBy", "==", userProfile.id),
-                where("clubId", "==", club.id)
+                collection(db, `clubs/${club.id}/members`),
+                where("referredBy", "==", userProfile.id)
             );
             const snapshot = await getDocs(q);
             return snapshot.docs.map((doc) => ({
@@ -77,7 +76,7 @@ export default function MemberNetwork() {
         queryFn: async () => {
             if (!userProfile?.id) return null;
             const q = query(
-                collection(db, "upgradeRequests"),
+                collection(db, `clubs/${club!.id}/upgradeRequests`),
                 where("memberId", "==", userProfile.id),
                 where("status", "==", "pending")
             );
@@ -91,7 +90,7 @@ export default function MemberNetwork() {
     const submitMutation = useMutation({
         mutationFn: async () => {
             if (!userProfile || !club) throw new Error("Missing user or club");
-            await addDoc(collection(db, "upgradeRequests"), {
+            await addDoc(collection(db, `clubs/${club.id}/upgradeRequests`), {
                 memberId: userProfile.id,
                 memberName: userProfile.name,
                 clubId: club.id,

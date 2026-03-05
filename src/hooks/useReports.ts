@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { collection, query, where, getDocs, Timestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, Timestamp, collectionGroup } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useClubContext } from "@/lib/clubDetection";
 import { format, startOfMonth, startOfDay, endOfDay, parseISO, eachDayOfInterval, isSameDay } from "date-fns";
@@ -23,7 +23,7 @@ export function useRevenueReport(startDate: string, endDate: string) {
 
             const snap = await getDocs(
                 query(
-                    collection(db, "walletTransactions"),
+                    collectionGroup(db, "transactions"),
                     where("clubId", "==", club.id),
                     where("type", "==", "debit"),
                     where("createdAt", ">=", startTimestamp),
@@ -78,9 +78,7 @@ export function useMemberGrowthReport(startDate: string, endDate: string) {
 
             const snap = await getDocs(
                 query(
-                    collection(db, "users"),
-                    where("clubId", "==", club.id),
-                    where("role", "==", "member"),
+                    collection(db, `clubs/${club.id}/members`),
                     where("createdAt", ">=", startTimestamp),
                     where("createdAt", "<=", endTimestamp)
                 )
@@ -127,7 +125,7 @@ export function useAttendanceReport(startDate: string, endDate: string) {
 
             const snap = await getDocs(
                 query(
-                    collection(db, "attendance"),
+                    collectionGroup(db, "attendance"),
                     where("clubId", "==", club.id),
                     where("type", "==", "member"),
                     where("date", ">=", startDate),
@@ -136,7 +134,7 @@ export function useAttendanceReport(startDate: string, endDate: string) {
             );
 
             const allMembersSnap = await getDocs(
-                query(collection(db, "users"), where("clubId", "==", club.id), where("role", "==", "member"), where("status", "==", "active"))
+                query(collection(db, `clubs/${club.id}/members`), where("status", "==", "active"))
             );
             const totalActiveMembers = allMembersSnap.size || 1;
 
@@ -186,8 +184,7 @@ export function useProductUsageReport(startDate: string, endDate: string) {
 
             const snap = await getDocs(
                 query(
-                    collection(db, "orders"),
-                    where("clubId", "==", club.id),
+                    collection(db, `clubs/${club.id}/orders`),
                     where("date", ">=", startDate),
                     where("date", "<=", endDate)
                 )
@@ -230,7 +227,15 @@ export function useVolunteerHoursReport(monthStr: string) { // monthStr format: 
 
             const snap = await getDocs(
                 query(
-                    collection(db, "attendance"),
+                    collection(db, `clubs/${club.id}/volunteers`),
+                )
+            );
+
+            const allVols = snap.docs.map(d => ({ id: d.id, ...d.data() } as User));
+
+            const attendanceSnap = await getDocs(
+                query(
+                    collectionGroup(db, "attendance"),
                     where("clubId", "==", club.id),
                     where("type", "==", "volunteer"),
                     where("date", ">=", startDate),
@@ -238,7 +243,7 @@ export function useVolunteerHoursReport(monthStr: string) { // monthStr format: 
                 )
             );
 
-            const records = snap.docs.map(d => d.data() as Attendance);
+            const records = attendanceSnap.docs.map(d => d.data() as Attendance);
             const volunteerMap: Record<string, { name: string, totalHours: number, daysWorked: number }> = {};
 
             records.forEach(r => {
@@ -281,11 +286,11 @@ export function useOverallSummary() {
             const startMonthStr = format(startOfCurrMonth, "yyyy-MM-dd");
 
             const [membersSnap, activeMembersSnap, ordersSnap, revenueSnap, attendanceSnap] = await Promise.all([
-                getDocs(query(collection(db, "users"), where("clubId", "==", club.id), where("role", "==", "member"))),
-                getDocs(query(collection(db, "users"), where("clubId", "==", club.id), where("role", "==", "member"), where("status", "==", "active"))),
-                getDocs(query(collection(db, "orders"), where("clubId", "==", club.id), where("date", ">=", startMonthStr))),
-                getDocs(query(collection(db, "walletTransactions"), where("clubId", "==", club.id), where("type", "==", "debit"), where("createdAt", ">=", startTimestamp))),
-                getDocs(query(collection(db, "attendance"), where("clubId", "==", club.id), where("type", "==", "member"), where("date", ">=", startMonthStr)))
+                getDocs(query(collection(db, `clubs/${club.id}/members`))),
+                getDocs(query(collection(db, `clubs/${club.id}/members`), where("status", "==", "active"))),
+                getDocs(query(collection(db, `clubs/${club.id}/orders`), where("date", ">=", startMonthStr))),
+                getDocs(query(collectionGroup(db, "transactions"), where("clubId", "==", club.id), where("type", "==", "debit"), where("createdAt", ">=", startTimestamp))),
+                getDocs(query(collectionGroup(db, "attendance"), where("clubId", "==", club.id), where("type", "==", "member"), where("date", ">=", startMonthStr)))
             ]);
 
             const totalRevenueThisMonth = revenueSnap.docs.reduce((sum, d) => sum + (d.data().amount || 0), 0);

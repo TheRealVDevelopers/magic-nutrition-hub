@@ -29,7 +29,21 @@
             ]
         },
         {
-            "collectionGroup": "walletTransactions",
+            "collectionGroup": "orders",
+            "queryScope": "COLLECTION_GROUP",
+            "fields": [
+                {
+                    "fieldPath": "memberId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "transactions",
             "queryScope": "COLLECTION",
             "fields": [
                 {
@@ -44,7 +58,7 @@
         },
         {
             "collectionGroup": "attendance",
-            "queryScope": "COLLECTION",
+            "queryScope": "COLLECTION_GROUP",
             "fields": [
                 {
                     "fieldPath": "clubId",
@@ -52,7 +66,25 @@
                 },
                 {
                     "fieldPath": "date",
-                    "order": "DESCENDING"
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "attendance",
+            "queryScope": "COLLECTION_GROUP",
+            "fields": [
+                {
+                    "fieldPath": "clubId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "date",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "type",
+                    "order": "ASCENDING"
                 }
             ]
         },
@@ -61,49 +93,27 @@
             "queryScope": "COLLECTION",
             "fields": [
                 {
-                    "fieldPath": "userId",
+                    "fieldPath": "date",
                     "order": "ASCENDING"
                 },
                 {
-                    "fieldPath": "date",
-                    "order": "DESCENDING"
+                    "fieldPath": "type",
+                    "order": "ASCENDING"
                 }
             ]
         },
         {
-            "collectionGroup": "attendance",
+            "collectionGroup": "members",
             "queryScope": "COLLECTION",
             "fields": [
                 {
-                    "fieldPath": "userId",
-                    "order": "ASCENDING"
-                },
-                {
-                    "fieldPath": "clubId",
-                    "order": "ASCENDING"
-                },
-                {
-                    "fieldPath": "date",
-                    "order": "DESCENDING"
-                }
-            ]
-        },
-        {
-            "collectionGroup": "users",
-            "queryScope": "COLLECTION",
-            "fields": [
-                {
-                    "fieldPath": "clubId",
-                    "order": "ASCENDING"
-                },
-                {
-                    "fieldPath": "role",
+                    "fieldPath": "email",
                     "order": "ASCENDING"
                 }
             ]
         },
         {
-            "collectionGroup": "users",
+            "collectionGroup": "members",
             "queryScope": "COLLECTION",
             "fields": [
                 {
@@ -112,6 +122,78 @@
                 },
                 {
                     "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "announcements",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "menu",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "isAvailable",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "name",
+                    "order": "ASCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "topupRequests",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "memberId",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "topupRequests",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "status",
+                    "order": "ASCENDING"
+                },
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "feedback",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "createdAt",
+                    "order": "DESCENDING"
+                }
+            ]
+        },
+        {
+            "collectionGroup": "weighIns",
+            "queryScope": "COLLECTION",
+            "fields": [
+                {
+                    "fieldPath": "date",
                     "order": "DESCENDING"
                 }
             ]

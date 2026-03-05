@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-    collection, doc, getDocs, setDoc, updateDoc,
+    collection, collectionGroup, doc, getDocs, setDoc, updateDoc,
     query, where, onSnapshot, Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -29,7 +29,7 @@ export function useTodayAttendance(type?: "member" | "volunteer") {
         ];
         if (type) constraints.push(where("type", "==", type));
 
-        const q = query(collection(db, "attendance"), ...constraints);
+        const q = query(collectionGroup(db, "attendance"), ...constraints);
         const unsub = onSnapshot(q,
             (snap) => {
                 setRecords(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Attendance));
@@ -58,7 +58,7 @@ export function useAttendanceHistory(startDate: string, endDate: string) {
             try {
                 const snap = await getDocs(
                     query(
-                        collection(db, "attendance"),
+                        collectionGroup(db, "attendance"),
                         where("clubId", "==", club.id),
                         where("date", ">=", startDate),
                         where("date", "<=", endDate)
@@ -93,9 +93,7 @@ export function useVolunteerHours(volunteerId: string, month: string) {
             setLoading(true);
             const snap = await getDocs(
                 query(
-                    collection(db, "attendance"),
-                    where("clubId", "==", club.id),
-                    where("userId", "==", volunteerId),
+                    collection(db, `clubs/${club.id}/members/${volunteerId}/attendance`),
                     where("date", ">=", startDate),
                     where("date", "<=", endDate)
                 )
@@ -123,9 +121,7 @@ export function useCheckInVolunteer() {
             // Check for existing open check-in today
             const existing = await getDocs(
                 query(
-                    collection(db, "attendance"),
-                    where("clubId", "==", club.id),
-                    where("userId", "==", userId),
+                    collection(db, `clubs/${club.id}/members/${userId}/attendance`),
                     where("date", "==", today()),
                     where("type", "==", "volunteer")
                 )
@@ -134,7 +130,7 @@ export function useCheckInVolunteer() {
             if (openRecord) throw new Error("Already checked in");
 
             const id = "att_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
-            await setDoc(doc(db, "attendance", id), {
+            await setDoc(doc(db, `clubs/${club.id}/members/${userId}/attendance`, id), {
                 id, userId, userName, userPhoto,
                 clubId: club.id, type: "volunteer",
                 checkInTime: Timestamp.now(), checkOutTime: null,
@@ -158,9 +154,7 @@ export function useCheckOutVolunteer() {
             if (!club) throw new Error("Club not loaded");
             const snap = await getDocs(
                 query(
-                    collection(db, "attendance"),
-                    where("clubId", "==", club.id),
-                    where("userId", "==", volunteerId),
+                    collection(db, `clubs/${club.id}/members/${volunteerId}/attendance`),
                     where("date", "==", today()),
                     where("type", "==", "volunteer")
                 )
@@ -172,7 +166,7 @@ export function useCheckOutVolunteer() {
             const now = new Date();
             const hoursWorked = Math.round(((now.getTime() - checkInTime.getTime()) / 3600000) * 100) / 100;
 
-            await updateDoc(doc(db, "attendance", openRecord.id), {
+            await updateDoc(doc(db, `clubs/${club.id}/members/${volunteerId}/attendance`, openRecord.id), {
                 checkOutTime: Timestamp.now(),
                 hoursWorked,
             });
@@ -197,9 +191,7 @@ export function useCheckInMember() {
             // Check if already checked in today
             const existing = await getDocs(
                 query(
-                    collection(db, "attendance"),
-                    where("clubId", "==", club.id),
-                    where("userId", "==", userId),
+                    collection(db, `clubs/${club.id}/members/${userId}/attendance`),
                     where("date", "==", today()),
                     where("type", "==", "member")
                 )
@@ -210,7 +202,7 @@ export function useCheckInMember() {
             }
 
             const id = "att_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
-            await setDoc(doc(db, "attendance", id), {
+            await setDoc(doc(db, `clubs/${club.id}/members/${userId}/attendance`, id), {
                 id, userId, userName, userPhoto,
                 clubId: club.id, type: "member",
                 checkInTime: Timestamp.now(), checkOutTime: null,
@@ -234,9 +226,7 @@ export function useIsVolunteerCheckedIn(volunteerId: string) {
     useEffect(() => {
         if (!club || !volunteerId) { setLoading(false); return; }
         const q = query(
-            collection(db, "attendance"),
-            where("clubId", "==", club.id),
-            where("userId", "==", volunteerId),
+            collection(db, `clubs/${club.id}/members/${volunteerId}/attendance`),
             where("date", "==", today()),
             where("type", "==", "volunteer")
         );
@@ -267,7 +257,7 @@ export function useAllVolunteersStatus() {
     useEffect(() => {
         if (!club) return;
         const q = query(
-            collection(db, "attendance"),
+            collectionGroup(db, "attendance"),
             where("clubId", "==", club.id),
             where("date", "==", today()),
             where("type", "==", "volunteer")
@@ -303,9 +293,7 @@ export function useManualCheckIn() {
             if (!club) throw new Error("Club not loaded");
             const existing = await getDocs(
                 query(
-                    collection(db, "attendance"),
-                    where("clubId", "==", club.id),
-                    where("userId", "==", userId),
+                    collection(db, `clubs/${club.id}/members/${userId}/attendance`),
                     where("date", "==", today()),
                     where("type", "==", "member")
                 )
@@ -313,7 +301,7 @@ export function useManualCheckIn() {
             if (existing.size > 0) throw new Error("Already checked in today");
 
             const id = "att_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
-            await setDoc(doc(db, "attendance", id), {
+            await setDoc(doc(db, `clubs/${club.id}/members/${userId}/attendance`, id), {
                 id, userId, userName, userPhoto,
                 clubId: club.id, type: "member",
                 checkInTime: Timestamp.now(), checkOutTime: null,

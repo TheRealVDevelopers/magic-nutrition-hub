@@ -9,7 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useClubContext } from "@/lib/clubDetection";
-import { doc, updateDoc, getDocs, addDoc, deleteDoc, collection, query, where } from "firebase/firestore";
+import { doc, updateDoc, getDocs, addDoc, deleteDoc, collection, query } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { MembershipPlan } from "@/types/firestore";
 import { Timestamp } from "firebase/firestore";
@@ -54,7 +54,7 @@ export default function Settings() {
         (async () => {
             setPlansLoading(true);
             try {
-                const q = query(collection(db, "memberships"), where("clubId", "==", clubId));
+                const q = query(collection(db, `clubs/${clubId}/memberships`));
                 const snap = await getDocs(q);
                 setPlans(snap.docs.map((d) => ({ id: d.id, ...d.data() } as MembershipPlan & { id: string })));
             } catch {
@@ -100,8 +100,7 @@ export default function Settings() {
         if (!clubId || !newPlanName.trim()) return;
         setPlanSaving(true);
         try {
-            await addDoc(collection(db, "memberships"), {
-                clubId,
+            await addDoc(collection(db, `clubs/${clubId}/memberships`), {
                 name: newPlanName.trim(),
                 durationDays: newPlanDuration,
                 price: newPlanPrice,
@@ -116,7 +115,7 @@ export default function Settings() {
             setNewPlanDuration(30);
             setNewPlanPrice(0);
             setNewPlanBenefits("");
-            const q = query(collection(db, "memberships"), where("clubId", "==", clubId));
+            const q = query(collection(db, `clubs/${clubId}/memberships`));
             const snap = await getDocs(q);
             setPlans(snap.docs.map((d) => ({ id: d.id, ...d.data() } as MembershipPlan & { id: string })));
         } catch (e: any) {
@@ -128,7 +127,7 @@ export default function Settings() {
 
     const handleTogglePlan = async (plan: MembershipPlan & { id: string }) => {
         try {
-            await updateDoc(doc(db, "memberships", plan.id), { isActive: !plan.isActive });
+            await updateDoc(doc(db, `clubs/${clubId}/memberships`, plan.id), { isActive: !plan.isActive });
             toast({ title: plan.isActive ? "Plan deactivated" : "Plan activated" });
             setPlans((prev) => prev.map((p) => (p.id === plan.id ? { ...p, isActive: !p.isActive } : p)));
         } catch (e: any) {
@@ -138,7 +137,7 @@ export default function Settings() {
 
     const handleDeletePlan = async (planId: string) => {
         try {
-            await deleteDoc(doc(db, "memberships", planId));
+            await deleteDoc(doc(db, `clubs/${clubId}/memberships`, planId));
             toast({ title: "Plan deleted" });
             setPlans((prev) => prev.filter((p) => p.id !== planId));
         } catch (e: any) {

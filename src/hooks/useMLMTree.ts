@@ -11,7 +11,7 @@ export interface TreeNode {
 }
 
 export function useMyTree() {
-    const { firebaseUser } = useAuth();
+    const { userProfile } = useAuth();
     const [tree, setTree] = useState<TreeNode | null>(null);
     const [directReferrals, setDirectReferrals] = useState(0);
     const [totalNetworkCount, setTotalNetworkCount] = useState(0);
@@ -19,36 +19,23 @@ export function useMyTree() {
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!firebaseUser) return;
+        if (!userProfile) return;
         const fetchTree = async () => {
             try {
-                const uid = firebaseUser.uid;
+                const uid = userProfile.id;
 
                 // 1. Fetch current user
-                const rootSnap = await getDoc(doc(db, "users", uid));
-                if (!rootSnap.exists()) throw new Error("User not found");
-                const rootUser = { id: rootSnap.id, ...rootSnap.data() } as User;
+                const rootUser = userProfile;
 
-                // 2. Fetch all users whose treePath contains the current user's ID
-                // Note: checking if treePath contains uid
-                const allUsersSnap = await getDocs(
-                    query(collection(db, "users"), where("treePath", ">=", uid), where("treePath", "<=", uid + "\uf8ff"))
-                );
-                let downline = allUsersSnap.docs.map(d => ({ id: d.id, ...d.data() } as User));
-
-                // Wait, the query above only works if treePath STARTS with uid. 
-                // In our data model, treePath might be "parent1/parent2/uid/child".
-                // Instead, a better way is to fetch ALL users in the club and filter in memory, 
-                // OR rely on array-contains if we stored treePath as an array. 
-                // Since it's a string, we cannot query "contains" efficiently in Firestore.
-                // Let's just fetch ALL users for this club and build in memory, or use `originalClubId`.
+                // Fetch ALL users in the club and build tree in memory
                 const clubUsersSnap = await getDocs(
-                    query(collection(db, "users"), where("originalClubId", "==", rootUser.originalClubId))
+                    query(collection(db, `clubs/${rootUser.clubId}/members`))
                 );
+
                 const allUsersInClub = clubUsersSnap.docs.map(d => ({ id: d.id, ...d.data() } as User));
 
                 // Filter those who have `uid` in their treePath (and are not the rootUser themselves)
-                downline = allUsersInClub.filter(u => u.treePath.includes(uid) && u.id !== uid);
+                let downline = allUsersInClub.filter(u => u.treePath && u.treePath.includes(uid) && u.id !== uid);
 
                 // Build Tree structure recursively
                 const buildTree = (user: User, depth: number): TreeNode => {
@@ -73,7 +60,7 @@ export function useMyTree() {
             }
         };
         fetchTree();
-    }, [firebaseUser]);
+    }, [userProfile]);
 
     return { tree, directReferrals, totalNetworkCount, loading, error };
 }
@@ -86,8 +73,15 @@ export function useUserBasicProfile(userId: string) {
         if (!userId) { setLoading(false); return; }
         const fetchProfile = async () => {
             try {
-                const snap = await getDoc(doc(db, "users", userId));
-                if (snap.exists()) setProfile({ id: snap.id, ...snap.data() } as User);
+                // Loop through all clubs to find the profile
+                const clubsSnap = await getDocs(collection(db, "clubs"));
+                for (const clubDoc of clubsSnap.docs) {
+                    const snap = await getDoc(doc(db, `clubs/${clubDoc.id}/members`, userId));
+                    if (snap.exists()) {
+                        setProfile({ id: snap.id, ...snap.data() } as User);
+                        break;
+                    }
+                }
             } catch (e) { }
             setLoading(false);
         };
@@ -98,23 +92,23 @@ export function useUserBasicProfile(userId: string) {
 }
 
 export function useDirectReferrals() {
-    const { firebaseUser } = useAuth();
+    const { userProfile } = useAuth();
     const [referrals, setReferrals] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!firebaseUser) return;
+        if (!userProfile) return;
         const fetchReferrals = async () => {
             try {
                 const snap = await getDocs(
-                    query(collection(db, "users"), where("referredBy", "==", firebaseUser.uid))
+                    query(collection(db, `clubs/${userProfile.clubId}/members`), where("referredBy", "==", userProfile.id))
                 );
                 setReferrals(snap.docs.map(d => ({ id: d.id, ...d.data() } as User)));
             } catch (e) { }
             setLoading(false);
         };
         fetchReferrals();
-    }, [firebaseUser]);
+    }, [userProfile]);
 
     return { referrals, count: referrals.length, loading, error: null };
 }

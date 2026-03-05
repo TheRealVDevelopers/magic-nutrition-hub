@@ -107,7 +107,7 @@ export default function MemberAnnouncements() {
             newExpanded.add(ann.id);
             // Mark as read if unread
             if (userProfile?.id && !ann.readBy?.includes(userProfile.id)) {
-                markAsRead.mutate({ announcementId: ann.id, memberId: userProfile.id });
+                markAsRead.mutate({ announcementId: ann.id, memberId: userProfile.id, clubId: club?.id || "" });
             }
         }
         setExpandedIds(newExpanded);
@@ -115,7 +115,7 @@ export default function MemberAnnouncements() {
 
     const handleMarkAllRead = () => {
         if (!userProfile?.id || !announcements) return;
-        markAllAsRead.mutate({ announcements, memberId: userProfile.id });
+        markAllAsRead.mutate({ announcements, memberId: userProfile.id, clubId: club?.id || "" });
     };
 
     if (loading) {

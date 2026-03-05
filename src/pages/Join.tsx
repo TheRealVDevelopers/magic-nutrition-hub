@@ -34,9 +34,9 @@ function useClubFromParams() {
 }
 
 // Validate that a memberId exists
-async function validateMemberId(memberId: string): Promise<boolean> {
+async function validateMemberId(clubId: string, memberId: string): Promise<boolean> {
     if (!memberId.trim()) return true; // Empty = valid (optional field)
-    const snap = await getDocs(query(collection(db, "users"), where("memberId", "==", memberId.trim())));
+    const snap = await getDocs(query(collection(db, `clubs/${clubId}/members`), where("memberId", "==", memberId.trim())));
     return !snap.empty;
 }
 
@@ -69,9 +69,9 @@ export default function Join() {
 
     const checkReferrer = async () => {
         const id = form.referredByMemberId.trim();
-        if (!id || form.noReferrer) { setReferrerStatus("idle"); return; }
+        if (!id || form.noReferrer || !club) { setReferrerStatus("idle"); return; }
         setReferrerStatus("checking");
-        const valid = await validateMemberId(id);
+        const valid = await validateMemberId(club.id, id);
         setReferrerStatus(valid ? "valid" : "invalid");
     };
 
@@ -95,7 +95,7 @@ export default function Join() {
         }
         setSubmitting(true);
         try {
-            await addDoc(collection(db, "enquiries"), {
+            await addDoc(collection(db, `clubs/${club.id}/enquiries`), {
                 clubId: club.id,
                 name: form.name.trim(),
                 phone: form.phone.trim(),

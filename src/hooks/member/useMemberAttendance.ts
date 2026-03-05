@@ -8,7 +8,7 @@ export function useMyAttendance(memberId: string | null, clubId: string | null) 
         queryKey: ["member-attendance", memberId, clubId],
         enabled: !!memberId && !!clubId,
         queryFn: async () => {
-            const q = query(collection(db, "attendance"), where("userId", "==", memberId), where("clubId", "==", clubId), orderBy("date", "desc"));
+            const q = query(collection(db, `clubs/${clubId}/members/${memberId}/attendance`), orderBy("date", "desc"));
             const snap = await getDocs(q);
             return snap.docs.map(d => ({ id: d.id, ...d.data() } as Attendance));
         },

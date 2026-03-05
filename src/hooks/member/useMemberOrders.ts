@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import { collectionGroup, query, where, getDocs, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Order } from "@/types/firestore";
 
@@ -9,7 +9,7 @@ export function useMyOrders(memberId: string | null) {
         enabled: !!memberId,
         queryFn: async () => {
             const q = query(
-                collection(db, "orders"),
+                collectionGroup(db, "orders"),
                 where("memberId", "==", memberId),
                 orderBy("createdAt", "desc")
             );

@@ -13,6 +13,7 @@ import {
     Timestamp
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { useClubContext } from "@/lib/clubDetection";
 import type { Announcement } from "@/types/firestore";
 
 function isAnnouncementForMember(
@@ -57,16 +58,17 @@ export function useMyAnnouncements(
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    const { club } = useClubContext();
+
     useEffect(() => {
-        if (!clubId || !memberId) {
+        if (!clubId || !memberId || !club?.id) {
             setAnnouncements([]);
             setLoading(false);
             return;
         }
 
         const q = query(
-            collection(db, "announcements"),
-            where("clubId", "==", clubId),
+            collection(db, `clubs/${clubId}/announcements`),
             orderBy("createdAt", "desc")
         );
 
@@ -98,7 +100,7 @@ export function useMyAnnouncements(
         );
 
         return () => unsub();
-    }, [clubId, memberId, memberType, membershipTier]);
+    }, [clubId, memberId, memberType, membershipTier, club?.id]);
 
     return { announcements, loading, error };
 }
@@ -121,10 +123,10 @@ export function useUnreadAnnouncementsCount(
 
 export function useMarkAsRead() {
     return useMutation({
-        mutationFn: async ({ announcementId, memberId }: { announcementId: string, memberId: string }) => {
-            if (!announcementId || !memberId) throw new Error("Missing params");
+        mutationFn: async ({ announcementId, memberId, clubId }: { announcementId: string, memberId: string, clubId: string }) => {
+            if (!announcementId || !memberId || !clubId) throw new Error("Missing params");
 
-            const ref = doc(db, "announcements", announcementId);
+            const ref = doc(db, `clubs/${clubId}/announcements`, announcementId);
             await updateDoc(ref, {
                 readBy: arrayUnion(memberId)
             });
@@ -134,15 +136,15 @@ export function useMarkAsRead() {
 
 export function useMarkAllAsRead() {
     return useMutation({
-        mutationFn: async ({ announcements, memberId }: { announcements: Announcement[], memberId: string }) => {
-            if (!announcements || !memberId) return;
+        mutationFn: async ({ announcements, memberId, clubId }: { announcements: Announcement[], memberId: string, clubId: string }) => {
+            if (!announcements || !memberId || !clubId) return;
 
             const unread = announcements.filter(a => !a.readBy?.includes(memberId));
             if (unread.length === 0) return;
 
             const batch = writeBatch(db);
             unread.forEach(a => {
-                const ref = doc(db, "announcements", a.id);
+                const ref = doc(db, `clubs/${clubId}/announcements`, a.id);
                 batch.update(ref, {
                     readBy: arrayUnion(memberId)
                 });

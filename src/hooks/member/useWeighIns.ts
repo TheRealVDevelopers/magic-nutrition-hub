@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { collection, query, where, orderBy, getDocs, limit } from "firebase/firestore";
+import { collection, query, where, orderBy, getDocs, limit, collectionGroup } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth";
 import { useClubContext } from "@/lib/clubDetection";
@@ -9,14 +9,14 @@ import type { LeaderboardEntry } from "@/hooks/owner/useWeighIns";
 // ─── My weigh-ins ───────────────────────────────────────────────────────────
 
 export function useMyWeighIns() {
-    const { firebaseUser } = useAuth();
+    const { userProfile } = useAuth();
+    const { club } = useClubContext();
     return useQuery({
-        queryKey: ["member-weighIns", firebaseUser?.uid],
-        enabled: !!firebaseUser,
+        queryKey: ["member-weighIns", userProfile?.id, club?.id],
+        enabled: !!userProfile && !!club,
         queryFn: async () => {
             const q = query(
-                collection(db, "weighIns"),
-                where("memberId", "==", firebaseUser!.uid),
+                collection(db, `clubs/${club!.id}/members/${userProfile!.id}/weighIns`),
                 orderBy("createdAt", "desc")
             );
             const snap = await getDocs(q);
@@ -35,16 +35,16 @@ export function useMyBadges() {
 // ─── My rank ────────────────────────────────────────────────────────────────
 
 export function useMyRank(period: "month" | "alltime") {
-    const { firebaseUser } = useAuth();
+    const { userProfile } = useAuth();
     const { club } = useClubContext();
 
     return useQuery({
-        queryKey: ["my-rank", club?.id, period, firebaseUser?.uid],
-        enabled: !!firebaseUser && !!club,
+        queryKey: ["my-rank", club?.id, period, userProfile?.id],
+        enabled: !!userProfile && !!club,
         queryFn: async () => {
             if (period === "alltime") {
                 const snap = await getDocs(
-                    query(collection(db, "users"), where("clubId", "==", club!.id), where("role", "==", "member"))
+                    query(collection(db, `clubs/${club!.id}/members`))
                 );
                 const entries: { memberId: string; lost: number }[] = [];
                 for (const d of snap.docs) {
@@ -55,14 +55,14 @@ export function useMyRank(period: "month" | "alltime") {
                     if (start > 0 && lost > 0) entries.push({ memberId: d.id, lost: +lost.toFixed(1) });
                 }
                 entries.sort((a, b) => b.lost - a.lost);
-                const idx = entries.findIndex((e) => e.memberId === firebaseUser!.uid);
+                const idx = entries.findIndex((e) => e.memberId === userProfile!.id);
                 return idx === -1 ? null : idx + 1;
             } else {
                 const now = new Date();
                 const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
                 const snap = await getDocs(
                     query(
-                        collection(db, "weighIns"),
+                        collectionGroup(db, "weighIns"),
                         where("clubId", "==", club!.id),
                         where("date", ">=", monthStart),
                         orderBy("date", "asc")
@@ -83,7 +83,7 @@ export function useMyRank(period: "month" | "alltime") {
                     if (lost > 0) entries.push({ memberId: mid, lost });
                 }
                 entries.sort((a, b) => b.lost - a.lost);
-                const idx = entries.findIndex((e) => e.memberId === firebaseUser!.uid);
+                const idx = entries.findIndex((e) => e.memberId === userProfile!.id);
                 return idx === -1 ? null : idx + 1;
             }
         },

@@ -11,6 +11,7 @@ import {
     writeBatch,
     Timestamp,
     serverTimestamp,
+    collectionGroup,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { Club, User, Wallet } from "@/types/firestore";
@@ -49,7 +50,7 @@ export function usePlatformStats() {
         queryFn: async () => {
             const [clubsSnap, usersSnap] = await Promise.all([
                 getDocs(collection(db, "clubs")),
-                getDocs(query(collection(db, "users"), where("role", "==", "member"))),
+                getDocs(query(collectionGroup(db, "members"))),
             ]);
 
             const clubs = clubsSnap.docs.map((d) => d.data() as Club);
@@ -74,9 +75,7 @@ export function useMemberCountByClub(clubId: string) {
         queryFn: async () => {
             const snap = await getDocs(
                 query(
-                    collection(db, "users"),
-                    where("clubId", "==", clubId),
-                    where("role", "==", "member")
+                    collection(db, `clubs/${clubId}/members`)
                 )
             );
             return snap.size;
@@ -152,13 +151,13 @@ export function useCreateClub() {
                 createdAt: now,
                 updatedAt: now,
             };
-            batch.set(doc(db, "users", ownerId), ownerData);
+            batch.set(doc(db, `clubs/${clubId}/members`, ownerId), ownerData);
 
             // Update club with ownerUserId
             batch.update(doc(db, "clubs", clubId), { ownerUserId: ownerId });
 
             // Create wallet
-            batch.set(doc(db, "wallets", ownerId), {
+            batch.set(doc(db, `clubs/${clubId}/members/${ownerId}/wallet`, "data"), {
                 userId: ownerId,
                 clubId,
                 currencyName: input.club.currencyName,
@@ -246,7 +245,7 @@ export function useAllMembersOfClub(clubId: string) {
         queryKey: ["superadmin", "clubMembers", clubId],
         queryFn: async () => {
             const snap = await getDocs(
-                query(collection(db, "users"), where("clubId", "==", clubId), where("role", "==", "member"))
+                query(collection(db, `clubs/${clubId}/members`))
             );
             return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as User);
         },
@@ -280,10 +279,12 @@ export function useConvertMemberToClubOwner() {
             const now = Timestamp.now();
             const newClubId = input.clubDetails.domain.replace(/[^a-z0-9]/g, "_") + "_" + Date.now();
 
-            // Fetch member
-            const memberSnap = await getDoc(doc(db, "users", input.memberId));
-            if (!memberSnap.exists()) throw new Error("Member not found");
-            const member = memberSnap.data() as User;
+            // Fetch member using collectionGroup
+            const mSnap = await getDocs(query(collectionGroup(db, "members"), where("id", "==", input.memberId)));
+            if (mSnap.empty) throw new Error("Member not found");
+            const memberDoc = mSnap.docs[0];
+            const member = memberDoc.data() as User;
+            const oldClubId = member.clubId;
 
             // Fetch parent club treePath
             let clubTreePath = newClubId;
@@ -318,17 +319,19 @@ export function useConvertMemberToClubOwner() {
                 createdBy: input.createdBy,
             });
 
-            // Update member → clubOwner
-            batch.update(doc(db, "users", input.memberId), {
+            // Update member → clubOwner by moving document
+            batch.set(doc(db, `clubs/${newClubId}/members`, input.memberId), {
+                ...member,
                 role: "clubOwner",
                 isClubOwner: true,
                 ownedClubId: newClubId,
                 clubId: newClubId,
                 updatedAt: now,
             });
+            batch.delete(memberDoc.ref);
 
-            // Move downline: find all users whose treePath starts with member's treePath
-            const allUsersSnap = await getDocs(collection(db, "users"));
+            // Move downline
+            const allUsersSnap = await getDocs(collection(db, `clubs/${oldClubId}/members`));
             const memberTreePath = member.treePath;
 
             allUsersSnap.docs.forEach((userDoc) => {
@@ -337,17 +340,20 @@ export function useConvertMemberToClubOwner() {
 
                 // User is in downline if their treePath starts with member's treePath
                 if (userData.treePath && userData.treePath.startsWith(memberTreePath + "/")) {
-                    batch.update(doc(db, "users", userDoc.id), {
+                    batch.set(doc(db, `clubs/${newClubId}/members`, userDoc.id), {
+                        ...userData,
                         clubId: newClubId,
                         updatedAt: now,
                     });
+                    batch.delete(userDoc.ref);
                 }
             });
 
-            // Create wallet for new club owner if not exists
-            const walletSnap = await getDoc(doc(db, "wallets", input.memberId));
+            // Create wallet for new club owner in new club
+            const oldWalletRef = doc(db, `clubs/${oldClubId}/members/${input.memberId}/wallet`, "data");
+            const walletSnap = await getDoc(oldWalletRef);
             if (!walletSnap.exists()) {
-                batch.set(doc(db, "wallets", input.memberId), {
+                batch.set(doc(db, `clubs/${newClubId}/members/${input.memberId}/wallet`, "data"), {
                     userId: input.memberId,
                     clubId: newClubId,
                     currencyName: input.clubDetails.currencyName,
@@ -355,11 +361,13 @@ export function useConvertMemberToClubOwner() {
                     lastUpdated: now,
                 });
             } else {
-                batch.update(doc(db, "wallets", input.memberId), {
+                batch.set(doc(db, `clubs/${newClubId}/members/${input.memberId}/wallet`, "data"), {
+                    ...walletSnap.data(),
                     clubId: newClubId,
                     currencyName: input.clubDetails.currencyName,
                     lastUpdated: now,
                 });
+                batch.delete(oldWalletRef);
             }
 
             await batch.commit();
@@ -377,7 +385,7 @@ export function useDownlineCount(treePath: string) {
     return useQuery({
         queryKey: ["superadmin", "downlineCount", treePath],
         queryFn: async () => {
-            const snap = await getDocs(collection(db, "users"));
+            const snap = await getDocs(collectionGroup(db, "members"));
             return snap.docs.filter(
                 (d) => (d.data() as User).treePath?.startsWith(treePath + "/")
             ).length;

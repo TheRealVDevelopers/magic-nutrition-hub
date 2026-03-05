@@ -9,7 +9,7 @@ interface NetworkNode {
 }
 
 async function fetchReferrals(memberId: string, clubId: string): Promise<NetworkNode[]> {
-    const q = query(collection(db, "users"), where("referredBy", "==", memberId), where("clubId", "==", clubId));
+    const q = query(collection(db, `clubs/${clubId}/members`), where("referredBy", "==", memberId));
     const snap = await getDocs(q);
     const members = snap.docs.map(d => ({ id: d.id, ...d.data() } as User));
     const nodes = await Promise.all(members.map(async (m) => {

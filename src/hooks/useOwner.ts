@@ -527,7 +527,7 @@ export function useAllProducts() {
         queryKey: ["owner", "products", club?.id],
         queryFn: async () => {
             const snap = await getDocs(
-                query(collection(db, "products"), where("clubId", "==", club!.id))
+                query(collection(db, `clubs/${club!.id}/menu`))
             );
             return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Product);
         },
@@ -694,6 +694,7 @@ export function useTodayAttendance() {
 // ─── useMemberReferrals ───────────────────────────────────────────────────
 
 export function useMemberReferrals(memberId: string) {
+    const { club } = useClubContext();
     return useQuery({
         queryKey: ["owner", "referrals", memberId],
         queryFn: async () => {
@@ -800,7 +801,7 @@ export function useLowStockProducts() {
         queryKey: ["owner", "lowStock", club?.id],
         queryFn: async () => {
             const snap = await getDocs(
-                query(collection(db, "products"), where("clubId", "==", club!.id))
+                query(collection(db, `clubs/${club!.id}/menu`))
             );
             return snap.docs
                 .map((d) => ({ id: d.id, ...d.data() }) as Product)

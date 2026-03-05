@@ -3,7 +3,7 @@ import {
     Search, ChevronDown, ChevronUp, UserPlus, UserCheck, X,
     Download, Star, Filter, AlertTriangle
 } from "lucide-react";
-import { collection, addDoc, getDocs, query, where, Timestamp, updateDoc, doc, deleteField } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, where, Timestamp, updateDoc, doc, deleteField, setDoc } from "firebase/firestore";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -220,7 +220,7 @@ function AcceptVisitingModal({ enquiry, onClose, onDone }: AcceptModalProps) {
             let treePath = newDocId;
             if (enquiry.referredByMemberId) {
                 const snap = await getDocs(
-                    query(collection(db, "users"), where("memberId", "==", enquiry.referredByMemberId))
+                    query(collection(db, `clubs/${club.id}/members`), where("memberId", "==", enquiry.referredByMemberId))
                 );
                 if (!snap.empty) {
                     const parentData = snap.docs[0].data();
@@ -248,7 +248,7 @@ function AcceptVisitingModal({ enquiry, onClose, onDone }: AcceptModalProps) {
             }
 
             // Create user doc with ALL enquiry fields
-            await addDoc(collection(db, "users"), {
+            await setDoc(doc(db, `clubs/${club.id}/members`, newDocId), {
                 id: newDocId,
                 name: enquiry.name,
                 phone: enquiry.phone,
@@ -284,7 +284,7 @@ function AcceptVisitingModal({ enquiry, onClose, onDone }: AcceptModalProps) {
             });
 
             // Create wallet
-            await addDoc(collection(db, "wallets"), {
+            await setDoc(doc(db, `clubs/${club.id}/members/${newDocId}/wallet`, "data"), {
                 userId: newDocId,
                 clubId: club.id,
                 currencyName: club.currencyName,
@@ -295,7 +295,7 @@ function AcceptVisitingModal({ enquiry, onClose, onDone }: AcceptModalProps) {
             // Remove password from enquiry doc (don't store password in Firestore)
             if (enquiryPassword) {
                 try {
-                    await updateDoc(doc(db, "enquiries", enquiry.id), {
+                    await updateDoc(doc(db, `clubs/${club.id}/enquiries`, enquiry.id), {
                         password: deleteField(),
                     });
                 } catch {
@@ -304,7 +304,7 @@ function AcceptVisitingModal({ enquiry, onClose, onDone }: AcceptModalProps) {
             }
 
             // Update enquiry status
-            await updateStatus.mutateAsync({ enquiryId: enquiry.id, status: "converted" });
+            await updateStatus.mutateAsync({ clubId: club.id, enquiryId: enquiry.id, status: "converted" });
 
             // WhatsApp URL
             const msg = encodeURIComponent(
@@ -386,7 +386,7 @@ export default function Enquiries() {
     const handleStatusChange = async (enquiryId: string, status: Enquiry["status"], notesOverride?: string) => {
         const notes = notesOverride ?? notesMap[enquiryId];
         try {
-            await updateStatus.mutateAsync({ enquiryId, status, ...(notes !== undefined && { notes }) });
+            await updateStatus.mutateAsync({ clubId: club!.id, enquiryId, status, ...(notes !== undefined && { notes }) });
             toast({ title: "Status updated" });
         } catch {
             toast({ title: "Failed to update", variant: "destructive" });
@@ -396,7 +396,7 @@ export default function Enquiries() {
     const handleReject = async () => {
         if (!rejectingId) return;
         try {
-            await updateStatus.mutateAsync({ enquiryId: rejectingId, status: "rejected" });
+            await updateStatus.mutateAsync({ clubId: club!.id, enquiryId: rejectingId, status: "rejected" });
             toast({ title: "Enquiry rejected" });
         } catch {
             toast({ title: "Failed to reject", variant: "destructive" });
@@ -416,8 +416,8 @@ export default function Enquiries() {
         if (!isExpanded && e.clubId === "{{CLUB_ID}}" && club) {
             try {
                 // Silently auto-correct bad data
-                await updateDoc(doc(db, "enquiries", e.id), { clubId: club.id });
-                updateStatus.mutate({ enquiryId: e.id, status: e.status }); // Triggers a cache invalidate
+                await updateDoc(doc(db, `clubs/${club.id}/enquiries`, e.id), { clubId: club.id });
+                updateStatus.mutate({ clubId: club.id, enquiryId: e.id, status: e.status }); // Triggers a cache invalidate
             } catch (err) {
                 console.error("Auto-fix failed:", err);
             }

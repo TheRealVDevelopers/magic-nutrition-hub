@@ -70,7 +70,7 @@ export default function TodaysMenuPage() {
     const handleRate = (rating: number, note: string) => {
         if (!ratingOrder) return;
         submitRating.mutate(
-            { orderId: ratingOrder.id, rating, ratingNote: note },
+            { clubId: club?.id || "", orderId: ratingOrder.id, rating, ratingNote: note },
             {
                 onSuccess: () => { toast({ title: "Thanks for your rating! ⭐" }); setRatingOrder(null); },
                 onError: (err: any) => toast({ title: "Error", description: err.message, variant: "destructive" }),

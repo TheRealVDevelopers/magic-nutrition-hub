@@ -13,7 +13,7 @@ export function useSubmitFeedback() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: async (input: Omit<Feedback, "id" | "createdAt">) => {
-            const ref = await addDoc(collection(db, "feedback"), {
+            const ref = await addDoc(collection(db, `clubs/${input.clubId}/feedback`), {
                 ...input,
                 createdAt: Timestamp.now(),
             });
@@ -32,8 +32,7 @@ export function useClubFeedback() {
         queryFn: async () => {
             const snap = await getDocs(
                 query(
-                    collection(db, "feedback"),
-                    where("clubId", "==", club!.id),
+                    collection(db, `clubs/${club!.id}/feedback`),
                     orderBy("createdAt", "desc")
                 )
             );
