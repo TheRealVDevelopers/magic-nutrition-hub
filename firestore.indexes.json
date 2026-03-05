@@ -107,29 +107,9 @@
             "queryScope": "COLLECTION",
             "fields": [
                 {
-                    "fieldPath": "email",
-                    "order": "ASCENDING"
-                }
-            ]
-        },
-        {
-            "collectionGroup": "members",
-            "queryScope": "COLLECTION",
-            "fields": [
-                {
                     "fieldPath": "referredBy",
                     "order": "ASCENDING"
                 },
-                {
-                    "fieldPath": "createdAt",
-                    "order": "DESCENDING"
-                }
-            ]
-        },
-        {
-            "collectionGroup": "announcements",
-            "queryScope": "COLLECTION",
-            "fields": [
                 {
                     "fieldPath": "createdAt",
                     "order": "DESCENDING"
@@ -174,26 +154,6 @@
                 },
                 {
                     "fieldPath": "createdAt",
-                    "order": "DESCENDING"
-                }
-            ]
-        },
-        {
-            "collectionGroup": "feedback",
-            "queryScope": "COLLECTION",
-            "fields": [
-                {
-                    "fieldPath": "createdAt",
-                    "order": "DESCENDING"
-                }
-            ]
-        },
-        {
-            "collectionGroup": "weighIns",
-            "queryScope": "COLLECTION",
-            "fields": [
-                {
-                    "fieldPath": "date",
                     "order": "DESCENDING"
                 }
             ]
