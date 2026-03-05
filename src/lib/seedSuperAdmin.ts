@@ -23,7 +23,7 @@ export async function seedSuperAdminIfNeeded(): Promise<void> {
     const uid = credential.user.uid;
 
     // Create Firestore user document
-    await setDoc(doc(db, "users", uid), {
+    await setDoc(doc(db, "superAdmins", uid), {
       name: "Super Admin",
       email: SUPERADMIN_EMAIL,
       role: "superAdmin",

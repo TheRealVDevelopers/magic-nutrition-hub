@@ -41,6 +41,8 @@ export default function CreateClub() {
                     name: data.name,
                     currencyName: data.currencyName,
                     domain: data.domain,
+                    landingPageUrl: "",
+                    landingPageImages: [],
                     parentClubId: data.parentClubId || null,
                     treePath: "",
                     theme: "custom",
@@ -96,9 +98,8 @@ export default function CreateClub() {
                 {[1, 2, 3].map((s) => (
                     <div
                         key={s}
-                        className={`h-1.5 flex-1 rounded-full transition-colors ${
-                            s <= step ? "bg-violet-500" : "bg-gray-200"
-                        }`}
+                        className={`h-1.5 flex-1 rounded-full transition-colors ${s <= step ? "bg-violet-500" : "bg-gray-200"
+                            }`}
                     />
                 ))}
             </div>
@@ -309,7 +310,10 @@ function HTMLUploadStep({
     async function handlePublish() {
         if (!htmlContent.trim()) return;
         try {
-            await uploadHTML(htmlContent);
+            // Replace {{CLUB_ID}} placeholder with the real Firestore document ID
+            // before uploading so enquiries are saved with the correct clubId.
+            const finalHtml = htmlContent.replace(/\{\{CLUB_ID\}\}/g, clubId);
+            await uploadHTML(finalHtml);
             toast({ title: "Landing page published successfully!" });
             onFinish();
         } catch {

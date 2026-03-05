@@ -14,8 +14,7 @@ export function useMenuItems(clubId: string | null) {
         enabled: !!clubId,
         queryFn: async () => {
             const q = query(
-                collection(db, "products"),
-                where("clubId", "==", clubId),
+                collection(db, `clubs/${clubId}/menu`),
                 where("isDeleted", "!=", true)
             );
             const snap = await getDocs(q);
@@ -38,8 +37,7 @@ export function useAvailableTodayItems(clubId: string | null) {
         queryFn: async () => {
             const todayStr = getTodayString();
             const q = query(
-                collection(db, "products"),
-                where("clubId", "==", clubId),
+                collection(db, `clubs/${clubId}/menu`),
                 where("isAvailableToday", "==", true),
                 where("availableDate", "==", todayStr)
             );
@@ -67,7 +65,7 @@ export function useAddMenuItem() {
             let photoUrl = data.item.photo || "";
 
             // If a file is provided, create the document first to get an ID, then upload the file using the ID
-            const docRef = await addDoc(collection(db, "products"), {
+            const docRef = await addDoc(collection(db, `clubs/${data.clubId}/menu`), {
                 clubId: data.clubId,
                 name: data.item.name || "",
                 category: data.item.category || "other",
@@ -114,7 +112,7 @@ export function useUpdateMenuItem() {
                 updatePayload.photo = await getDownloadURL(storageRef);
             }
 
-            await updateDoc(doc(db, "products", itemId), updatePayload);
+            await updateDoc(doc(db, `clubs/${clubId}/menu`, itemId), updatePayload);
         },
         onSuccess: (_, vars) => {
             qc.invalidateQueries({ queryKey: ["owner-menu"] });
@@ -126,8 +124,8 @@ export function useUpdateMenuItem() {
 export function useDeleteMenuItem() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: async (itemId: string) => {
-            await updateDoc(doc(db, "products", itemId), { isDeleted: true, isAvailableToday: false, updatedAt: Timestamp.now() });
+        mutationFn: async ({ clubId, itemId }: { clubId: string; itemId: string }) => {
+            await updateDoc(doc(db, `clubs/${clubId}/menu`, itemId), { isDeleted: true, isAvailableToday: false, updatedAt: Timestamp.now() });
         },
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ["owner-menu"] });
@@ -139,8 +137,8 @@ export function useDeleteMenuItem() {
 export function useToggleAvailability() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: async ({ itemId, available }: { itemId: string; available: boolean }) => {
-            await updateDoc(doc(db, "products", itemId), {
+        mutationFn: async ({ clubId, itemId, available }: { clubId: string; itemId: string; available: boolean }) => {
+            await updateDoc(doc(db, `clubs/${clubId}/menu`, itemId), {
                 isAvailableToday: available,
                 availableDate: available ? getTodayString() : null,
                 updatedAt: Timestamp.now()

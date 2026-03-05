@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from "firebase/firestore";
+import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -22,8 +22,9 @@ setPersistence(auth, browserLocalPersistence)
     .catch((error) => {
         console.error('Auth persistence error:', error);
     });
-export const db = initializeFirestore(app, {
-    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-});
+
+// Plain Firestore — no custom persistence to avoid IndexedDB conflicts.
+// React Query (staleTime: 2min) handles in-session caching for fast navigation.
+export const db = getFirestore(app);
 export const storage = getStorage(app);
 export default app;

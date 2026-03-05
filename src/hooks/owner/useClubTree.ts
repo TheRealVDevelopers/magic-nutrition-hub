@@ -13,16 +13,16 @@ async function fetchChildren(parentId: string): Promise<ClubTreeNode[]> {
     const q = query(collection(db, "clubs"), where("parentClubId", "==", parentId));
     const snap = await getDocs(q);
     const clubs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Club));
-    
+
     const nodes = await Promise.all(
         clubs.map(async (club) => {
-            const membersQ = query(collection(db, "users"), where("clubId", "==", club.id), where("role", "==", "member"));
+            const membersQ = query(collection(db, `clubs/${club.id}/members`));
             const membersSnap = await getDocs(membersQ);
             const children = await fetchChildren(club.id);
             return { club, memberCount: membersSnap.size, children };
         })
     );
-    
+
     return nodes;
 }
 

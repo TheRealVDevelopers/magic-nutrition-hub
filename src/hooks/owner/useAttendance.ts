@@ -13,14 +13,24 @@ export function useAttendanceByDate(clubId: string | null, date?: string) {
         queryKey: ["owner-attendance", clubId, d],
         enabled: !!clubId,
         queryFn: async () => {
-            const q = query(
-                collection(db, "attendance"),
-                where("clubId", "==", clubId),
-                where("date", "==", d),
-                orderBy("checkInTime", "desc")
-            );
-            const snap = await getDocs(q);
-            return snap.docs.map(d => ({ id: d.id, ...d.data() } as Attendance));
+            const membersQ = query(collection(db, `clubs/${clubId}/members`));
+            const memberSnap = await getDocs(membersQ);
+
+            let allAttendance: Attendance[] = [];
+
+            for (const memberDoc of memberSnap.docs) {
+                const q = query(
+                    collection(db, `clubs/${clubId}/members/${memberDoc.id}/attendance`),
+                    where("date", "==", d),
+                    orderBy("checkInTime", "desc")
+                );
+                const aSnap = await getDocs(q);
+                for (const doc of aSnap.docs) {
+                    allAttendance.push({ id: doc.id, ...doc.data() } as Attendance);
+                }
+            }
+            // re-sort combined list by desc checkInTime
+            return allAttendance.sort((a, b) => b.checkInTime.toMillis() - a.checkInTime.toMillis());
         },
     });
 }
@@ -38,8 +48,9 @@ export function useMarkAttendance() {
         }) => {
             const now = Timestamp.now();
             const date = data.date ?? todayStr();
-            const docId = `${data.clubId}_${date}_${data.userId}`;
-            await setDoc(doc(db, "attendance", docId), {
+            const docId = date; // Can just use date as doc id for simplicity since it's nested per member
+
+            await setDoc(doc(db, `clubs/${data.clubId}/members/${data.userId}/attendance`, docId), {
                 userId: data.userId,
                 userName: data.userName,
                 userPhoto: data.userPhoto || "",
@@ -55,6 +66,7 @@ export function useMarkAttendance() {
         },
         onSuccess: (_, vars) => {
             qc.invalidateQueries({ queryKey: ["owner-attendance", vars.clubId] });
+            qc.invalidateQueries({ queryKey: ["owner-attendance-stats", vars.clubId] });
         },
     });
 }
@@ -65,9 +77,20 @@ export function useAttendanceStats(clubId: string | null) {
         enabled: !!clubId,
         queryFn: async () => {
             const today = todayStr();
-            const q = query(collection(db, "attendance"), where("clubId", "==", clubId), where("date", "==", today));
-            const snap = await getDocs(q);
-            return { todayCount: snap.size, records: snap.docs.map(d => ({ id: d.id, ...d.data() } as Attendance)) };
+
+            const membersQ = query(collection(db, `clubs/${clubId}/members`));
+            const memberSnap = await getDocs(membersQ);
+
+            let allAttendance: Attendance[] = [];
+            for (const memberDoc of memberSnap.docs) {
+                const q = query(collection(db, `clubs/${clubId}/members/${memberDoc.id}/attendance`), where("date", "==", today));
+                const aSnap = await getDocs(q);
+                for (const d of aSnap.docs) {
+                    allAttendance.push({ id: d.id, ...d.data() } as Attendance);
+                }
+            }
+
+            return { todayCount: allAttendance.length, records: allAttendance };
         },
     });
 }

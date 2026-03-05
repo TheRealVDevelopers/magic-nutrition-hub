@@ -667,14 +667,16 @@ function LandingPageTab({ clubId, club }: { clubId: string; club: Club }) {
             // b) Upload with timestamped filename so old files are NOT overwritten
             const ts = Date.now();
             const htmlRef = ref(storage, `clubs/${clubId}/landing/landing_${ts}.html`);
-            await uploadString(htmlRef, htmlContent, "raw", { contentType: "text/html" });
+            // Replace {{CLUB_ID}} placeholder with the real club ID before uploading
+            const finalHtml = htmlContent.replace(/\{\{CLUB_ID\}\}/g, clubId);
+            await uploadString(htmlRef, finalHtml, "raw", { contentType: "text/html" });
             const newUrl = await getDownloadURL(htmlRef);
 
             // c) Update Firestore with new URL
             await updateDoc(doc(db, "clubs", clubId), { landingPageUrl: newUrl });
 
             // d) Keep textarea content (do NOT clear it)
-            setSavedHtml(htmlContent);
+            setSavedHtml(finalHtml);
 
             // e) Back to read-only
             setEditMode(false);
@@ -1352,7 +1354,7 @@ function EnquiriesTab({ clubId, clubName }: { clubId: string; clubName: string }
                                     <Select
                                         value={e.status}
                                         onValueChange={(v) => {
-                                            updateStatus.mutate({ enquiryId: e.id, status: v as Enquiry["status"] });
+                                            updateStatus.mutate({ clubId, enquiryId: e.id, status: v as Enquiry["status"] });
                                         }}
                                     >
                                         <SelectTrigger className="h-7 text-xs w-28" onClick={(ev) => ev.stopPropagation()}>

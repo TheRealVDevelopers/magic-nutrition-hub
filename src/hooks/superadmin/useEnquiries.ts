@@ -19,24 +19,24 @@ export function useClubFeedback(clubId?: string) {
     return useQuery({
         queryKey: ["superadmin", "club-feedback", clubId ?? "all"],
         queryFn: async () => {
-            let q;
+            let allFeedback: ClubFeedback[] = [];
+
             if (clubId) {
-                q = query(
-                    collection(db, "clubFeedback"),
-                    where("clubId", "==", clubId),
+                const q = query(
+                    collection(db, `clubs/${clubId}/feedback`),
                     orderBy("createdAt", "desc")
                 );
+                const snap = await getDocs(q);
+                allFeedback = snap.docs.map(d => ({ ...d.data() as Omit<ClubFeedback, 'id'>, id: d.id, clubId } as ClubFeedback));
             } else {
-                q = query(
-                    collection(db, "clubFeedback"),
-                    orderBy("createdAt", "desc")
-                );
+                const clubsSnap = await getDocs(collection(db, "clubs"));
+                for (const clubDoc of clubsSnap.docs) {
+                    const q = query(collection(db, `clubs/${clubDoc.id}/feedback`), orderBy("createdAt", "desc"));
+                    const snap = await getDocs(q);
+                    allFeedback.push(...snap.docs.map(d => ({ ...d.data() as Omit<ClubFeedback, 'id'>, id: d.id, clubId: clubDoc.id } as ClubFeedback)));
+                }
             }
-            const snap = await getDocs(q);
-            return snap.docs.map((d) => {
-                const data = d.data() as Omit<ClubFeedback, 'id'>;
-                return { ...data, id: d.id } as ClubFeedback;
-            });
+            return allFeedback.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
         },
     });
 }
@@ -48,10 +48,12 @@ export function useUpdateClubFeedbackStatus() {
 
     return useMutation({
         mutationFn: async ({
+            clubId,
             feedbackId,
             status,
             reply,
         }: {
+            clubId: string;
             feedbackId: string;
             status: ClubFeedback["status"];
             reply?: string;
@@ -61,7 +63,7 @@ export function useUpdateClubFeedbackStatus() {
                 updates.reply = reply;
                 updates.repliedAt = Timestamp.now();
             }
-            await updateDoc(doc(db, "clubFeedback", feedbackId), updates);
+            await updateDoc(doc(db, `clubs/${clubId}/feedback`, feedbackId), updates);
         },
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ["superadmin", "club-feedback"] });
@@ -75,13 +77,14 @@ export function useUnreadClubFeedbackCount() {
     return useQuery({
         queryKey: ["superadmin", "club-feedback", "unread-count"],
         queryFn: async () => {
-            const snap = await getDocs(
-                query(
-                    collection(db, "clubFeedback"),
-                    where("status", "==", "new")
-                )
-            );
-            return snap.size;
+            let count = 0;
+            const clubsSnap = await getDocs(collection(db, "clubs"));
+            for (const clubDoc of clubsSnap.docs) {
+                const q = query(collection(db, `clubs/${clubDoc.id}/feedback`), where("status", "==", "new"));
+                const snap = await getDocs(q);
+                count += snap.size;
+            }
+            return count;
         },
         refetchInterval: 60_000,
     });

@@ -28,7 +28,8 @@ import {
 } from "@/hooks/superadmin/useEnquiries";
 import { useAllClubs } from "@/hooks/useSuperAdmin";
 import type { ClubFeedback } from "@/types/firestore";
-import { Timestamp } from "firebase/firestore";
+import { Timestamp, collection, query, where, getDocs, writeBatch } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 // ─── Status badge colors ──────────────────────────────────────────────────
 
@@ -95,10 +96,11 @@ export default function Enquiries() {
         return list;
     }, [feedbackList, filterClub, filterStatus, filterCategory, search]);
 
-    const handleReply = async (feedbackId: string) => {
+    const handleReply = async (clubId: string, feedbackId: string) => {
         if (!replyText.trim()) return;
         try {
             await updateStatus.mutateAsync({
+                clubId,
                 feedbackId,
                 status: "resolved",
                 reply: replyText.trim(),
@@ -111,12 +113,56 @@ export default function Enquiries() {
         }
     };
 
-    const handleMarkRead = async (feedbackId: string) => {
+    const handleMarkRead = async (clubId: string, feedbackId: string) => {
         try {
-            await updateStatus.mutateAsync({ feedbackId, status: "read" });
+            await updateStatus.mutateAsync({ clubId, feedbackId, status: "read" });
             toast({ title: "Marked as read" });
         } catch {
             toast({ title: "Error", variant: "destructive" });
+        }
+    };
+
+    const [fixing, setFixing] = useState(false);
+    const handleFixOrphanedEnquiries = async () => {
+        setFixing(true);
+        try {
+            // Step 1: find the real club ID (first club in Firestore)
+            const clubsSnap = await getDocs(collection(db, "clubs"));
+            if (clubsSnap.empty) {
+                toast({ title: "No clubs found in Firestore", variant: "destructive" });
+                return;
+            }
+            const actualClubId = clubsSnap.docs[0].id;
+
+            // Step 2: find enquiries with the literal placeholder as clubId
+            const snapshot = await getDocs(
+                query(
+                    collection(db, "enquiries"),
+                    where("clubId", "==", "{{CLUB_ID}}")
+                )
+            );
+
+            if (snapshot.empty) {
+                toast({ title: "No orphaned enquiries found — nothing to fix ✅" });
+                return;
+            }
+
+            // Step 3: batch-update them with the real club ID
+            const batch = writeBatch(db);
+            snapshot.forEach((docSnap) => {
+                batch.update(docSnap.ref, { clubId: actualClubId });
+            });
+            await batch.commit();
+
+            toast({ title: `✅ Fixed ${snapshot.size} orphaned enquiries → ${actualClubId}` });
+        } catch (err: unknown) {
+            toast({
+                title: "Fix failed",
+                description: err instanceof Error ? err.message : "Unknown error",
+                variant: "destructive",
+            });
+        } finally {
+            setFixing(false);
         }
     };
 
@@ -131,15 +177,26 @@ export default function Enquiries() {
                         {feedbackList && ` · ${filtered.length} of ${feedbackList.length}`}
                     </p>
                 </div>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => exportClubFeedbackToCSV(filtered, "club-feedback.csv")}
-                    disabled={!filtered.length}
-                >
-                    Export CSV
-                </Button>
+                <div className="flex gap-2">
+                    <Button
+                        variant="default"
+                        size="sm"
+                        className="gap-1.5 bg-orange-500 hover:bg-orange-600 text-white"
+                        onClick={handleFixOrphanedEnquiries}
+                        disabled={fixing}
+                    >
+                        {fixing ? "Fixing…" : "Fix Orphaned Enquiries"}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5"
+                        onClick={() => exportClubFeedbackToCSV(filtered, "club-feedback.csv")}
+                        disabled={!filtered.length}
+                    >
+                        Export CSV
+                    </Button>
+                </div>
             </div>
 
             {/* Filters */}
@@ -301,7 +358,7 @@ export default function Enquiries() {
                                                 <Button
                                                     size="sm"
                                                     className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
-                                                    onClick={() => handleReply(fb.id)}
+                                                    onClick={() => handleReply(fb.clubId!, fb.id)}
                                                     disabled={!replyText.trim() || updateStatus.isPending}
                                                 >
                                                     <CheckCircle className="w-3.5 h-3.5" />
@@ -323,7 +380,7 @@ export default function Enquiries() {
                                                     size="sm"
                                                     variant="outline"
                                                     className="gap-1.5 text-xs"
-                                                    onClick={() => handleMarkRead(fb.id)}
+                                                    onClick={() => handleMarkRead(fb.clubId!, fb.id)}
                                                     disabled={updateStatus.isPending}
                                                 >
                                                     <Eye className="w-3.5 h-3.5" />

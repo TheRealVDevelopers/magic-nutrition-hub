@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     collection,
     query,
-    where,
     orderBy,
     onSnapshot,
     addDoc,
@@ -28,8 +27,7 @@ export function useAnnouncements(clubId: string | null) {
         }
 
         const q = query(
-            collection(db, "announcements"),
-            where("clubId", "==", clubId),
+            collection(db, `clubs/${clubId}/announcements`),
             orderBy("createdAt", "desc")
         );
 
@@ -61,7 +59,7 @@ export function useSendAnnouncement(clubId: string | null) {
         mutationFn: async (data: Omit<Announcement, "id" | "clubId" | "createdAt" | "createdBy" | "readBy">) => {
             if (!clubId) throw new Error("No club ID");
 
-            await addDoc(collection(db, "announcements"), {
+            await addDoc(collection(db, `clubs/${clubId}/announcements`), {
                 ...data,
                 clubId,
                 createdBy: "owner",
@@ -78,9 +76,9 @@ export function useSendAnnouncement(clubId: string | null) {
 
 export function useDeleteAnnouncement() {
     return useMutation({
-        mutationFn: async (announcementId: string) => {
-            if (!announcementId) throw new Error("No announcement ID");
-            await deleteDoc(doc(db, "announcements", announcementId));
+        mutationFn: async ({ clubId, announcementId }: { clubId: string; announcementId: string }) => {
+            if (!announcementId || !clubId) throw new Error("No announcement ID or club ID");
+            await deleteDoc(doc(db, `clubs/${clubId}/announcements`, announcementId));
         },
     });
 }

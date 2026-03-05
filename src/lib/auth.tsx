@@ -12,7 +12,7 @@ import {
     onAuthStateChanged,
     User as FirebaseUser,
 } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, query, collection, where, getDocs } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import type { User, UserRole } from "@/types/firestore";
 
@@ -53,32 +53,77 @@ function loadProfileFromStorage(): User | null {
 
 // ─── Helper: fetch user profile from Firestore ──────────────────────────
 
-async function fetchUserProfile(uid: string): Promise<User | null> {
-    // Return memory cache if uid matches
-    if (_cachedProfile && _cachedProfile.id === uid) {
-        return _cachedProfile;
+async function fetchUserProfile(uid: string, email?: string | null): Promise<User | null> {
+    // Return memory cache if uid or email matches
+    if (_cachedProfile) {
+        if (_cachedProfile.id === uid) return _cachedProfile;
+        if (email && (_cachedProfile as any).email === email) return _cachedProfile;
     }
+
     // Check localStorage next
     const stored = loadProfileFromStorage();
-    if (stored && stored.id === uid) {
-        _cachedProfile = stored;
-        return stored;
+    if (stored) {
+        if (stored.id === uid || (email && (stored as any).email === email)) {
+            _cachedProfile = stored;
+            return stored;
+        }
     }
-    // Fetch from Firestore
-    try {
-        const userDocRef = doc(db, "users", uid);
-        const userSnap = await getDoc(userDocRef);
 
-        if (!userSnap.exists()) {
-            return null;
+    try {
+        // Step 1: Check superAdmins first
+        const superAdminSnap = await getDoc(doc(db, 'superAdmins', uid));
+        if (superAdminSnap.exists()) {
+            const profile = { id: uid, ...superAdminSnap.data(), role: 'superAdmin' } as User;
+            _cachedProfile = profile;
+            saveProfileToStorage(profile);
+            return profile;
         }
 
-        const profile = { id: userSnap.id, ...userSnap.data() } as User;
-        _cachedProfile = profile;
-        saveProfileToStorage(profile);
-        return profile;
+        // Step 2: Check if owner of any club
+        const clubsSnap = await getDocs(
+            query(collection(db, 'clubs'), where('ownerUserId', '==', uid))
+        );
+        if (!clubsSnap.empty) {
+            const clubDoc = clubsSnap.docs[0];
+            const ownerSnap = await getDoc(doc(db, `clubs/${clubDoc.id}/owner/profile`));
+            const profile = {
+                id: uid,
+                clubId: clubDoc.id,
+                ...(ownerSnap.exists() ? ownerSnap.data() : {}),
+                role: 'clubOwner'
+            } as User;
+            _cachedProfile = profile;
+            saveProfileToStorage(profile);
+            return profile;
+        }
+
+        // Step 3: Check members across all clubs by email
+        if (email) {
+            const allClubsSnap = await getDocs(collection(db, 'clubs'));
+            for (const clubDoc of allClubsSnap.docs) {
+                const membersSnap = await getDocs(
+                    query(
+                        collection(db, `clubs/${clubDoc.id}/members`),
+                        where('email', '==', email)
+                    )
+                );
+                if (!membersSnap.empty) {
+                    const profile = {
+                        id: membersSnap.docs[0].id,
+                        clubId: clubDoc.id,
+                        ...membersSnap.docs[0].data(),
+                        role: 'member'
+                    } as unknown as User;
+                    _cachedProfile = profile;
+                    saveProfileToStorage(profile);
+                    return profile;
+                }
+            }
+        }
+
+        return null;
     } catch (error) {
-        console.error("Error fetching user profile:", error);
+        console.error('fetchUserProfile error:', error);
         return null;
     }
 }
@@ -91,7 +136,7 @@ export async function signIn(
 ): Promise<User> {
     try {
         const credential = await signInWithEmailAndPassword(auth, email, password);
-        const profile = await fetchUserProfile(credential.user.uid);
+        const profile = await fetchUserProfile(credential.user.uid, credential.user.email);
 
         if (!profile) {
             throw new Error(
@@ -192,8 +237,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setFirebaseUser(fbUser);
 
             if (fbUser) {
-                // fetchUserProfile uses cache — instant if uid matches stored profile
-                const profile = await fetchUserProfile(fbUser.uid).catch(() => null);
+                // Pass email directly — no race condition with auth.currentUser
+                const profile = await fetchUserProfile(fbUser.uid, fbUser.email).catch(() => null);
                 setUserProfile(profile);
                 setRole(profile?.role ?? null);
                 if (profile) saveProfileToStorage(profile);
@@ -232,18 +277,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Bust the memory cache so fetchUserProfile actually hits Firestore
         _cachedProfile = null;
         localStorage.removeItem(PROFILE_CACHE_KEY);
-        const profile = await fetchUserProfile(firebaseUser.uid).catch(() => null);
-        // fetchUserProfile re-populates cache internally but we busted it, so do a direct fetch
-        try {
-            const snap = await getDoc(doc(db, "users", firebaseUser.uid));
-            if (snap.exists()) {
-                const fresh = { id: snap.id, ...snap.data() } as User;
-                _cachedProfile = fresh;
-                saveProfileToStorage(fresh);
-                setUserProfile(fresh);
-                setRole(fresh.role ?? null);
-            }
-        } catch { /* ignore */ }
+        // Use email-based lookup (works for both regular users and members)
+        const profile = await fetchUserProfile(firebaseUser.uid, firebaseUser.email).catch(() => null);
+        if (profile) {
+            _cachedProfile = profile;
+            saveProfileToStorage(profile);
+            setUserProfile(profile);
+            setRole(profile.role ?? null);
+        }
     };
 
     return (

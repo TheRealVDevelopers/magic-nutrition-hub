@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAllClubs, usePlatformStats } from "@/hooks/useSuperAdmin";
-import { useUnreadEnquiryCount } from "@/hooks/superadmin/useEnquiries";
+import { useUnreadClubFeedbackCount } from "@/hooks/superadmin/useEnquiries";
 import { usePaymentStatus } from "@/hooks/superadmin/useClubPayments";
 import type { Club } from "@/types/firestore";
 
@@ -70,7 +70,7 @@ export default function SuperAdminDashboard() {
     const navigate = useNavigate();
     const { data: clubs, isLoading: clubsLoading } = useAllClubs();
     const { data: stats, isLoading: statsLoading } = usePlatformStats();
-    const { data: unreadEnquiries = 0 } = useUnreadEnquiryCount();
+    const { data: unreadFeedback = 0 } = useUnreadClubFeedbackCount();
 
     const isLoading = clubsLoading || statsLoading;
 
@@ -133,11 +133,11 @@ export default function SuperAdminDashboard() {
                         color="bg-emerald-500"
                     />
                     <StatCard
-                        label="New Enquiries"
-                        value={unreadEnquiries}
+                        label="New Feedback"
+                        value={unreadFeedback}
                         icon={MessageSquare}
                         color="bg-orange-500"
-                        badge={unreadEnquiries}
+                        badge={unreadFeedback}
                         onClick={() => navigate("/superadmin/enquiries")}
                     />
                 </div>
@@ -274,8 +274,8 @@ export default function SuperAdminDashboard() {
                             <span className="text-sm font-semibold text-red-500">{overdueClubs.length}</span>
                         </div>
                         <div className="flex justify-between items-center py-2">
-                            <span className="text-sm text-muted-foreground">New Enquiries</span>
-                            <span className="text-sm font-semibold text-orange-500">{unreadEnquiries}</span>
+                            <span className="text-sm text-muted-foreground">New Feedback</span>
+                            <span className="text-sm font-semibold text-orange-500">{unreadFeedback}</span>
                         </div>
                     </div>
                     <div className="pt-2">

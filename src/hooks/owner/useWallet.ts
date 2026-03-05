@@ -12,19 +12,29 @@ export function useWallets(clubId: string | null) {
         queryKey: ["owner-wallets", clubId],
         enabled: !!clubId,
         queryFn: async () => {
-            const q = query(collection(db, "wallets"), where("clubId", "==", clubId));
-            const snap = await getDocs(q);
-            return snap.docs.map(d => ({ ...d.data(), id: d.id } as Wallet & { id: string }));
+            // First fetch all members for this club
+            const membersQ = query(collection(db, `clubs/${clubId}/members`));
+            const memberSnap = await getDocs(membersQ);
+
+            const wallets: (Wallet & { id: string })[] = [];
+            for (const memberDoc of memberSnap.docs) {
+                const walletSnap = await getDocs(collection(db, `clubs/${clubId}/members/${memberDoc.id}/wallet`));
+                if (!walletSnap.empty) {
+                    const data = walletSnap.docs[0].data() as Wallet;
+                    wallets.push({ ...data, id: walletSnap.docs[0].id });
+                }
+            }
+            return wallets;
         },
     });
 }
 
-export function useWallet(memberId: string | null) {
+export function useWallet(clubId: string | null, memberId: string | null) {
     return useQuery({
         queryKey: ["owner-wallet", memberId],
-        enabled: !!memberId,
+        enabled: !!memberId && !!clubId,
         queryFn: async () => {
-            const q = query(collection(db, "wallets"), where("userId", "==", memberId));
+            const q = query(collection(db, `clubs/${clubId}/members/${memberId}/wallet`));
             const snap = await getDocs(q);
             if (snap.empty) return null;
             return { ...snap.docs[0].data(), id: snap.docs[0].id } as Wallet & { id: string };
@@ -37,14 +47,28 @@ export function useTransactions(clubId: string | null, memberId?: string) {
         queryKey: ["owner-transactions", clubId, memberId],
         enabled: !!clubId,
         queryFn: async () => {
-            let q;
             if (memberId) {
-                q = query(collection(db, "walletTransactions"), where("userId", "==", memberId), where("clubId", "==", clubId), orderBy("createdAt", "desc"));
+                const q = query(
+                    collection(db, `clubs/${clubId}/members/${memberId}/transactions`),
+                    orderBy("createdAt", "desc")
+                );
+                const snap = await getDocs(q);
+                return snap.docs.map(d => ({ ...(d.data() as Record<string, unknown>), id: d.id } as WalletTransaction));
             } else {
-                q = query(collection(db, "walletTransactions"), where("clubId", "==", clubId), orderBy("createdAt", "desc"));
+                // If memberId is NOT provided, the owner wants to see ALL transactions across the club.
+                // We fetch all members, then all their transactions, and combine & sort them.
+                const membersQ = query(collection(db, `clubs/${clubId}/members`));
+                const memberSnap = await getDocs(membersQ);
+                let allTransactions: WalletTransaction[] = [];
+
+                for (const memberDoc of memberSnap.docs) {
+                    const txSnap = await getDocs(query(collection(db, `clubs/${clubId}/members/${memberDoc.id}/transactions`), orderBy("createdAt", "desc")));
+                    for (const doc of txSnap.docs) {
+                        allTransactions.push({ ...(doc.data() as Record<string, unknown>), id: doc.id } as WalletTransaction);
+                    }
+                }
+                return allTransactions.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
             }
-            const snap = await getDocs(q);
-            return snap.docs.map(d => ({ ...(d.data() as Record<string, unknown>), id: d.id } as WalletTransaction));
         },
     });
 }
@@ -58,8 +82,7 @@ export function usePendingTopupRequests(clubId: string | null) {
     useEffect(() => {
         if (!clubId) { setLoading(false); return; }
         const q = query(
-            collection(db, "topupRequests"),
-            where("clubId", "==", clubId),
+            collection(db, `clubs/${clubId}/topupRequests`),
             where("status", "==", "pending"),
             orderBy("requestedAt", "desc")
         );
@@ -91,12 +114,12 @@ export function useTopUp() {
             const now = Timestamp.now();
             const newBalance = data.currentBalance + data.amount;
 
-            await updateDoc(doc(db, "wallets", data.walletDocId), {
+            await updateDoc(doc(db, `clubs/${data.clubId}/members/${data.memberId}/wallet`, data.walletDocId), {
                 balance: newBalance,
                 lastUpdated: serverTimestamp(),
             });
 
-            await addDoc(collection(db, "walletTransactions"), {
+            await addDoc(collection(db, `clubs/${data.clubId}/members/${data.memberId}/transactions`), {
                 userId: data.memberId,
                 clubId: data.clubId,
                 type: "credit",
@@ -136,12 +159,12 @@ export function useApproveTopup() {
             const now = Timestamp.now();
             const newBalance = currentBalance + approvedAmount;
 
-            await updateDoc(doc(db, "wallets", walletDocId), {
+            await updateDoc(doc(db, `clubs/${request.clubId}/members/${request.memberId}/wallet`, walletDocId), {
                 balance: newBalance,
                 lastUpdated: serverTimestamp(),
             });
 
-            await addDoc(collection(db, "walletTransactions"), {
+            await addDoc(collection(db, `clubs/${request.clubId}/members/${request.memberId}/transactions`), {
                 userId: request.memberId,
                 clubId: request.clubId,
                 type: "credit",
@@ -157,7 +180,7 @@ export function useApproveTopup() {
                 createdAt: now,
             });
 
-            await updateDoc(doc(db, "topupRequests", request.id), {
+            await updateDoc(doc(db, `clubs/${request.clubId}/topupRequests`, request.id), {
                 status: "approved",
                 approvedAmount,
                 resolvedAt: now,
@@ -173,8 +196,8 @@ export function useApproveTopup() {
 
 export function useRejectTopup() {
     return useMutation({
-        mutationFn: async (data: { requestId: string; reason?: string }) => {
-            await updateDoc(doc(db, "topupRequests", data.requestId), {
+        mutationFn: async (data: { clubId: string; requestId: string; reason?: string }) => {
+            await updateDoc(doc(db, `clubs/${data.clubId}/topupRequests`, data.requestId), {
                 status: "rejected",
                 rejectionReason: data.reason ?? "",
                 resolvedAt: Timestamp.now(),
@@ -186,8 +209,8 @@ export function useRejectTopup() {
 
 // ─── Re-export wallet lookup by userId for convenience ──────────────────────
 
-export async function getWalletByUserId(memberId: string): Promise<(Wallet & { id: string }) | null> {
-    const q = query(collection(db, "wallets"), where("userId", "==", memberId));
+export async function getWalletByUserId(clubId: string, memberId: string): Promise<(Wallet & { id: string }) | null> {
+    const q = query(collection(db, `clubs/${clubId}/members/${memberId}/wallet`));
     const snap = await getDocs(q);
     if (snap.empty) return null;
     return { ...snap.docs[0].data(), id: snap.docs[0].id } as Wallet & { id: string };

@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
     collection, query, where, orderBy, getDocs, addDoc, updateDoc,
-    doc, Timestamp, serverTimestamp, limit, increment, arrayUnion,
+    doc, serverTimestamp, increment, arrayUnion,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { checkMilestones, type MilestoneData } from "@/utils/checkMilestones";
@@ -14,14 +14,33 @@ export function useWeighIns(clubId: string | null, memberId?: string) {
         queryKey: ["weighIns", clubId, memberId ?? "all"],
         enabled: !!clubId,
         queryFn: async () => {
-            const constraints = [
-                where("clubId", "==", clubId),
-                orderBy("createdAt", "desc"),
-            ];
-            if (memberId) constraints.splice(1, 0, where("memberId", "==", memberId));
-            const q = query(collection(db, "weighIns"), ...constraints);
-            const snap = await getDocs(q);
-            return snap.docs.map((d) => ({ id: d.id, ...d.data() } as WeighIn));
+            if (memberId) {
+                const q = query(
+                    collection(db, `clubs/${clubId}/members/${memberId}/weighIns`),
+                    orderBy("createdAt", "desc")
+                );
+                const snap = await getDocs(q);
+                return snap.docs.map((d) => ({ id: d.id, ...d.data() } as WeighIn));
+            } else {
+                // Fetch all members, then all weigh-ins
+                const membersQ = query(collection(db, `clubs/${clubId}/members`));
+                const memberSnap = await getDocs(membersQ);
+                let allWeighIns: WeighIn[] = [];
+
+                for (const memberDoc of memberSnap.docs) {
+                    const wSnap = await getDocs(
+                        query(collection(db, `clubs/${clubId}/members/${memberDoc.id}/weighIns`), orderBy("createdAt", "desc"))
+                    );
+                    for (const d of wSnap.docs) {
+                        allWeighIns.push({ id: d.id, ...d.data() } as WeighIn);
+                    }
+                }
+                return allWeighIns.sort((a, b) => {
+                    const tA = a.createdAt?.toMillis?.() || 0;
+                    const tB = b.createdAt?.toMillis?.() || 0;
+                    return tB - tA;
+                });
+            }
         },
     });
 }
@@ -61,7 +80,7 @@ export function useRecordWeighIn() {
             const today = new Date().toISOString().split("T")[0]; // "2026-03-05"
 
             // 1. Write weigh-in document
-            await addDoc(collection(db, "weighIns"), {
+            await addDoc(collection(db, `clubs/${clubId}/members/${memberId}/weighIns`), {
                 memberId,
                 clubId,
                 weight,
@@ -83,7 +102,7 @@ export function useRecordWeighIn() {
             if (!startingWeight && totalWeighIns === 0) {
                 memberUpdate.startingWeight = weight;
             }
-            await updateDoc(doc(db, "users", memberId), memberUpdate);
+            await updateDoc(doc(db, `clubs/${clubId}/members`, memberId), memberUpdate);
 
             // 3. Check milestones
             const totalLost = (startingWeight || weight) - weight;
@@ -96,7 +115,7 @@ export function useRecordWeighIn() {
             const newBadges = checkMilestones(milestoneData, existingBadges);
 
             if (newBadges.length > 0) {
-                await updateDoc(doc(db, "users", memberId), {
+                await updateDoc(doc(db, `clubs/${clubId}/members`, memberId), {
                     badges: arrayUnion(...newBadges),
                 });
             }
@@ -127,12 +146,14 @@ export function useLeaderboard(clubId: string | null, period: "month" | "alltime
         queryKey: ["leaderboard", clubId, period],
         enabled: !!clubId,
         queryFn: async () => {
+            const membersSnap = await getDocs(query(collection(db, `clubs/${clubId}/members`)));
+            const memberMap: Record<string, User> = {};
+            for (const d of membersSnap.docs) memberMap[d.id] = d.data() as User;
+
+            const entries: LeaderboardEntry[] = [];
+
             if (period === "alltime") {
                 // All-time: use startingWeight vs currentWeight from members
-                const membersSnap = await getDocs(
-                    query(collection(db, "users"), where("clubId", "==", clubId), where("role", "==", "member"))
-                );
-                const entries: LeaderboardEntry[] = [];
                 for (const d of membersSnap.docs) {
                     const m = d.data() as User;
                     const start = m.startingWeight ?? 0;
@@ -150,46 +171,30 @@ export function useLeaderboard(clubId: string | null, period: "month" | "alltime
                 }
                 return entries.sort((a, b) => b.weightLost - a.weightLost).slice(0, 10);
             } else {
-                // This month: first weigh-in vs last weigh-in of month
+                // This month: first weigh-in vs last weigh-in of month for each member
                 const now = new Date();
                 const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-                const weighInsSnap = await getDocs(
-                    query(
-                        collection(db, "weighIns"),
-                        where("clubId", "==", clubId),
-                        where("date", ">=", monthStart),
-                        orderBy("date", "asc")
-                    )
-                );
 
-                // Group by member
-                const memberWeighIns: Record<string, WeighIn[]> = {};
-                for (const d of weighInsSnap.docs) {
-                    const w = { id: d.id, ...d.data() } as WeighIn;
-                    if (!memberWeighIns[w.memberId]) memberWeighIns[w.memberId] = [];
-                    memberWeighIns[w.memberId].push(w);
-                }
+                for (const d of membersSnap.docs) {
+                    const wSnap = await getDocs(
+                        query(
+                            collection(db, `clubs/${clubId}/members/${d.id}/weighIns`),
+                            where("date", ">=", monthStart),
+                            orderBy("date", "asc")
+                        )
+                    );
 
-                // Get member info
-                const memberIds = Object.keys(memberWeighIns);
-                if (memberIds.length === 0) return [];
+                    if (wSnap.empty) continue;
 
-                const membersSnap = await getDocs(
-                    query(collection(db, "users"), where("clubId", "==", clubId), where("role", "==", "member"))
-                );
-                const memberMap: Record<string, User> = {};
-                for (const d of membersSnap.docs) memberMap[d.id] = d.data() as User;
-
-                const entries: LeaderboardEntry[] = [];
-                for (const [mid, weighIns] of Object.entries(memberWeighIns)) {
-                    if (weighIns.length < 1) continue;
+                    const weighIns = wSnap.docs.map(doc => doc.data() as WeighIn);
                     const first = weighIns[0].weight;
                     const last = weighIns[weighIns.length - 1].weight;
                     const lost = +(first - last).toFixed(1);
+
                     if (lost > 0) {
-                        const m = memberMap[mid];
+                        const m = memberMap[d.id];
                         entries.push({
-                            memberId: mid,
+                            memberId: d.id,
                             memberName: m?.name ?? "Unknown",
                             memberPhoto: m?.photo ?? "",
                             weightLost: lost,
@@ -222,42 +227,31 @@ export function useDrasticChanges(clubId: string | null) {
             weekAgo.setDate(weekAgo.getDate() - 7);
             const weekAgoStr = weekAgo.toISOString().split("T")[0];
 
-            const snap = await getDocs(
-                query(
-                    collection(db, "weighIns"),
-                    where("clubId", "==", clubId),
-                    where("date", ">=", weekAgoStr),
-                    orderBy("date", "asc")
-                )
-            );
-
-            // Group by member — first vs last of week
-            const memberWeighIns: Record<string, WeighIn[]> = {};
-            for (const d of snap.docs) {
-                const w = { id: d.id, ...d.data() } as WeighIn;
-                if (!memberWeighIns[w.memberId]) memberWeighIns[w.memberId] = [];
-                memberWeighIns[w.memberId].push(w);
-            }
-
-            // Get member info
-            const membersSnap = await getDocs(
-                query(collection(db, "users"), where("clubId", "==", clubId), where("role", "==", "member"))
-            );
-            const memberMap: Record<string, User> = {};
-            for (const d of membersSnap.docs) memberMap[d.id] = d.data() as User;
-
+            const membersSnap = await getDocs(query(collection(db, `clubs/${clubId}/members`)));
             const alerts: DrasticChangeAlert[] = [];
-            for (const [mid, weighIns] of Object.entries(memberWeighIns)) {
-                if (weighIns.length < 2) continue;
+
+            for (const d of membersSnap.docs) {
+                const wSnap = await getDocs(
+                    query(
+                        collection(db, `clubs/${clubId}/members/${d.id}/weighIns`),
+                        where("date", ">=", weekAgoStr),
+                        orderBy("date", "asc")
+                    )
+                );
+
+                if (wSnap.size < 2) continue;
+
+                const weighIns = wSnap.docs.map(doc => doc.data() as WeighIn);
                 const first = weighIns[0].weight;
                 const last = weighIns[weighIns.length - 1].weight;
                 const change = +(first - last).toFixed(1); // positive = lost
-                const m = memberMap[mid];
+
+                const m = d.data() as User;
 
                 if (change < -2) {
                     // Gained more than 2kg
                     alerts.push({
-                        memberId: mid,
+                        memberId: d.id,
                         memberName: m?.name ?? "Unknown",
                         memberPhoto: m?.photo ?? "",
                         change,
@@ -266,7 +260,7 @@ export function useDrasticChanges(clubId: string | null) {
                 } else if (change > 3) {
                     // Lost more than 3kg (too fast)
                     alerts.push({
-                        memberId: mid,
+                        memberId: d.id,
                         memberName: m?.name ?? "Unknown",
                         memberPhoto: m?.photo ?? "",
                         change,
@@ -278,3 +272,4 @@ export function useDrasticChanges(clubId: string | null) {
         },
     });
 }
+

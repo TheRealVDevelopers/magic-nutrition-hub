@@ -8,9 +8,14 @@ export function useEnquiries(clubId: string | null) {
         queryKey: ["owner-enquiries", clubId],
         enabled: !!clubId,
         queryFn: async () => {
-            const q = query(collection(db, "enquiries"), where("clubId", "==", clubId), orderBy("createdAt", "desc"));
+            const q = query(collection(db, `clubs/${clubId}/enquiries`));
             const snap = await getDocs(q);
-            return snap.docs.map(d => ({ id: d.id, ...d.data() } as Enquiry));
+            const data = snap.docs.map(d => ({ id: d.id, ...d.data() } as Enquiry));
+            return data.sort((a, b) => {
+                const timeA = a.createdAt?.toMillis?.() || 0;
+                const timeB = b.createdAt?.toMillis?.() || 0;
+                return timeB - timeA;
+            });
         },
     });
 }
@@ -20,7 +25,7 @@ export function useUnreadEnquiryCount(clubId: string | null) {
         queryKey: ["owner-enquiries-unread", clubId],
         enabled: !!clubId,
         queryFn: async () => {
-            const q = query(collection(db, "enquiries"), where("clubId", "==", clubId), where("status", "==", "new"));
+            const q = query(collection(db, `clubs/${clubId}/enquiries`), where("status", "==", "new"));
             const snap = await getDocs(q);
             return snap.size;
         },
@@ -31,10 +36,10 @@ export function useUnreadEnquiryCount(clubId: string | null) {
 export function useUpdateEnquiryStatus() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: async ({ enquiryId, status, notes }: { enquiryId: string; status: Enquiry["status"]; notes?: string }) => {
+        mutationFn: async ({ clubId, enquiryId, status, notes }: { clubId: string; enquiryId: string; status: Enquiry["status"]; notes?: string }) => {
             const updates: Record<string, unknown> = { status };
             if (notes !== undefined) updates.notes = notes;
-            await updateDoc(doc(db, "enquiries", enquiryId), updates);
+            await updateDoc(doc(db, `clubs/${clubId}/enquiries`, enquiryId), updates);
         },
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ["owner-enquiries"] });

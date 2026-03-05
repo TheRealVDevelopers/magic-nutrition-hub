@@ -22,8 +22,7 @@ export function useTodayOrders(clubId: string | null) {
         setIsLoading(true);
         const today = todayStr();
         const q = query(
-            collection(db, "orders"),
-            where("clubId", "==", clubId),
+            collection(db, `clubs/${clubId}/orders`),
             where("date", "==", today),
             orderBy("createdAt", "desc")
         );
@@ -64,7 +63,7 @@ export function usePlaceOrder() {
             const batch = writeBatch(db);
 
             // 1. Create Order
-            const orderRef = doc(collection(db, "orders"));
+            const orderRef = doc(collection(db, `clubs/${data.clubId}/orders`));
             batch.set(orderRef, {
                 clubId: data.clubId,
                 memberId: data.memberId,
@@ -84,14 +83,14 @@ export function usePlaceOrder() {
             });
 
             // 2. Deduct Wallet
-            const walletRef = doc(db, "wallets", data.walletDocId);
+            const walletRef = doc(db, `clubs/${data.clubId}/members/${data.memberId}/wallet`, "data");
             batch.update(walletRef, {
                 balance: newBalance,
                 lastUpdated: now,
             });
 
             // 3. Create Transaction
-            const transactionRef = doc(collection(db, "walletTransactions"));
+            const transactionRef = doc(collection(db, `clubs/${data.clubId}/members/${data.memberId}/transactions`));
             batch.set(transactionRef, {
                 userId: data.memberId,
                 clubId: data.clubId,
@@ -123,12 +122,12 @@ export function usePlaceOrder() {
 
 export function useUpdateOrderStatus() {
     return useMutation({
-        mutationFn: async ({ orderId, status }: { orderId: string; status: Order["status"] }) => {
+        mutationFn: async ({ clubId, orderId, status }: { clubId: string; orderId: string; status: Order["status"] }) => {
             const updates: Record<string, unknown> = { status, updatedAt: Timestamp.now() };
             if (status === "served") updates.servedAt = Timestamp.now();
 
             const batch = writeBatch(db);
-            batch.update(doc(db, "orders", orderId), updates);
+            batch.update(doc(db, `clubs/${clubId}/orders`, orderId), updates);
             await batch.commit();
         },
     });
@@ -158,21 +157,21 @@ export function useCancelOrder() {
             const batch = writeBatch(db);
 
             // 1. Update order status
-            const orderRef = doc(db, "orders", orderId);
+            const orderRef = doc(db, `clubs/${clubId}/orders`, orderId);
             batch.update(orderRef, {
                 status: "cancelled",
                 updatedAt: now
             });
 
             // 2. Refund wallet
-            const walletRef = doc(db, "wallets", walletDocId);
+            const walletRef = doc(db, `clubs/${clubId}/members/${memberId}/wallet`, "data");
             batch.update(walletRef, {
                 balance: newBalance,
                 lastUpdated: now
             });
 
             // 3. Create refund transaction
-            const transactionRef = doc(collection(db, "walletTransactions"));
+            const transactionRef = doc(collection(db, `clubs/${clubId}/members/${memberId}/transactions`));
             batch.set(transactionRef, {
                 userId: memberId,
                 clubId: clubId,

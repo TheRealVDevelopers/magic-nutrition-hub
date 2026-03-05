@@ -8,19 +8,19 @@ export function useMembers(clubId: string | null) {
         queryKey: ["owner-members", clubId],
         enabled: !!clubId,
         queryFn: async () => {
-            const q = query(collection(db, "users"), where("clubId", "==", clubId), where("role", "==", "member"), orderBy("name"));
+            const q = query(collection(db, `clubs/${clubId}/members`), orderBy("name"));
             const snap = await getDocs(q);
             return snap.docs.map(d => ({ id: d.id, ...d.data() } as User));
         },
     });
 }
 
-export function useMember(memberId: string | null) {
+export function useMember(clubId: string | null, memberId: string | null) {
     return useQuery({
-        queryKey: ["owner-member", memberId],
-        enabled: !!memberId,
+        queryKey: ["owner-member", clubId, memberId],
+        enabled: !!clubId && !!memberId,
         queryFn: async () => {
-            const snap = await getDoc(doc(db, "users", memberId!));
+            const snap = await getDoc(doc(db, `clubs/${clubId}/members`, memberId!));
             if (!snap.exists()) return null;
             return { id: snap.id, ...snap.data() } as User;
         },
@@ -32,11 +32,11 @@ export function useAddMember() {
     return useMutation({
         mutationFn: async (data: { clubId: string; member: Partial<User> }) => {
             // Count existing members to generate ID
-            const q = query(collection(db, "users"), where("clubId", "==", data.clubId), where("role", "==", "member"));
+            const q = query(collection(db, `clubs/${data.clubId}/members`));
             const snap = await getDocs(q);
             const nextNum = snap.size + 1;
             const memberId = `MNC${String(nextNum).padStart(4, "0")}`;
-            
+
             const now = Timestamp.now();
             const memberDoc = {
                 ...data.member,
@@ -52,18 +52,19 @@ export function useAddMember() {
                 createdAt: now,
                 updatedAt: now,
             };
-            
-            const ref = await addDoc(collection(db, "users"), memberDoc);
-            
+
+            const ref = await addDoc(collection(db, `clubs/${data.clubId}/members`), memberDoc);
+
             // Create wallet
-            await addDoc(collection(db, "wallets"), {
+            const { setDoc } = await import("firebase/firestore");
+            await setDoc(doc(db, `clubs/${data.clubId}/members/${ref.id}/wallet`, "data"), {
                 userId: ref.id,
                 clubId: data.clubId,
                 currencyName: "MNC Currency",
                 balance: 0,
                 lastUpdated: now,
             });
-            
+
             return { id: ref.id, memberId };
         },
         onSuccess: (_, vars) => {
@@ -75,8 +76,8 @@ export function useAddMember() {
 export function useUpdateMember() {
     const qc = useQueryClient();
     return useMutation({
-        mutationFn: async ({ memberId, data }: { memberId: string; data: Partial<User> }) => {
-            await updateDoc(doc(db, "users", memberId), { ...data, updatedAt: Timestamp.now() } as any);
+        mutationFn: async ({ clubId, memberId, data }: { clubId: string; memberId: string; data: Partial<User> }) => {
+            await updateDoc(doc(db, `clubs/${clubId}/members`, memberId), { ...data, updatedAt: Timestamp.now() } as any);
         },
         onSuccess: () => {
             qc.invalidateQueries({ queryKey: ["owner-member"] });

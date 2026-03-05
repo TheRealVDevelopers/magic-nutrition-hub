@@ -25,9 +25,7 @@ export function useClubMembers() {
     return useQuery({
         queryKey: ["owner", "members", club?.id],
         queryFn: async () => {
-            const snap = await getDocs(
-                query(collection(db, "users"), where("clubId", "==", club!.id), where("role", "==", "member"))
-            );
+            const snap = await getDocs(query(collection(db, `clubs/${club!.id}/members`)));
             return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as User);
         },
         enabled: !!club,
@@ -41,9 +39,7 @@ export function useClubVolunteers() {
     return useQuery({
         queryKey: ["owner", "volunteers", club?.id],
         queryFn: async () => {
-            const snap = await getDocs(
-                query(collection(db, "users"), where("clubId", "==", club!.id), where("role", "==", "staff"))
-            );
+            const snap = await getDocs(query(collection(db, `clubs/${club!.id}/volunteers`)));
             return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as User);
         },
         enabled: !!club,
@@ -56,9 +52,14 @@ export function useMemberById(memberId: string) {
     return useQuery({
         queryKey: ["owner", "member", memberId],
         queryFn: async () => {
-            const snap = await getDoc(doc(db, "users", memberId));
-            if (!snap.exists()) throw new Error("Member not found");
-            return { id: snap.id, ...snap.data() } as User;
+            // Try to find member across clubs - requires clubId context
+            // For now query all clubs
+            const clubsSnap = await getDocs(collection(db, "clubs"));
+            for (const clubDoc of clubsSnap.docs) {
+                const snap = await getDoc(doc(db, `clubs/${clubDoc.id}/members`, memberId));
+                if (snap.exists()) return { id: snap.id, ...snap.data() } as User;
+            }
+            throw new Error("Member not found");
         },
         enabled: !!memberId,
     });
@@ -91,7 +92,7 @@ export function useAddMember() {
             let treePath = memberId;
             let parentUserId: string | null = input.referredBy || null;
             if (parentUserId) {
-                const parentSnap = await getDoc(doc(db, "users", parentUserId));
+                const parentSnap = await getDoc(doc(db, `clubs/${club.id}/members`, parentUserId));
                 if (parentSnap.exists()) {
                     treePath = (parentSnap.data() as User).treePath + "/" + memberId;
                 }
@@ -113,10 +114,10 @@ export function useAddMember() {
                 memberId: generatedMemberId,
                 createdAt: now, updatedAt: now,
             };
-            batch.set(doc(db, "users", memberId), userData);
+            batch.set(doc(db, `clubs/${club.id}/members`, memberId), userData);
 
             // Create wallet
-            batch.set(doc(db, "wallets", memberId), {
+            batch.set(doc(db, `clubs/${club.id}/members/${memberId}/wallet`, "data"), {
                 userId: memberId, clubId: club.id,
                 currencyName: club.currencyName, balance: 0, lastUpdated: now,
             } as Wallet);
@@ -126,21 +127,21 @@ export function useAddMember() {
                 const bonusCoins = club.referralBonusCoins ?? 50;
 
                 const refId = "ref_" + Date.now();
-                batch.set(doc(db, "referrals", refId), {
+                batch.set(doc(db, `clubs/${club.id}/referrals`, refId), {
                     id: refId, referrerId: parentUserId, referredId: memberId,
                     clubId: club.id, bonusCoinsAwarded: bonusCoins,
                     status: "rewarded", createdAt: now, rewardedAt: now,
                 });
 
                 // Reward referrer wallet natively inside batch
-                const referrerWalletSnap = await getDoc(doc(db, "wallets", parentUserId));
+                const referrerWalletSnap = await getDoc(doc(db, `clubs/${club.id}/members/${parentUserId}/wallet`, "data"));
                 if (referrerWalletSnap.exists()) {
                     const referrerWallet = referrerWalletSnap.data() as Wallet;
                     const newBalance = referrerWallet.balance + bonusCoins;
-                    batch.update(doc(db, "wallets", parentUserId), { balance: newBalance, lastUpdated: now });
+                    batch.update(doc(db, `clubs/${club.id}/members/${parentUserId}/wallet`, "data"), { balance: newBalance, lastUpdated: now });
 
                     const txId = "tx_" + Date.now() + "_ref";
-                    batch.set(doc(db, "walletTransactions", txId), {
+                    batch.set(doc(db, `clubs/${club.id}/members/${parentUserId}/transactions`, txId), {
                         id: txId, userId: parentUserId, clubId: club.id,
                         type: "credit", amount: bonusCoins, reason: "referral_bonus",
                         addedBy: "system", note: `Referral bonus for ${input.name}`,
@@ -164,7 +165,15 @@ export function useUpdateMember() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: async ({ memberId, data }: { memberId: string; data: Partial<User> }) => {
-            await updateDoc(doc(db, "users", memberId), { ...data, updatedAt: Timestamp.now() } as any);
+            // Need clubId to update member in nested path
+            const clubsSnap = await getDocs(collection(db, "clubs"));
+            for (const clubDoc of clubsSnap.docs) {
+                const memberSnap = await getDoc(doc(db, `clubs/${clubDoc.id}/members`, memberId));
+                if (memberSnap.exists()) {
+                    await updateDoc(doc(db, `clubs/${clubDoc.id}/members`, memberId), { ...data, updatedAt: Timestamp.now() } as any);
+                    return;
+                }
+            }
         },
         onSuccess: () => qc.invalidateQueries({ queryKey: ["owner"] }),
     });
@@ -176,7 +185,14 @@ export function useDeactivateMember() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: async (memberId: string) => {
-            await updateDoc(doc(db, "users", memberId), { status: "paused", updatedAt: Timestamp.now() });
+            const clubsSnap = await getDocs(collection(db, "clubs"));
+            for (const clubDoc of clubsSnap.docs) {
+                const memberSnap = await getDoc(doc(db, `clubs/${clubDoc.id}/members`, memberId));
+                if (memberSnap.exists()) {
+                    await updateDoc(doc(db, `clubs/${clubDoc.id}/members`, memberId), { status: "paused", updatedAt: Timestamp.now() });
+                    return;
+                }
+            }
         },
         onSuccess: () => qc.invalidateQueries({ queryKey: ["owner"] }),
     });
@@ -190,7 +206,7 @@ export function useMembershipPlans() {
         queryKey: ["owner", "plans", club?.id],
         queryFn: async () => {
             const snap = await getDocs(
-                query(collection(db, "memberships"), where("clubId", "==", club!.id))
+                query(collection(db, `clubs/${club!.id}/memberships`))
             );
             return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as MembershipPlan);
         },
@@ -207,7 +223,7 @@ export function useCreateMembershipPlan() {
         mutationFn: async (plan: Omit<MembershipPlan, "id" | "clubId" | "createdAt">) => {
             if (!club) throw new Error("Club not loaded");
             const planId = "plan_" + Date.now();
-            await setDoc(doc(db, "memberships", planId), {
+            await setDoc(doc(db, `clubs/${club.id}/memberships`, planId), {
                 ...plan, id: planId, clubId: club.id, createdAt: Timestamp.now(),
             });
             return planId;
@@ -220,9 +236,10 @@ export function useCreateMembershipPlan() {
 
 export function useUpdateMembershipPlan() {
     const qc = useQueryClient();
+    const { club } = useClubContext();
     return useMutation({
         mutationFn: async ({ planId, data }: { planId: string; data: Partial<MembershipPlan> }) => {
-            await updateDoc(doc(db, "memberships", planId), data as any);
+            await updateDoc(doc(db, `clubs/${club!.id}/memberships`, planId), data as any);
         },
         onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "plans"] }),
     });
@@ -237,11 +254,11 @@ export function useAssignMembership() {
     return useMutation({
         mutationFn: async ({ memberId, planId }: { memberId: string; planId: string }) => {
             if (!club) throw new Error("Club not loaded");
-            const planSnap = await getDoc(doc(db, "memberships", planId));
+            const planSnap = await getDoc(doc(db, `clubs/${club!.id}/memberships`, planId));
             if (!planSnap.exists()) throw new Error("Plan not found");
             const plan = planSnap.data() as MembershipPlan;
 
-            const walletSnap = await getDoc(doc(db, "wallets", memberId));
+            const walletSnap = await getDoc(doc(db, `clubs/${club!.id}/members/${memberId}/wallet`, "data"));
             if (!walletSnap.exists()) throw new Error("Wallet not found");
             const wallet = walletSnap.data() as Wallet;
 
@@ -256,18 +273,18 @@ export function useAssignMembership() {
             const end = new Date(start.getTime() + (plan.durationDays ?? 0) * 86400000);
 
             // Deduct wallet
-            batch.update(doc(db, "wallets", memberId), { balance: newBalance, lastUpdated: now });
+            batch.update(doc(db, `clubs/${club!.id}/members/${memberId}/wallet`, "data"), { balance: newBalance, lastUpdated: now });
 
             // Create transaction
             const txId = "tx_" + Date.now();
-            batch.set(doc(db, "walletTransactions", txId), {
+            batch.set(doc(db, `clubs/${club!.id}/members/${memberId}/transactions`, txId), {
                 id: txId, userId: memberId, clubId: club.id,
                 type: "debit", amount: plan.price, reason: "membership",
                 addedBy: null, note: `${plan.name} membership`, createdAt: now, balanceAfter: newBalance,
             } as WalletTransaction);
 
             // Update user membership
-            batch.update(doc(db, "users", memberId), {
+            batch.update(doc(db, `clubs/${club!.id}/members`, memberId), {
                 membershipTier: plan.name.toLowerCase() as any,
                 membershipPlanId: planId,
                 membershipStart: Timestamp.fromDate(start),
@@ -292,8 +309,7 @@ export function usePendingTopupRequests() {
     useEffect(() => {
         if (!club) return;
         const q = query(
-            collection(db, "topupRequests"),
-            where("clubId", "==", club.id),
+            collection(db, `clubs/${club.id}/topupRequests`),
             where("status", "==", "pending")
         );
         const unsub = onSnapshot(q,
@@ -320,11 +336,11 @@ export function useApproveTopup() {
             requestId: string; approvedAmount: number; resolvedBy: string;
         }) => {
             if (!club) throw new Error("Club not loaded");
-            const reqSnap = await getDoc(doc(db, "topupRequests", requestId));
+            const reqSnap = await getDoc(doc(db, `clubs/${club!.id}/topupRequests`, requestId));
             if (!reqSnap.exists()) throw new Error("Request not found");
             const req = reqSnap.data() as TopupRequest;
 
-            const walletSnap = await getDoc(doc(db, "wallets", req.memberId));
+            const walletSnap = await getDoc(doc(db, `clubs/${club!.id}/members/${req.memberId}/wallet`, "data"));
             if (!walletSnap.exists()) throw new Error("Wallet not found");
             const wallet = walletSnap.data() as Wallet;
 
@@ -332,13 +348,13 @@ export function useApproveTopup() {
             const now = Timestamp.now();
             const newBalance = wallet.balance + approvedAmount;
 
-            batch.update(doc(db, "topupRequests", requestId), {
+            batch.update(doc(db, `clubs/${club!.id}/topupRequests`, requestId), {
                 status: "approved", approvedAmount, resolvedAt: now, resolvedBy,
             });
-            batch.update(doc(db, "wallets", req.memberId), { balance: newBalance, lastUpdated: now });
+            batch.update(doc(db, `clubs/${club!.id}/members/${req.memberId}/wallet`, "data"), { balance: newBalance, lastUpdated: now });
 
             const txId = "tx_" + Date.now();
-            batch.set(doc(db, "walletTransactions", txId), {
+            batch.set(doc(db, `clubs/${club!.id}/members/${req.memberId}/transactions`, txId), {
                 id: txId, userId: req.memberId, clubId: club.id,
                 type: "credit", amount: approvedAmount, reason: "topup",
                 addedBy: resolvedBy, note: "Wallet topup", createdAt: now, balanceAfter: newBalance,
@@ -354,9 +370,10 @@ export function useApproveTopup() {
 
 export function useRejectTopup() {
     const qc = useQueryClient();
+    const { club } = useClubContext();
     return useMutation({
         mutationFn: async ({ requestId, resolvedBy }: { requestId: string; resolvedBy: string }) => {
-            await updateDoc(doc(db, "topupRequests", requestId), {
+            await updateDoc(doc(db, `clubs/${club!.id}/topupRequests`, requestId), {
                 status: "rejected", resolvedAt: Timestamp.now(), resolvedBy,
             });
         },
@@ -372,7 +389,7 @@ export function useTopupHistory() {
         queryKey: ["owner", "topupHistory", club?.id],
         queryFn: async () => {
             const snap = await getDocs(
-                query(collection(db, "topupRequests"), where("clubId", "==", club!.id))
+                query(collection(db, `clubs/${club!.id}/topupRequests`))
             );
             return snap.docs
                 .map((d) => ({ id: d.id, ...d.data() }) as TopupRequest)
@@ -390,12 +407,18 @@ export function useDailyStats() {
     return useQuery({
         queryKey: ["owner", "dailyStats", club?.id, today()],
         queryFn: async () => {
-            const [attendSnap, ordersSnap, membersSnap, productsSnap] = await Promise.all([
-                getDocs(query(collection(db, "attendance"), where("clubId", "==", club!.id), where("date", "==", today()))),
-                getDocs(query(collection(db, "orders"), where("clubId", "==", club!.id), where("date", "==", today()))),
-                getDocs(query(collection(db, "users"), where("clubId", "==", club!.id), where("role", "==", "member"), where("status", "==", "active"))),
-                getDocs(query(collection(db, "products"), where("clubId", "==", club!.id))),
-            ]);
+            const td = today();
+            const membersSnap = await getDocs(query(collection(db, `clubs/${club!.id}/members`)));
+            const productsSnap = await getDocs(query(collection(db, `clubs/${club!.id}/menu`)));
+            const ordersSnap = await getDocs(query(collection(db, `clubs/${club!.id}/orders`), where("date", "==", td)));
+
+            // Count attendance across all members for today
+            let todayAttendanceCount = 0;
+            for (const mDoc of membersSnap.docs) {
+                const aSnap = await getDocs(query(collection(db, `clubs/${club!.id}/members/${mDoc.id}/attendance`), where("date", "==", td)));
+                todayAttendanceCount += aSnap.size;
+            }
+
             const todayRevenue = ordersSnap.docs.reduce((sum, d) => sum + ((d.data() as Order).totalCost || 0), 0);
             const lowStock = productsSnap.docs.filter((d) => {
                 const p = d.data() as Product;
@@ -403,9 +426,9 @@ export function useDailyStats() {
             }).length;
 
             return {
-                todayAttendance: attendSnap.size,
+                todayAttendance: todayAttendanceCount,
                 todayRevenue,
-                totalActiveMembers: membersSnap.size,
+                totalActiveMembers: membersSnap.docs.filter(d => (d.data() as User).status === "active").length,
                 lowStockCount: lowStock,
             };
         },
@@ -437,7 +460,7 @@ export function useAnnouncements() {
         queryKey: ["owner", "announcements", club?.id],
         queryFn: async () => {
             const snap = await getDocs(
-                query(collection(db, "announcements"), where("clubId", "==", club!.id), orderBy("createdAt", "desc"))
+                query(collection(db, `clubs/${club!.id}/announcements`), orderBy("createdAt", "desc"))
             );
             return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Announcement);
         },
@@ -456,12 +479,12 @@ export function useCreateAnnouncement() {
         }) => {
             if (!club) throw new Error("Club not loaded");
             const id = "ann_" + Date.now();
-            await setDoc(doc(db, "announcements", id), {
+            await setDoc(doc(db, `clubs/${club.id}/announcements`, id), {
                 id, clubId: club.id, title, message, postedBy,
                 createdAt: Timestamp.now(),
                 expiresAt: expiresAt ? Timestamp.fromDate(expiresAt) : null,
                 isActive: true,
-            } as Announcement);
+            } as unknown as Announcement);
         },
         onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "announcements"] }),
     });
@@ -471,9 +494,10 @@ export function useCreateAnnouncement() {
 
 export function useDeleteAnnouncement() {
     const qc = useQueryClient();
+    const { club } = useClubContext();
     return useMutation({
         mutationFn: async (annId: string) => {
-            await updateDoc(doc(db, "announcements", annId), { isActive: false });
+            await updateDoc(doc(db, `clubs/${club!.id}/announcements`, annId), { isActive: false });
         },
         onSuccess: () => qc.invalidateQueries({ queryKey: ["owner", "announcements"] }),
     });
@@ -487,7 +511,7 @@ export function useTodaysSpecial() {
         queryKey: ["owner", "todaysSpecial", club?.id],
         queryFn: async () => {
             const snap = await getDocs(
-                query(collection(db, "products"), where("clubId", "==", club!.id), where("isAvailableToday", "==", true))
+                query(collection(db, `clubs/${club!.id}/menu`), where("isAvailableToday", "==", true))
             );
             return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Product);
         },
@@ -520,11 +544,11 @@ export function useSetTodaysSpecial() {
         mutationFn: async (selectedIds: string[]) => {
             if (!club) throw new Error("Club not loaded");
             const allSnap = await getDocs(
-                query(collection(db, "products"), where("clubId", "==", club.id))
+                query(collection(db, `clubs/${club.id}/menu`))
             );
             const batch = writeBatch(db);
             allSnap.docs.forEach((d) => {
-                batch.update(doc(db, "products", d.id), {
+                batch.update(doc(db, `clubs/${club.id}/menu`, d.id), {
                     isAvailableToday: selectedIds.includes(d.id),
                 });
             });
@@ -540,9 +564,13 @@ export function useMemberWallet(memberId: string) {
     return useQuery({
         queryKey: ["owner", "wallet", memberId],
         queryFn: async () => {
-            const snap = await getDoc(doc(db, "wallets", memberId));
-            if (!snap.exists()) return null;
-            return snap.data() as Wallet;
+            // Need to find which club this member belongs to
+            const clubsSnap = await getDocs(collection(db, "clubs"));
+            for (const clubDoc of clubsSnap.docs) {
+                const snap = await getDoc(doc(db, `clubs/${clubDoc.id}/members/${memberId}/wallet`, "data"));
+                if (snap.exists()) return snap.data() as Wallet;
+            }
+            return null;
         },
         enabled: !!memberId,
     });
@@ -554,12 +582,19 @@ export function useMemberTransactions(memberId: string) {
     return useQuery({
         queryKey: ["owner", "transactions", memberId],
         queryFn: async () => {
-            const snap = await getDocs(
-                query(collection(db, "walletTransactions"), where("userId", "==", memberId))
-            );
-            return snap.docs
-                .map((d) => ({ id: d.id, ...d.data() }) as WalletTransaction)
-                .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+            const clubsSnap = await getDocs(collection(db, "clubs"));
+            for (const clubDoc of clubsSnap.docs) {
+                const memberSnap = await getDoc(doc(db, `clubs/${clubDoc.id}/members`, memberId));
+                if (memberSnap.exists()) {
+                    const snap = await getDocs(
+                        query(collection(db, `clubs/${clubDoc.id}/members/${memberId}/transactions`))
+                    );
+                    return snap.docs
+                        .map((d) => ({ id: d.id, ...d.data() }) as WalletTransaction)
+                        .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+                }
+            }
+            return [];
         },
         enabled: !!memberId,
     });
@@ -571,12 +606,18 @@ export function useMemberOrders(memberId: string) {
     return useQuery({
         queryKey: ["owner", "orders", memberId],
         queryFn: async () => {
-            const snap = await getDocs(
-                query(collection(db, "orders"), where("memberId", "==", memberId))
-            );
-            return snap.docs
-                .map((d) => ({ id: d.id, ...d.data() }) as Order)
-                .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+            const clubsSnap = await getDocs(collection(db, "clubs"));
+            for (const clubDoc of clubsSnap.docs) {
+                const snap = await getDocs(
+                    query(collection(db, `clubs/${clubDoc.id}/orders`), where("memberId", "==", memberId))
+                );
+                if (!snap.empty) {
+                    return snap.docs
+                        .map((d) => ({ id: d.id, ...d.data() }) as Order)
+                        .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+                }
+            }
+            return [];
         },
         enabled: !!memberId,
     });
@@ -588,10 +629,17 @@ export function useMemberWeightLog(memberId: string) {
     return useQuery({
         queryKey: ["owner", "weightLog", memberId],
         queryFn: async () => {
-            const snap = await getDocs(collection(db, "users", memberId, "weightLog"));
-            return snap.docs
-                .map((d) => ({ id: d.id, ...d.data() }))
-                .sort((a: any, b: any) => (a.date?.toMillis?.() || 0) - (b.date?.toMillis?.() || 0));
+            const clubsSnap = await getDocs(collection(db, "clubs"));
+            for (const clubDoc of clubsSnap.docs) {
+                const memberSnap = await getDoc(doc(db, `clubs/${clubDoc.id}/members`, memberId));
+                if (memberSnap.exists()) {
+                    const snap = await getDocs(collection(db, `clubs/${clubDoc.id}/members/${memberId}/weighIns`));
+                    return snap.docs
+                        .map((d) => ({ id: d.id, ...d.data() }))
+                        .sort((a: any, b: any) => (a.date?.toMillis?.() || 0) - (b.date?.toMillis?.() || 0));
+                }
+            }
+            return [];
         },
         enabled: !!memberId,
     });
@@ -603,10 +651,17 @@ export function useAddWeightEntry() {
     const qc = useQueryClient();
     return useMutation({
         mutationFn: async ({ memberId, weight, notes }: { memberId: string; weight: number; notes?: string }) => {
-            const id = "wl_" + Date.now();
-            await setDoc(doc(db, "users", memberId, "weightLog", id), {
-                id, weight, date: Timestamp.now(), notes: notes || "",
-            });
+            const clubsSnap = await getDocs(collection(db, "clubs"));
+            for (const clubDoc of clubsSnap.docs) {
+                const memberSnap = await getDoc(doc(db, `clubs/${clubDoc.id}/members`, memberId));
+                if (memberSnap.exists()) {
+                    const id = "wl_" + Date.now();
+                    await setDoc(doc(db, `clubs/${clubDoc.id}/members/${memberId}/weighIns`, id), {
+                        id, weight, date: Timestamp.now(), notes: notes || "",
+                    });
+                    return;
+                }
+            }
         },
         onSuccess: (_d, vars) => qc.invalidateQueries({ queryKey: ["owner", "weightLog", vars.memberId] }),
     });
@@ -619,10 +674,18 @@ export function useTodayAttendance() {
     return useQuery({
         queryKey: ["owner", "todayAttendance", club?.id, today()],
         queryFn: async () => {
-            const snap = await getDocs(
-                query(collection(db, "attendance"), where("clubId", "==", club!.id), where("date", "==", today()))
-            );
-            return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Attendance);
+            const membersSnap = await getDocs(query(collection(db, `clubs/${club!.id}/members`)));
+            let allAttendance: Attendance[] = [];
+            const td = today();
+            for (const mDoc of membersSnap.docs) {
+                const aSnap = await getDocs(
+                    query(collection(db, `clubs/${club!.id}/members/${mDoc.id}/attendance`), where("date", "==", td))
+                );
+                for (const d of aSnap.docs) {
+                    allAttendance.push({ id: d.id, ...d.data() } as Attendance);
+                }
+            }
+            return allAttendance;
         },
         enabled: !!club,
     });
@@ -635,13 +698,13 @@ export function useMemberReferrals(memberId: string) {
         queryKey: ["owner", "referrals", memberId],
         queryFn: async () => {
             const snap = await getDocs(
-                query(collection(db, "referrals"), where("referrerId", "==", memberId))
+                query(collection(db, `clubs/${club!.id}/referrals`), where("referrerId", "==", memberId))
             );
             const refs = snap.docs.map(d => ({ id: d.id, ...d.data() } as Referral));
 
             const detailed = [];
             for (const r of refs) {
-                const uSnap = await getDoc(doc(db, "users", r.referredId || ""));
+                const uSnap = await getDoc(doc(db, `clubs/${club!.id}/members`, r.referredId || ""));
                 if (uSnap.exists()) {
                     detailed.push({
                         ...r,
@@ -663,7 +726,7 @@ export function useRecentOrders() {
         queryKey: ["owner", "recentOrders", club?.id],
         queryFn: async () => {
             const snap = await getDocs(
-                query(collection(db, "orders"), where("clubId", "==", club!.id), orderBy("createdAt", "desc"))
+                query(collection(db, `clubs/${club!.id}/orders`), orderBy("createdAt", "desc"))
             );
             return snap.docs.slice(0, 5).map((d) => ({ id: d.id, ...d.data() }) as Order);
         },
@@ -681,7 +744,7 @@ export function useAddVolunteer() {
             if (!club) throw new Error("Club not loaded");
             const id = "staff_" + Date.now();
             const now = Timestamp.now();
-            await setDoc(doc(db, "users", id), {
+            await setDoc(doc(db, `clubs/${club.id}/volunteers`, id), {
                 id, name: input.name, phone: input.phone,
                 email: input.email || "", photo: input.photo || "",
                 role: "staff", clubId: club.id,
@@ -718,7 +781,7 @@ export function useExpiringMembers() {
         queryKey: ["owner", "expiring", club?.id],
         queryFn: async () => {
             const snap = await getDocs(
-                query(collection(db, "users"), where("clubId", "==", club!.id), where("role", "==", "member"))
+                query(collection(db, `clubs/${club!.id}/members`))
             );
             const sevenDaysFromNow = new Date(Date.now() + 7 * 86400000);
             return snap.docs

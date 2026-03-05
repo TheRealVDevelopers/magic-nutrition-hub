@@ -28,24 +28,24 @@ export function useMemberAuth(): MemberAuthResult {
                 return;
             }
             try {
-                // Try by uid first
-                const snap = await getDoc(doc(db, "users", fbUser.uid));
-                if (snap.exists()) {
-                    const data = { id: snap.id, ...snap.data() } as User;
-                    if (data.clubId === club.id && data.role === "member") {
-                        setMember(data);
-                        setLoading(false);
-                        return;
+                // Try to find the member under the current club's members collection by email
+                // Note: member document ID usually doesn't match fbUser.uid
+                if (fbUser.email) {
+                    const q = query(
+                        collection(db, `clubs/${club.id}/members`),
+                        where("email", "==", fbUser.email)
+                    );
+                    const qSnap = await getDocs(q);
+                    if (!qSnap.empty) {
+                        const data = qSnap.docs[0].data();
+                        setMember({ id: qSnap.docs[0].id, clubId: club.id, ...data, role: "member" } as unknown as User);
+                    } else {
+                        setMember(null);
+                        setError("No member account found for this club.");
                     }
-                }
-                // Fallback: query by email + clubId
-                const q = query(collection(db, "users"), where("email", "==", fbUser.email), where("clubId", "==", club.id), where("role", "==", "member"));
-                const qSnap = await getDocs(q);
-                if (!qSnap.empty) {
-                    setMember({ id: qSnap.docs[0].id, ...qSnap.docs[0].data() } as User);
                 } else {
                     setMember(null);
-                    setError("No member account found for this club.");
+                    setError("No email found in authentication.");
                 }
             } catch (e: any) {
                 setError(e.message);

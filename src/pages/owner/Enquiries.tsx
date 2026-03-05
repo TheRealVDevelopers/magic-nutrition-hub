@@ -411,6 +411,19 @@ export default function Enquiries() {
         window.open(waUrl, "_blank");
     };
 
+    const handleExpand = async (e: Enquiry, isExpanded: boolean) => {
+        setExpandedId(isExpanded ? null : e.id);
+        if (!isExpanded && e.clubId === "{{CLUB_ID}}" && club) {
+            try {
+                // Silently auto-correct bad data
+                await updateDoc(doc(db, "enquiries", e.id), { clubId: club.id });
+                updateStatus.mutate({ enquiryId: e.id, status: e.status }); // Triggers a cache invalidate
+            } catch (err) {
+                console.error("Auto-fix failed:", err);
+            }
+        }
+    };
+
     const filters: { value: StatusFilter; label: string }[] = [
         { value: "all", label: "All" },
         ...STATUS_OPTIONS,
@@ -494,7 +507,7 @@ export default function Enquiries() {
                                     <div key={e.id} className="rounded-2xl border bg-white overflow-hidden">
                                         <div
                                             className="p-4 flex items-center justify-between gap-3 cursor-pointer"
-                                            onClick={() => setExpandedId(isExpanded ? null : e.id)}
+                                            onClick={() => handleExpand(e, isExpanded)}
                                         >
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center gap-2 flex-wrap">
@@ -567,7 +580,7 @@ export default function Enquiries() {
                                                         Save notes
                                                     </Button>
 
-                                                    {/* Accept as Visiting Member */}
+                                                    {/* Accept enquiry → creates Visiting Member */}
                                                     {e.status !== "converted" && e.status !== "rejected" && (
                                                         <Button
                                                             size="sm"
@@ -576,7 +589,7 @@ export default function Enquiries() {
                                                             style={{ backgroundColor: "#2d9653" }}
                                                         >
                                                             <UserCheck className="w-4 h-4 mr-1" />
-                                                            ✅ Accept as Visiting
+                                                            ✅ Accept
                                                         </Button>
                                                     )}
 
