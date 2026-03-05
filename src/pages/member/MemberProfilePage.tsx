@@ -41,6 +41,13 @@ export default function MemberProfilePage() {
     const [isEditMode, setIsEditMode] = useState(false);
     const [editName, setEditName] = useState("");
     const [editPhone, setEditPhone] = useState("");
+    const [editWhatsapp, setEditWhatsapp] = useState("");
+    const [editEmail, setEditEmail] = useState("");
+    const [editAddress, setEditAddress] = useState("");
+    const [editDob, setEditDob] = useState("");
+    const [editCurrentWeight, setEditCurrentWeight] = useState("");
+    const [editTargetWeight, setEditTargetWeight] = useState("");
+    const [editHealthConditions, setEditHealthConditions] = useState("");
     const [saving, setSaving] = useState(false);
 
     const [currentPassword, setCurrentPassword] = useState("");
@@ -58,6 +65,18 @@ export default function MemberProfilePage() {
         if (profile) {
             setEditName(profile.name);
             setEditPhone(profile.phone);
+            setEditWhatsapp((profile as any).whatsapp ?? "");
+            setEditEmail(profile.email ?? "");
+            setEditAddress((profile as any).address ?? "");
+            const dob = profile.dob;
+            if (dob?.toDate) {
+                setEditDob(format(dob.toDate(), "yyyy-MM-dd"));
+            } else {
+                setEditDob("");
+            }
+            setEditCurrentWeight(String((profile as any).currentWeight ?? ""));
+            setEditTargetWeight(String((profile as any).targetWeight ?? ""));
+            setEditHealthConditions((profile as any).healthConditions ?? "");
             setIsEditMode(true);
         }
     };
@@ -71,8 +90,20 @@ export default function MemberProfilePage() {
         setSaving(true);
         try {
             const userRef = doc(db, "users", profile.id);
-            await updateDoc(userRef, { name: editName, phone: editPhone });
-            setProfileOverride({ name: editName, phone: editPhone });
+            const updates: Record<string, any> = {
+                name: editName,
+                phone: editPhone,
+                whatsapp: editWhatsapp,
+                address: editAddress,
+                currentWeight: editCurrentWeight ? parseFloat(editCurrentWeight) : null,
+                targetWeight: editTargetWeight ? parseFloat(editTargetWeight) : null,
+                healthConditions: editHealthConditions,
+            };
+            if (editDob) {
+                updates.dob = Timestamp.fromDate(new Date(editDob));
+            }
+            await updateDoc(userRef, updates);
+            setProfileOverride(updates);
             setIsEditMode(false);
             toast({ title: "Profile updated!" });
         } catch (err: any) {
@@ -248,11 +279,65 @@ export default function MemberProfilePage() {
                                 />
                             </div>
                             <div className="space-y-2">
+                                <Label>WhatsApp</Label>
+                                <Input
+                                    value={editWhatsapp}
+                                    onChange={(e) => setEditWhatsapp(e.target.value)}
+                                    placeholder="WhatsApp number"
+                                />
+                            </div>
+                            <div className="space-y-2">
                                 <Label>Email</Label>
                                 <Input
-                                    value={profile.email}
-                                    disabled
-                                    className="bg-muted text-muted-foreground"
+                                    value={editEmail}
+                                    onChange={(e) => setEditEmail(e.target.value)}
+                                    placeholder="your@email.com"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Address</Label>
+                                <Input
+                                    value={editAddress}
+                                    onChange={(e) => setEditAddress(e.target.value)}
+                                    placeholder="Your address"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Date of Birth</Label>
+                                <Input
+                                    type="date"
+                                    value={editDob}
+                                    onChange={(e) => setEditDob(e.target.value)}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-2">
+                                    <Label>Current Weight (kg)</Label>
+                                    <Input
+                                        type="number"
+                                        step="0.1"
+                                        value={editCurrentWeight}
+                                        onChange={(e) => setEditCurrentWeight(e.target.value)}
+                                        placeholder="e.g. 68.5"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Target Weight (kg)</Label>
+                                    <Input
+                                        type="number"
+                                        step="0.1"
+                                        value={editTargetWeight}
+                                        onChange={(e) => setEditTargetWeight(e.target.value)}
+                                        placeholder="e.g. 60"
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Health Conditions</Label>
+                                <Input
+                                    value={editHealthConditions}
+                                    onChange={(e) => setEditHealthConditions(e.target.value)}
+                                    placeholder="Any health conditions"
                                 />
                             </div>
                         </>
@@ -266,18 +351,50 @@ export default function MemberProfilePage() {
                                 <p className="text-xs text-muted-foreground">Phone</p>
                                 <p className="font-bold text-base">{profile.phone}</p>
                             </div>
+                            {(profile as any).whatsapp && (
+                                <div>
+                                    <p className="text-xs text-muted-foreground">WhatsApp</p>
+                                    <p className="font-medium text-base">{(profile as any).whatsapp}</p>
+                                </div>
+                            )}
                             <div>
                                 <p className="text-xs text-muted-foreground">Email</p>
                                 <p className="font-medium text-base text-muted-foreground">
                                     {profile.email}
                                 </p>
                             </div>
+                            {(profile as any).address && (
+                                <div>
+                                    <p className="text-xs text-muted-foreground">Address</p>
+                                    <p className="font-medium text-base">{(profile as any).address}</p>
+                                </div>
+                            )}
                             <div>
                                 <p className="text-xs text-muted-foreground">Date of birth</p>
                                 <p className="font-medium text-base">
                                     {formatTimestamp(profile.dob)}
                                 </p>
                             </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                {(profile as any).currentWeight != null && (
+                                    <div>
+                                        <p className="text-xs text-muted-foreground">Current Weight</p>
+                                        <p className="font-medium text-base">{(profile as any).currentWeight} kg</p>
+                                    </div>
+                                )}
+                                {(profile as any).targetWeight != null && (
+                                    <div>
+                                        <p className="text-xs text-muted-foreground">Target Weight</p>
+                                        <p className="font-medium text-base">{(profile as any).targetWeight} kg</p>
+                                    </div>
+                                )}
+                            </div>
+                            {(profile as any).healthConditions && (
+                                <div>
+                                    <p className="text-xs text-muted-foreground">Health Conditions</p>
+                                    <p className="font-medium text-base">{(profile as any).healthConditions}</p>
+                                </div>
+                            )}
                             <div className="flex flex-wrap gap-2 pt-2">
                                 {profile.membershipTier && (
                                     <Badge

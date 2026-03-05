@@ -10,63 +10,74 @@ import {
     Timestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { Enquiry } from "@/types/firestore";
+import type { ClubFeedback } from "@/types/firestore";
 
-// ─── useEnquiries ────────────────────────────────────────────────────────
+// ─── useClubFeedback ─────────────────────────────────────────────────────
+// Fetches messages/requests FROM club owners TO the super admin platform
 
-export function useEnquiries(clubId?: string) {
+export function useClubFeedback(clubId?: string) {
     return useQuery({
-        queryKey: ["superadmin", "enquiries", clubId ?? "all"],
+        queryKey: ["superadmin", "club-feedback", clubId ?? "all"],
         queryFn: async () => {
             let q;
             if (clubId) {
                 q = query(
-                    collection(db, "enquiries"),
+                    collection(db, "clubFeedback"),
                     where("clubId", "==", clubId),
                     orderBy("createdAt", "desc")
                 );
             } else {
                 q = query(
-                    collection(db, "enquiries"),
+                    collection(db, "clubFeedback"),
                     orderBy("createdAt", "desc")
                 );
             }
             const snap = await getDocs(q);
-            return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Enquiry);
+            return snap.docs.map((d) => {
+                const data = d.data() as Omit<ClubFeedback, 'id'>;
+                return { ...data, id: d.id } as ClubFeedback;
+            });
         },
     });
 }
 
-// ─── useUpdateEnquiryStatus ──────────────────────────────────────────────
+// ─── useUpdateClubFeedbackStatus ─────────────────────────────────────────
 
-export function useUpdateEnquiryStatus() {
+export function useUpdateClubFeedbackStatus() {
     const qc = useQueryClient();
 
     return useMutation({
         mutationFn: async ({
-            enquiryId,
+            feedbackId,
             status,
+            reply,
         }: {
-            enquiryId: string;
-            status: Enquiry["status"];
+            feedbackId: string;
+            status: ClubFeedback["status"];
+            reply?: string;
         }) => {
-            await updateDoc(doc(db, "enquiries", enquiryId), { status });
+            const updates: Record<string, unknown> = { status };
+            if (reply !== undefined) {
+                updates.reply = reply;
+                updates.repliedAt = Timestamp.now();
+            }
+            await updateDoc(doc(db, "clubFeedback", feedbackId), updates);
         },
         onSuccess: () => {
-            qc.invalidateQueries({ queryKey: ["superadmin", "enquiries"] });
+            qc.invalidateQueries({ queryKey: ["superadmin", "club-feedback"] });
         },
     });
 }
 
-// ─── useUnreadEnquiryCount ───────────────────────────────────────────────
+// ─── useUnreadClubFeedbackCount ──────────────────────────────────────────
 
-export function useUnreadEnquiryCount() {
+export function useUnreadClubFeedbackCount() {
     return useQuery({
-        queryKey: ["superadmin", "enquiries", "unread-count"],
+        queryKey: ["superadmin", "club-feedback", "unread-count"],
         queryFn: async () => {
             const snap = await getDocs(
                 query(
-                    collection(db, "enquiries"),
+                    collection(db, "clubFeedback"),
                     where("status", "==", "new")
                 )
             );
@@ -76,27 +87,23 @@ export function useUnreadEnquiryCount() {
     });
 }
 
-// ─── exportEnquiriesToCSV ────────────────────────────────────────────────
+// ─── exportClubFeedbackToCSV ─────────────────────────────────────────────
 
-export function exportEnquiriesToCSV(enquiries: Enquiry[], filename = "enquiries.csv") {
+export function exportClubFeedbackToCSV(items: ClubFeedback[], filename = "club-feedback.csv") {
     const headers = [
-        "Name", "Phone", "WhatsApp", "Email", "Address", "DOB",
-        "Current Weight", "Target Weight", "Health Conditions",
-        "Referred By", "Status", "Date",
+        "Club", "Sender", "Email", "Category", "Subject", "Message",
+        "Status", "Reply", "Date",
     ];
 
-    const rows = enquiries.map((e) => [
-        e.name,
-        e.phone,
-        e.whatsapp ?? "",
-        e.email ?? "",
-        e.address ?? "",
-        e.dob ?? "",
-        e.currentWeight ?? "",
-        e.targetWeight ?? "",
-        e.healthConditions ?? "",
-        e.referredBy ?? "",
+    const rows = items.map((e) => [
+        e.clubName,
+        e.senderName,
+        e.senderEmail,
+        e.category,
+        e.subject,
+        e.message,
         e.status,
+        e.reply ?? "",
         e.createdAt instanceof Timestamp
             ? e.createdAt.toDate().toLocaleDateString("en-IN")
             : "",

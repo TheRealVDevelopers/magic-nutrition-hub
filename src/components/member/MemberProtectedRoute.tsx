@@ -1,10 +1,11 @@
 import { ReactNode } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useLocation } from "react-router-dom";
 import { useMemberAuth } from "@/hooks/member/useMemberAuth";
 import { Loader2 } from "lucide-react";
 
 export default function MemberProtectedRoute({ children }: { children: ReactNode }) {
     const { member, loading, error } = useMemberAuth();
+    const location = useLocation();
 
     if (loading) {
         return (
@@ -15,6 +16,8 @@ export default function MemberProtectedRoute({ children }: { children: ReactNode
     }
 
     if (!member) {
+        // Save current path so login can redirect back
+        sessionStorage.setItem('mnc_redirect', location.pathname + location.search);
         return <Navigate to="/member/login" replace />;
     }
 

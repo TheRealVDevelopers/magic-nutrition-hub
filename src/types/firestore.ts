@@ -95,6 +95,7 @@ export interface Enquiry {
     healthConditions?: string;
     referredBy?: string;
     referredByMemberId?: string;
+    password?: string;
     notes?: string;
     status: "new" | "contacted" | "converted" | "rejected";
     createdAt: Timestamp;
@@ -384,4 +385,21 @@ export interface Feedback {
     message?: string;
     createdAt: Timestamp;
     source: 'reception' | 'app';
+}
+
+// ─── /clubFeedback/{feedbackId} ───────────────────────────────────────
+// Messages / requests FROM club owners TO the super admin platform
+export interface ClubFeedback {
+    id: string;
+    clubId: string;
+    clubName: string;
+    senderName: string;
+    senderEmail: string;
+    category: 'general' | 'bug_report' | 'feature_request' | 'billing' | 'support' | 'other';
+    subject: string;
+    message: string;
+    status: 'new' | 'read' | 'resolved';
+    reply?: string;
+    repliedAt?: Timestamp;
+    createdAt: Timestamp;
 }

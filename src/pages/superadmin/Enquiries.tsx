@@ -4,13 +4,15 @@ import {
     ChevronDown,
     ChevronUp,
     MessageSquare,
-    CheckSquare,
-    Square,
+    CheckCircle,
+    Reply,
+    Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
 import {
     Select,
     SelectContent,
@@ -19,18 +21,30 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { useEnquiries, useUpdateEnquiryStatus, exportEnquiriesToCSV } from "@/hooks/superadmin/useEnquiries";
+import {
+    useClubFeedback,
+    useUpdateClubFeedbackStatus,
+    exportClubFeedbackToCSV,
+} from "@/hooks/superadmin/useEnquiries";
 import { useAllClubs } from "@/hooks/useSuperAdmin";
-import type { Enquiry } from "@/types/firestore";
+import type { ClubFeedback } from "@/types/firestore";
 import { Timestamp } from "firebase/firestore";
 
 // ─── Status badge colors ──────────────────────────────────────────────────
 
-const statusColors: Record<Enquiry["status"], string> = {
+const statusColors: Record<ClubFeedback["status"], string> = {
     new: "border-blue-200 bg-blue-50 text-blue-700",
-    contacted: "border-yellow-200 bg-yellow-50 text-yellow-700",
-    converted: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    rejected: "border-red-200 bg-red-50 text-red-700",
+    read: "border-yellow-200 bg-yellow-50 text-yellow-700",
+    resolved: "border-emerald-200 bg-emerald-50 text-emerald-700",
+};
+
+const categoryLabels: Record<ClubFeedback["category"], string> = {
+    general: "💬 General",
+    bug_report: "🐛 Bug Report",
+    feature_request: "💡 Feature Request",
+    billing: "💳 Billing",
+    support: "🆘 Support",
+    other: "📝 Other",
 };
 
 function formatDate(ts: { toDate?: () => Date } | null | undefined) {
@@ -38,22 +52,21 @@ function formatDate(ts: { toDate?: () => Date } | null | undefined) {
     return ts.toDate().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-// ─── Global Enquiries Page ────────────────────────────────────────────────
+// ─── Club Feedback Page (Super Admin) ─────────────────────────────────────
 
 export default function Enquiries() {
     const { toast } = useToast();
-    const { data: enquiries, isLoading } = useEnquiries();
+    const { data: feedbackList, isLoading } = useClubFeedback();
     const { data: clubs } = useAllClubs();
-    const updateStatus = useUpdateEnquiryStatus();
+    const updateStatus = useUpdateClubFeedbackStatus();
 
     const [search, setSearch] = useState("");
     const [filterClub, setFilterClub] = useState("all");
-    const [filterStatus, setFilterStatus] = useState<Enquiry["status"] | "all">("all");
-    const [filterFrom, setFilterFrom] = useState("");
-    const [filterTo, setFilterTo] = useState("");
-    const [filterReferredBy, setFilterReferredBy] = useState("");
+    const [filterStatus, setFilterStatus] = useState<ClubFeedback["status"] | "all">("all");
+    const [filterCategory, setFilterCategory] = useState<ClubFeedback["category"] | "all">("all");
     const [expandedId, setExpandedId] = useState<string | null>(null);
-    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [replyingId, setReplyingId] = useState<string | null>(null);
+    const [replyText, setReplyText] = useState("");
 
     const clubMap = useMemo(() => {
         const m: Record<string, string> = {};
@@ -62,77 +75,67 @@ export default function Enquiries() {
     }, [clubs]);
 
     const filtered = useMemo(() => {
-        if (!enquiries) return [];
-        let list = [...enquiries];
+        if (!feedbackList) return [];
+        let list = [...feedbackList];
 
         if (filterClub !== "all") list = list.filter((e) => e.clubId === filterClub);
         if (filterStatus !== "all") list = list.filter((e) => e.status === filterStatus);
-        if (filterReferredBy.trim()) {
-            const q = filterReferredBy.toLowerCase();
-            list = list.filter((e) => e.referredBy?.toLowerCase().includes(q));
-        }
-        if (filterFrom) {
-            const from = new Date(filterFrom);
-            list = list.filter((e) => e.createdAt instanceof Timestamp && e.createdAt.toDate() >= from);
-        }
-        if (filterTo) {
-            const to = new Date(filterTo);
-            to.setHours(23, 59, 59, 999);
-            list = list.filter((e) => e.createdAt instanceof Timestamp && e.createdAt.toDate() <= to);
-        }
+        if (filterCategory !== "all") list = list.filter((e) => e.category === filterCategory);
         if (search.trim()) {
             const q = search.toLowerCase();
             list = list.filter(
                 (e) =>
-                    e.name.toLowerCase().includes(q) ||
-                    e.phone.includes(q) ||
-                    e.email?.toLowerCase().includes(q)
+                    e.subject.toLowerCase().includes(q) ||
+                    e.message.toLowerCase().includes(q) ||
+                    e.senderName.toLowerCase().includes(q) ||
+                    e.clubName.toLowerCase().includes(q)
             );
         }
 
         return list;
-    }, [enquiries, filterClub, filterStatus, filterFrom, filterTo, filterReferredBy, search]);
+    }, [feedbackList, filterClub, filterStatus, filterCategory, search]);
 
-    function toggleSelect(id: string) {
-        setSelectedIds((prev) => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-        });
-    }
-
-    function toggleSelectAll() {
-        if (selectedIds.size === filtered.length) {
-            setSelectedIds(new Set());
-        } else {
-            setSelectedIds(new Set(filtered.map((e) => e.id)));
+    const handleReply = async (feedbackId: string) => {
+        if (!replyText.trim()) return;
+        try {
+            await updateStatus.mutateAsync({
+                feedbackId,
+                status: "resolved",
+                reply: replyText.trim(),
+            });
+            toast({ title: "Reply sent & marked as resolved ✅" });
+            setReplyingId(null);
+            setReplyText("");
+        } catch {
+            toast({ title: "Error sending reply", variant: "destructive" });
         }
-    }
+    };
 
-    async function bulkMarkContacted() {
-        const ids = Array.from(selectedIds);
-        await Promise.all(ids.map((id) => updateStatus.mutateAsync({ enquiryId: id, status: "contacted" })));
-        setSelectedIds(new Set());
-        toast({ title: `${ids.length} enquiries marked as contacted.` });
-    }
+    const handleMarkRead = async (feedbackId: string) => {
+        try {
+            await updateStatus.mutateAsync({ feedbackId, status: "read" });
+            toast({ title: "Marked as read" });
+        } catch {
+            toast({ title: "Error", variant: "destructive" });
+        }
+    };
 
     return (
         <div className="space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">All Enquiries</h1>
+                    <h1 className="text-2xl font-bold tracking-tight">Club Feedback</h1>
                     <p className="text-sm text-muted-foreground mt-1">
-                        {filtered.length} enquiries
-                        {enquiries && filtered.length !== enquiries.length ? ` (filtered from ${enquiries.length})` : ""}
+                        Messages and requests from club owners
+                        {feedbackList && ` · ${filtered.length} of ${feedbackList.length}`}
                     </p>
                 </div>
                 <Button
                     variant="outline"
                     size="sm"
                     className="gap-1.5"
-                    onClick={() => exportEnquiriesToCSV(filtered, "all-enquiries.csv")}
+                    onClick={() => exportClubFeedbackToCSV(filtered, "club-feedback.csv")}
                     disabled={!filtered.length}
                 >
                     Export CSV
@@ -145,7 +148,7 @@ export default function Enquiries() {
                     <div className="relative sm:col-span-2 lg:col-span-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                         <Input
-                            placeholder="Search name, phone, email…"
+                            placeholder="Search subject, message, sender…"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             className="pl-9"
@@ -162,73 +165,46 @@ export default function Enquiries() {
                             ))}
                         </SelectContent>
                     </Select>
-                    <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as Enquiry["status"] | "all")}>
+                    <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as ClubFeedback["status"] | "all")}>
                         <SelectTrigger>
                             <SelectValue placeholder="All Statuses" />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Statuses</SelectItem>
-                            <SelectItem value="new">New</SelectItem>
-                            <SelectItem value="contacted">Contacted</SelectItem>
-                            <SelectItem value="converted">Converted</SelectItem>
-                            <SelectItem value="rejected">Rejected</SelectItem>
+                            <SelectItem value="new">🔵 New</SelectItem>
+                            <SelectItem value="read">🟡 Read</SelectItem>
+                            <SelectItem value="resolved">🟢 Resolved</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Input
-                        placeholder="Referred by…"
-                        value={filterReferredBy}
-                        onChange={(e) => setFilterReferredBy(e.target.value)}
-                    />
+                    <Select value={filterCategory} onValueChange={(v) => setFilterCategory(v as ClubFeedback["category"] | "all")}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="All Categories" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Categories</SelectItem>
+                            <SelectItem value="general">💬 General</SelectItem>
+                            <SelectItem value="bug_report">🐛 Bug Report</SelectItem>
+                            <SelectItem value="feature_request">💡 Feature Request</SelectItem>
+                            <SelectItem value="billing">💳 Billing</SelectItem>
+                            <SelectItem value="support">🆘 Support</SelectItem>
+                            <SelectItem value="other">📝 Other</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-3">
-                    <div className="flex items-center gap-2">
-                        <Label>From</Label>
-                        <Input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)} className="w-40" />
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Label>To</Label>
-                        <Input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)} className="w-40" />
-                    </div>
-                    {(filterFrom || filterTo || filterClub !== "all" || filterStatus !== "all" || filterReferredBy || search) && (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                                setSearch(""); setFilterClub("all"); setFilterStatus("all");
-                                setFilterFrom(""); setFilterTo(""); setFilterReferredBy("");
-                            }}
-                        >
-                            Clear Filters
-                        </Button>
-                    )}
-                </div>
+                {(search || filterClub !== "all" || filterStatus !== "all" || filterCategory !== "all") && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                            setSearch(""); setFilterClub("all"); setFilterStatus("all"); setFilterCategory("all");
+                        }}
+                    >
+                        Clear Filters
+                    </Button>
+                )}
             </div>
 
-            {/* Bulk actions */}
-            {selectedIds.size > 0 && (
-                <div className="flex items-center gap-3 p-3 rounded-xl bg-violet-50 border border-violet-200">
-                    <span className="text-sm font-medium text-violet-700">{selectedIds.size} selected</span>
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        className="gap-1.5 text-xs border-violet-300 text-violet-700 hover:bg-violet-100"
-                        onClick={bulkMarkContacted}
-                        disabled={updateStatus.isPending}
-                    >
-                        Mark as Contacted
-                    </Button>
-                    <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-xs text-violet-600"
-                        onClick={() => setSelectedIds(new Set())}
-                    >
-                        Clear selection
-                    </Button>
-                </div>
-            )}
-
-            {/* Table */}
+            {/* Feedback List */}
             {isLoading ? (
                 <div className="space-y-2">
                     {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-14 rounded-xl" />)}
@@ -236,106 +212,141 @@ export default function Enquiries() {
             ) : filtered.length === 0 ? (
                 <div className="text-center py-16 text-muted-foreground">
                     <MessageSquare className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                    <p className="text-sm">No enquiries match your filters.</p>
+                    <p className="text-sm">
+                        {feedbackList?.length === 0
+                            ? "No club feedback yet. Club owners can send messages from their dashboard."
+                            : "No feedback matches your filters."}
+                    </p>
                 </div>
             ) : (
-                <div className="bg-white rounded-2xl border overflow-hidden">
-                    {/* Header row */}
-                    <div className="hidden lg:grid lg:grid-cols-[32px_1.5fr_1fr_1fr_1fr_1fr_1fr_auto] gap-3 px-4 py-2 bg-gray-50 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        <button onClick={toggleSelectAll} className="flex items-center">
-                            {selectedIds.size === filtered.length && filtered.length > 0
-                                ? <CheckSquare className="w-4 h-4 text-violet-600" />
-                                : <Square className="w-4 h-4" />}
-                        </button>
-                        <span>Name</span>
-                        <span>Club</span>
-                        <span>Phone</span>
-                        <span>WhatsApp</span>
-                        <span>Date</span>
-                        <span>Status</span>
-                        <span></span>
-                    </div>
+                <div className="space-y-3">
+                    {filtered.map((fb) => (
+                        <div key={fb.id} className={`bg-white rounded-2xl border overflow-hidden transition-all ${fb.status === "new" ? "border-blue-200 shadow-sm" : ""}`}>
+                            {/* Header row */}
+                            <div
+                                className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50"
+                                onClick={() => setExpandedId(expandedId === fb.id ? null : fb.id)}
+                            >
+                                {/* Status indicator */}
+                                <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${fb.status === "new" ? "bg-blue-500" : fb.status === "read" ? "bg-yellow-400" : "bg-emerald-500"}`} />
 
-                    <div className="divide-y">
-                        {filtered.map((e) => (
-                            <div key={e.id}>
-                                <div
-                                    className="grid grid-cols-1 lg:grid-cols-[32px_1.5fr_1fr_1fr_1fr_1fr_1fr_auto] gap-2 lg:gap-3 px-4 py-3 items-center hover:bg-gray-50 cursor-pointer"
-                                    onClick={() => setExpandedId(expandedId === e.id ? null : e.id)}
-                                >
-                                    <button
-                                        className="hidden lg:flex items-center"
-                                        onClick={(ev) => { ev.stopPropagation(); toggleSelect(e.id); }}
-                                    >
-                                        {selectedIds.has(e.id)
-                                            ? <CheckSquare className="w-4 h-4 text-violet-600" />
-                                            : <Square className="w-4 h-4 text-muted-foreground" />}
-                                    </button>
-                                    <div>
-                                        <p className="text-sm font-medium">{e.name}</p>
-                                        {e.referredBy && <p className="text-xs text-muted-foreground">via {e.referredBy}</p>}
+                                {/* Main info */}
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <p className="text-sm font-semibold truncate">{fb.subject}</p>
+                                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                                            {categoryLabels[fb.category] ?? fb.category}
+                                        </Badge>
                                     </div>
-                                    <span className="text-xs text-muted-foreground truncate hidden lg:block">{clubMap[e.clubId] ?? e.clubId}</span>
-                                    <span className="text-sm hidden lg:block">{e.phone}</span>
-                                    <span className="text-sm text-muted-foreground hidden lg:block">{e.whatsapp ?? "—"}</span>
-                                    <span className="text-xs text-muted-foreground hidden lg:block">{formatDate(e.createdAt as { toDate?: () => Date })}</span>
-                                    <div onClick={(ev) => ev.stopPropagation()}>
-                                        <Select
-                                            value={e.status}
-                                            onValueChange={(v) => updateStatus.mutate({ enquiryId: e.id, status: v as Enquiry["status"] })}
-                                        >
-                                            <SelectTrigger className="h-7 text-xs w-28">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {(["new", "contacted", "converted", "rejected"] as const).map((s) => (
-                                                    <SelectItem key={s} value={s} className="text-xs capitalize">{s}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(ev) => { ev.stopPropagation(); setExpandedId(expandedId === e.id ? null : e.id); }}>
-                                        {expandedId === e.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                    </Button>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        {fb.clubName} · {fb.senderName} · {formatDate(fb.createdAt as { toDate?: () => Date })}
+                                    </p>
                                 </div>
 
-                                {expandedId === e.id && (
-                                    <div className="px-4 pb-4 bg-gray-50 border-t">
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-3">
-                                            {[
-                                                ["Club", clubMap[e.clubId] ?? e.clubId],
-                                                ["Phone", e.phone],
-                                                ["WhatsApp", e.whatsapp],
-                                                ["Email", e.email],
-                                                ["Address", e.address],
-                                                ["Date of Birth", e.dob],
-                                                ["Current Weight", e.currentWeight ? `${e.currentWeight} kg` : undefined],
-                                                ["Target Weight", e.targetWeight ? `${e.targetWeight} kg` : undefined],
-                                                ["Health Conditions", e.healthConditions],
-                                                ["Referred By", e.referredBy],
-                                                ["Status", e.status],
-                                                ["Date", formatDate(e.createdAt as { toDate?: () => Date })],
-                                            ]
-                                                .filter(([, v]) => v)
-                                                .map(([label, value]) => (
-                                                    <div key={String(label)}>
-                                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-                                                        <p className="text-sm mt-0.5 capitalize">{String(value)}</p>
-                                                    </div>
-                                                ))}
-                                        </div>
-                                    </div>
-                                )}
+                                {/* Status badge */}
+                                <Badge className={`text-[10px] capitalize ${statusColors[fb.status]}`}>
+                                    {fb.status}
+                                </Badge>
+
+                                {/* Expand chevron */}
+                                {expandedId === fb.id ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                             </div>
-                        ))}
-                    </div>
+
+                            {/* Expanded details */}
+                            {expandedId === fb.id && (
+                                <div className="px-4 pb-4 border-t bg-gray-50/50 space-y-4">
+                                    {/* Message */}
+                                    <div className="pt-3">
+                                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground mb-1">Message</p>
+                                        <p className="text-sm text-gray-700 whitespace-pre-wrap">{fb.message}</p>
+                                    </div>
+
+                                    {/* Contact info */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                        {[
+                                            ["Club", fb.clubName],
+                                            ["Sender", fb.senderName],
+                                            ["Email", fb.senderEmail],
+                                            ["Category", categoryLabels[fb.category]],
+                                            ["Status", fb.status.charAt(0).toUpperCase() + fb.status.slice(1)],
+                                            ["Sent", formatDate(fb.createdAt as { toDate?: () => Date })],
+                                        ].map(([label, value]) => (
+                                            <div key={String(label)}>
+                                                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+                                                <p className="text-sm mt-0.5">{String(value)}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Existing reply */}
+                                    {fb.reply && (
+                                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                                            <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700 mb-1">
+                                                ✅ Reply{fb.repliedAt ? ` · ${formatDate(fb.repliedAt as { toDate?: () => Date })}` : ""}
+                                            </p>
+                                            <p className="text-sm text-emerald-800 whitespace-pre-wrap">{fb.reply}</p>
+                                        </div>
+                                    )}
+
+                                    {/* Reply form */}
+                                    {replyingId === fb.id ? (
+                                        <div className="space-y-2">
+                                            <Textarea
+                                                placeholder="Type your reply to the club owner..."
+                                                value={replyText}
+                                                onChange={(e) => setReplyText(e.target.value)}
+                                                className="min-h-[80px]"
+                                            />
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    size="sm"
+                                                    className="gap-1.5 bg-emerald-600 hover:bg-emerald-700"
+                                                    onClick={() => handleReply(fb.id)}
+                                                    disabled={!replyText.trim() || updateStatus.isPending}
+                                                >
+                                                    <CheckCircle className="w-3.5 h-3.5" />
+                                                    Send Reply & Resolve
+                                                </Button>
+                                                <Button
+                                                    size="sm"
+                                                    variant="ghost"
+                                                    onClick={() => { setReplyingId(null); setReplyText(""); }}
+                                                >
+                                                    Cancel
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex gap-2 pt-1">
+                                            {fb.status === "new" && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="gap-1.5 text-xs"
+                                                    onClick={() => handleMarkRead(fb.id)}
+                                                    disabled={updateStatus.isPending}
+                                                >
+                                                    <Eye className="w-3.5 h-3.5" />
+                                                    Mark as Read
+                                                </Button>
+                                            )}
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="gap-1.5 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                                                onClick={() => { setReplyingId(fb.id); setReplyText(fb.reply ?? ""); }}
+                                            >
+                                                <Reply className="w-3.5 h-3.5" />
+                                                {fb.reply ? "Edit Reply" : "Reply"}
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    ))}
                 </div>
             )}
         </div>
     );
-}
-
-// Small Label helper used in filter row
-function Label({ children }: { children: React.ReactNode }) {
-    return <span className="text-sm text-muted-foreground whitespace-nowrap">{children}</span>;
 }

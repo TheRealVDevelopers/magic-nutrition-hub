@@ -1,9 +1,10 @@
 import { useState, useMemo, useCallback } from "react";
 import {
     Search, ChevronDown, ChevronUp, UserPlus, UserCheck, X,
-    Download, Star, Filter
+    Download, Star, Filter, AlertTriangle
 } from "lucide-react";
-import { collection, addDoc, getDocs, query, where, Timestamp, updateDoc, doc } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, where, Timestamp, updateDoc, doc, deleteField } from "firebase/firestore";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +23,7 @@ import {
 } from "@/hooks/owner/useEnquiries";
 import { useClubContext } from "@/lib/clubDetection";
 import { useToast } from "@/hooks/use-toast";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import { generateMemberId, generatePrefixFromName } from "@/utils/generateMemberId";
 import { useClubFeedback } from "@/hooks/useFeedback";
 import type { Enquiry, Feedback } from "@/types/firestore";
@@ -202,6 +203,7 @@ interface AcceptModalProps {
 
 function AcceptVisitingModal({ enquiry, onClose, onDone }: AcceptModalProps) {
     const { club } = useClubContext();
+    const { toast } = useToast();
     const updateStatus = useUpdateEnquiryStatus();
     const [loading, setLoading] = useState(false);
 
@@ -226,12 +228,33 @@ function AcceptVisitingModal({ enquiry, onClose, onDone }: AcceptModalProps) {
                 }
             }
 
-            // Create user doc
+            // Create Firebase Auth account if email + password available
+            const enquiryPassword = (enquiry as any).password;
+            if (enquiry.email && enquiryPassword) {
+                try {
+                    await createUserWithEmailAndPassword(auth, enquiry.email, enquiryPassword);
+                } catch (authErr: any) {
+                    // If email already exists in auth, continue with member creation
+                    if (authErr.code !== 'auth/email-already-in-use') {
+                        throw authErr;
+                    }
+                }
+            } else if (!enquiry.email) {
+                toast({
+                    title: "⚠️ No email provided",
+                    description: "Member cannot log in until email is added to their profile.",
+                    variant: "destructive",
+                });
+            }
+
+            // Create user doc with ALL enquiry fields
             await addDoc(collection(db, "users"), {
                 id: newDocId,
                 name: enquiry.name,
                 phone: enquiry.phone,
+                whatsapp: enquiry.whatsapp ?? "",
                 email: enquiry.email ?? "",
+                address: enquiry.address ?? "",
                 photo: "",
                 role: "member",
                 clubId: club.id,
@@ -248,10 +271,14 @@ function AcceptVisitingModal({ enquiry, onClose, onDone }: AcceptModalProps) {
                 isClubOwner: false,
                 ownedClubId: null,
                 originalClubId: club.id,
-                referredBy: null,
+                referredBy: enquiry.referredBy ?? null,
                 referredByMemberId: enquiry.referredByMemberId ?? null,
                 memberType: "visiting",
                 memberId: generatedMemberId,
+                currentWeight: enquiry.currentWeight ?? null,
+                targetWeight: enquiry.targetWeight ?? null,
+                healthConditions: enquiry.healthConditions ?? "",
+                passwordChanged: false,
                 createdAt: now,
                 updatedAt: now,
             });
@@ -265,7 +292,18 @@ function AcceptVisitingModal({ enquiry, onClose, onDone }: AcceptModalProps) {
                 lastUpdated: now,
             });
 
-            // Update enquiry
+            // Remove password from enquiry doc (don't store password in Firestore)
+            if (enquiryPassword) {
+                try {
+                    await updateDoc(doc(db, "enquiries", enquiry.id), {
+                        password: deleteField(),
+                    });
+                } catch {
+                    // Non-critical — continue even if password removal fails
+                }
+            }
+
+            // Update enquiry status
             await updateStatus.mutateAsync({ enquiryId: enquiry.id, status: "converted" });
 
             // WhatsApp URL
@@ -280,7 +318,7 @@ function AcceptVisitingModal({ enquiry, onClose, onDone }: AcceptModalProps) {
         } finally {
             setLoading(false);
         }
-    }, [club, enquiry, updateStatus, onDone]);
+    }, [club, enquiry, updateStatus, onDone, toast]);
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

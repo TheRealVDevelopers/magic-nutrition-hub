@@ -1,14 +1,18 @@
-import { useState, useEffect } from "react";
-import { collection, getDocs, query, where, orderBy } from "firebase/firestore";
+import { useState, useEffect, useMemo } from "react";
+import { collection, getDocs, query, where, orderBy, addDoc, updateDoc, doc, Timestamp, limit, getDoc } from "firebase/firestore";
 import { useQuery } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
 import { db } from "@/lib/firebase";
 import { useClubContext } from "@/lib/clubDetection";
 import VolunteerModal from "@/components/reception/VolunteerModal";
 import FeedbackModal from "@/components/reception/FeedbackModal";
-import type { Product, Announcement } from "@/types/firestore";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Search, X, Loader2 } from "lucide-react";
+import type { Product, Announcement, User } from "@/types/firestore";
 
 const GREEN = "#2d9653";
+const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 
 function todayStr() {
     return new Date().toISOString().slice(0, 10);
@@ -150,6 +154,314 @@ function TodaysShakes({ clubId }: { clubId: string }) {
     );
 }
 
+// ─── Weigh-in Section ─────────────────────────────────────────────────────
+
+function getNextWeighInDate(weighInDays: string[]): { dayName: string; date: Date } | null {
+    if (!weighInDays.length) return null;
+    const today = new Date();
+    const todayIndex = today.getDay();
+    const dayIndices = weighInDays
+        .map(d => DAY_NAMES.indexOf(d.toLowerCase()))
+        .filter(i => i >= 0)
+        .sort((a, b) => a - b);
+    if (!dayIndices.length) return null;
+
+    // Find next day after today
+    let nextIndex = dayIndices.find(i => i > todayIndex);
+    let daysAhead: number;
+    if (nextIndex !== undefined) {
+        daysAhead = nextIndex - todayIndex;
+    } else {
+        nextIndex = dayIndices[0];
+        daysAhead = 7 - todayIndex + nextIndex;
+    }
+
+    const nextDate = new Date(today);
+    nextDate.setDate(today.getDate() + daysAhead);
+    return { dayName: DAY_NAMES[nextIndex], date: nextDate };
+}
+
+function WeighInSection({ clubId }: { clubId: string }) {
+    const [weighInDays, setWeighInDays] = useState<string[] | null>(null);
+    const [loaded, setLoaded] = useState(false);
+    const [modalOpen, setModalOpen] = useState(false);
+
+    useEffect(() => {
+        const fetchDays = async () => {
+            try {
+                const clubDoc = await getDoc(doc(db, "clubs", clubId));
+                if (clubDoc.exists()) {
+                    const data = clubDoc.data();
+                    setWeighInDays(data.weighInDays ?? []);
+                }
+            } catch {
+                setWeighInDays([]);
+            }
+            setLoaded(true);
+        };
+        fetchDays();
+    }, [clubId]);
+
+    if (!loaded || !weighInDays || weighInDays.length === 0) return null;
+
+    const todayDay = DAY_NAMES[new Date().getDay()];
+    const isWeighInDay = weighInDays.map(d => d.toLowerCase()).includes(todayDay);
+
+    if (isWeighInDay) {
+        return (
+            <section className="px-6 py-4">
+                <div
+                    className="rounded-3xl border-2 p-6"
+                    style={{ backgroundColor: "#f0fdf4", borderColor: `${GREEN}40` }}
+                >
+                    <h3 className="text-xl font-black mb-2" style={{ color: GREEN }}>
+                        ⚖️ Today is Weigh-in Day!
+                    </h3>
+                    <p className="text-gray-600 mb-4">Ask staff to record your weight</p>
+                    <Button
+                        onClick={() => setModalOpen(true)}
+                        className="rounded-xl text-white font-bold px-6"
+                        style={{ backgroundColor: GREEN }}
+                    >
+                        Start Weigh-in
+                    </Button>
+                </div>
+                {modalOpen && (
+                    <WeighInModal clubId={clubId} onClose={() => setModalOpen(false)} />
+                )}
+            </section>
+        );
+    }
+
+    // Not a weigh-in day — show motivational card
+    const next = getNextWeighInDate(weighInDays);
+    const nextDateStr = next
+        ? next.date.toLocaleDateString("en-US", { weekday: "long", day: "2-digit", month: "short", year: "numeric" })
+        : "—";
+
+    return (
+        <section className="px-6 py-4">
+            <div
+                className="rounded-3xl border-2 p-6 text-center"
+                style={{ backgroundColor: "#f0fdf4", borderColor: `${GREEN}40` }}
+            >
+                <h3 className="text-xl font-black mb-2" style={{ color: GREEN }}>
+                    💪 Keep Going!
+                </h3>
+                <p className="text-gray-600">
+                    Next weigh-in is on
+                </p>
+                <p className="text-lg font-black mt-1" style={{ color: GREEN }}>
+                    {nextDateStr}
+                </p>
+                <p className="text-gray-500 mt-2 text-sm">
+                    Stay consistent — results are coming! 🌟
+                </p>
+            </div>
+        </section>
+    );
+}
+
+function WeighInModal({ clubId, onClose }: { clubId: string; onClose: () => void }) {
+    const [searchQuery, setSearchQuery] = useState("");
+    const [members, setMembers] = useState<User[]>([]);
+    const [searching, setSearching] = useState(false);
+    const [selectedMember, setSelectedMember] = useState<User | null>(null);
+    const [weight, setWeight] = useState("");
+    const [notes, setNotes] = useState("");
+    const [saving, setSaving] = useState(false);
+    const [result, setResult] = useState<{ change: number; name: string } | null>(null);
+
+    const searchMembers = async () => {
+        if (!searchQuery.trim()) return;
+        setSearching(true);
+        try {
+            // Search by name (case-insensitive client-side filtering)
+            const snap = await getDocs(
+                query(
+                    collection(db, "users"),
+                    where("clubId", "==", clubId),
+                    where("role", "==", "member"),
+                    limit(50)
+                )
+            );
+            const q = searchQuery.trim().toLowerCase();
+            const results = snap.docs
+                .map(d => ({ id: d.id, ...d.data() } as User))
+                .filter(m => m.name.toLowerCase().includes(q) || (m.memberId ?? "").toLowerCase().includes(q));
+            setMembers(results);
+        } catch {
+            setMembers([]);
+        }
+        setSearching(false);
+    };
+
+    const handleSave = async () => {
+        if (!selectedMember || !weight) return;
+        setSaving(true);
+        try {
+            const newWeight = parseFloat(weight);
+            const previousWeight = (selectedMember as any).currentWeight ?? null;
+            const change = previousWeight != null ? previousWeight - newWeight : null;
+
+            // Save to weighIns collection
+            await addDoc(collection(db, "weighIns"), {
+                memberId: selectedMember.id,
+                memberName: selectedMember.name,
+                clubId,
+                weight: newWeight,
+                date: todayStr(),
+                previousWeight,
+                change,
+                notes,
+                recordedBy: "owner",
+                createdAt: Timestamp.now(),
+            });
+
+            // Update member's currentWeight
+            await updateDoc(doc(db, "users", selectedMember.id), {
+                currentWeight: newWeight,
+                lastWeighIn: Timestamp.now(),
+            });
+
+            setResult({ change: change ?? 0, name: selectedMember.name });
+
+            // Auto close after 3 seconds
+            setTimeout(() => {
+                setResult(null);
+                setSelectedMember(null);
+                setWeight("");
+                setNotes("");
+            }, 3000);
+        } catch (err) {
+            console.error("Weigh-in error:", err);
+        }
+        setSaving(false);
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4" style={{ fontFamily: "Nunito, sans-serif" }}>
+                <div className="flex justify-between items-start">
+                    <h2 className="text-xl font-black text-gray-800">⚖️ Weigh-in</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-2xl font-bold">✕</button>
+                </div>
+
+                {result ? (
+                    <div className="text-center py-6 space-y-3">
+                        <div className="text-5xl">
+                            {result.change > 0 ? "🎉" : result.change < 0 ? "💪" : "⚖️"}
+                        </div>
+                        <p className="font-black text-xl text-gray-800">{result.name}</p>
+                        <p className="text-lg font-bold" style={{ color: result.change > 0 ? GREEN : result.change < 0 ? "#dc2626" : "#6b7280" }}>
+                            {result.change > 0 ? `Lost ${result.change.toFixed(1)}kg 🎉` :
+                                result.change < 0 ? `Gained ${Math.abs(result.change).toFixed(1)}kg` :
+                                    "No change"}
+                        </p>
+                        <p className="text-xs text-gray-400">Auto-closing in 3 seconds...</p>
+                    </div>
+                ) : selectedMember ? (
+                    <div className="space-y-4">
+                        {/* Selected member card */}
+                        <div className="bg-green-50 rounded-2xl p-4 flex items-center gap-3 border border-green-200">
+                            <div className="w-12 h-12 rounded-full flex items-center justify-center text-white text-lg font-bold" style={{ backgroundColor: GREEN }}>
+                                {selectedMember.name[0]?.toUpperCase()}
+                            </div>
+                            <div className="flex-1">
+                                <p className="font-bold text-gray-800">{selectedMember.name}</p>
+                                <p className="text-xs text-gray-500">{(selectedMember as any).memberId ?? "—"}</p>
+                                {(selectedMember as any).currentWeight != null && (
+                                    <p className="text-xs text-gray-500">
+                                        Last weight: {(selectedMember as any).currentWeight}kg
+                                        {selectedMember.lastWeighIn && ` • ${selectedMember.lastWeighIn?.toDate?.()?.toLocaleDateString() ?? ""}`}
+                                    </p>
+                                )}
+                            </div>
+                            <button onClick={() => setSelectedMember(null)} className="text-gray-400 hover:text-gray-600">
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold text-gray-700">Weight (kg)</label>
+                            <Input
+                                type="number"
+                                step="0.1"
+                                value={weight}
+                                onChange={e => setWeight(e.target.value)}
+                                placeholder="e.g. 68.5"
+                                className="h-12 text-lg font-bold"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold text-gray-700">Notes (optional)</label>
+                            <Input
+                                value={notes}
+                                onChange={e => setNotes(e.target.value)}
+                                placeholder="Any notes..."
+                            />
+                        </div>
+                        <Button
+                            onClick={handleSave}
+                            disabled={!weight || saving}
+                            className="w-full rounded-xl text-white font-bold h-12"
+                            style={{ backgroundColor: GREEN }}
+                        >
+                            {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-2" />Saving...</> : "💾 Save Weigh-in"}
+                        </Button>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        <p className="text-sm text-gray-500">Search for a member by name or member ID</p>
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <Input
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    onKeyDown={e => e.key === "Enter" && searchMembers()}
+                                    placeholder="Name or member ID..."
+                                    className="pl-9"
+                                />
+                            </div>
+                            <Button onClick={searchMembers} disabled={searching} variant="outline" className="rounded-xl">
+                                {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Search"}
+                            </Button>
+                        </div>
+                        {members.length > 0 && (
+                            <div className="max-h-60 overflow-y-auto space-y-2">
+                                {members.map(m => (
+                                    <button
+                                        key={m.id}
+                                        onClick={() => setSelectedMember(m)}
+                                        className="w-full flex items-center gap-3 p-3 rounded-xl border hover:bg-green-50 transition-colors text-left"
+                                    >
+                                        <div className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold" style={{ backgroundColor: GREEN }}>
+                                            {m.name[0]?.toUpperCase()}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-bold text-sm text-gray-800 truncate">{m.name}</p>
+                                            <p className="text-xs text-gray-400">{(m as any).memberId ?? "—"}</p>
+                                        </div>
+                                        {(m as any).currentWeight != null && (
+                                            <span className="text-xs text-gray-400">{(m as any).currentWeight}kg</span>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                        {members.length === 0 && searchQuery && !searching && (
+                            <p className="text-center text-sm text-gray-400 py-4">No members found</p>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// ─── Existing Modals ──────────────────────────────────────────────────────
+
 interface AboutModalProps {
     onClose: () => void;
 }
@@ -231,9 +543,10 @@ export default function Reception() {
 
             {/* Main content - fills remaining height */}
             <div className="flex-1 flex flex-col lg:flex-row gap-0 overflow-hidden">
-                {/* Today's Shakes - left/top */}
+                {/* Today's Shakes + Weigh-in - left/top */}
                 <div className="flex-1 overflow-y-auto">
                     {club?.id && <TodaysShakes clubId={club.id} />}
+                    {club?.id && <WeighInSection clubId={club.id} />}
                 </div>
 
                 {/* Action buttons - right/bottom */}
@@ -267,3 +580,4 @@ export default function Reception() {
         </div>
     );
 }
+

@@ -20,9 +20,11 @@ export default function MemberLogin() {
     const [submitting, setSubmitting] = useState(false);
     const [resetSent, setResetSent] = useState(false);
 
-    // If already logged in, go to dashboard
+    // If already logged in, go to saved redirect or dashboard
     if (member) {
-        navigate("/member/dashboard", { replace: true });
+        const redirect = sessionStorage.getItem('mnc_redirect') || '/member/dashboard';
+        sessionStorage.removeItem('mnc_redirect');
+        navigate(redirect, { replace: true });
         return null;
     }
 
@@ -32,7 +34,9 @@ export default function MemberLogin() {
         setSubmitting(true);
         try {
             await signIn(email, password);
-            navigate("/member/dashboard", { replace: true });
+            const redirect = sessionStorage.getItem('mnc_redirect') || '/member/dashboard';
+            sessionStorage.removeItem('mnc_redirect');
+            navigate(redirect, { replace: true });
         } catch (err: any) {
             setError(err.message || "Login failed");
         } finally {

@@ -70,7 +70,7 @@ import {
     useUploadLandingHTML,
 } from "@/hooks/useLandingImages";
 import { useClubPayments, useAddPayment } from "@/hooks/superadmin/useClubPayments";
-import { useEnquiries, useUpdateEnquiryStatus, exportEnquiriesToCSV } from "@/hooks/superadmin/useEnquiries";
+import { useEnquiries, useUpdateEnquiryStatus } from "@/hooks/owner/useEnquiries";
 import { useClubCostEstimate } from "@/hooks/superadmin/useFirebaseUsage";
 import { ref, uploadString, getDownloadURL, getBytes } from "firebase/storage";
 import { doc, updateDoc, arrayUnion, Timestamp } from "firebase/firestore";
@@ -573,29 +573,29 @@ function LandingPageTab({ clubId, club }: { clubId: string; club: Club }) {
     const history = club.landingPageHistory ?? [];
 
     // ── HTML editor state ──────────────────────────────────────────────
-    const [htmlContent, setHtmlContent]   = useState("");
-    const [savedHtml, setSavedHtml]       = useState("");   // last fetched/published value
+    const [htmlContent, setHtmlContent] = useState("");
+    const [savedHtml, setSavedHtml] = useState("");   // last fetched/published value
     const [fetchingHtml, setFetchingHtml] = useState(false);
-    const [editMode, setEditMode]         = useState(false);
-    const [publishing, setPublishing]     = useState(false);
-    const [publishStep, setPublishStep]   = useState<PublishStep>(null);
+    const [editMode, setEditMode] = useState(false);
+    const [publishing, setPublishing] = useState(false);
+    const [publishStep, setPublishStep] = useState<PublishStep>(null);
 
     // ── Preview modals ─────────────────────────────────────────────────
-    const [livePreviewOpen, setLivePreviewOpen]   = useState(false);
+    const [livePreviewOpen, setLivePreviewOpen] = useState(false);
     const [versionPreviewUrl, setVersionPreviewUrl] = useState<string | null>(null);
 
     // ── Restore state ──────────────────────────────────────────────────
-    const [restoreTarget, setRestoreTarget]   = useState<RestoreTarget | null>(null);
+    const [restoreTarget, setRestoreTarget] = useState<RestoreTarget | null>(null);
     const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
-    const [restoring, setRestoring]           = useState(false);
+    const [restoring, setRestoring] = useState(false);
 
     // ── Image state ────────────────────────────────────────────────────
-    const [imageLabel, setImageLabel]   = useState("");
-    const [imageFile, setImageFile]     = useState<File | null>(null);
+    const [imageLabel, setImageLabel] = useState("");
+    const [imageFile, setImageFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const { upload, uploading: imageUploading, progress: imageProgress } = useUploadLandingImage(clubId);
-    const { deleteImage, deleting }     = useDeleteLandingImage(clubId);
-    const [copiedId, setCopiedId]       = useState<string | null>(null);
+    const { deleteImage, deleting } = useDeleteLandingImage(clubId);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
     const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
     // ── useUploadLandingHTML kept for compatibility (not used for upload path below) ──
@@ -629,12 +629,12 @@ function LandingPageTab({ clubId, club }: { clubId: string; club: Club }) {
             });
 
         return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [club.landingPageUrl]);
 
     // ── Helpers ────────────────────────────────────────────────────────
-    function enterEditMode()  { setEditMode(true); }
-    function cancelEdit()     { setHtmlContent(savedHtml); setEditMode(false); }
+    function enterEditMode() { setEditMode(true); }
+    function cancelEdit() { setHtmlContent(savedHtml); setEditMode(false); }
 
     // Step 1 of publish flow
     function requestPublish() {
@@ -775,8 +775,8 @@ function LandingPageTab({ clubId, club }: { clubId: string; club: Club }) {
         if (!ts?.toDate) return "—";
         const d = ts.toDate();
         return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
-             + " · "
-             + d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+            + " · "
+            + d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
     }
 
     // ── Render ─────────────────────────────────────────────────────────

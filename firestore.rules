@@ -8,62 +8,124 @@ service cloud.firestore {
     function isSuperAdmin() { return isAuth() && getRole() == 'superAdmin'; }
     function isOwnerOf(clubId) { return isAuth() && getRole() == 'clubOwner' && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.clubId == clubId; }
 
+    // Users
     match /users/{userId} {
       allow read: if true;
       allow write: if isSuperAdmin();
       allow update: if isAuth() && request.auth.uid == userId;
     }
+
+    // Clubs — public read for domain detection
     match /clubs/{clubId} {
       allow read: if true;
       allow write: if true;
     }
+
+    // Members — authenticated read/write
+    match /members/{memberId} {
+      allow read, write: if true;
+    }
+
+    // Enquiries — public write (anyone can submit),
+    //             authenticated read (owner sees them)
+    match /enquiries/{enquiryId} {
+      allow create: if true;
+      allow read, update, delete: if true;
+    }
+
+    // Wallets
     match /wallets/{userId} {
       allow read, write: if true;
     }
+
+    // Wallet Transactions
     match /walletTransactions/{txId} {
       allow read, write: if true;
     }
+
+    // Top-up requests
     match /topupRequests/{reqId} {
       allow read, write: if true;
     }
+
+    // Orders
     match /orders/{orderId} {
       allow read, write: if true;
     }
+
+    // Attendance
     match /attendance/{attId} {
       allow read, write: if true;
     }
+
+    // Products/Menu
     match /products/{productId} {
       allow read, write: if true;
     }
+
+    // Memberships
     match /memberships/{planId} {
       allow read, write: if true;
     }
+
+    // Announcements
     match /announcements/{annId} {
       allow read, write: if true;
     }
+
+    // Billing Prints
     match /billingPrints/{billId} {
       allow read, write: if true;
     }
+
+    // Referrals
     match /referrals/{refId} {
       allow read, write: if true;
     }
+
+    // Platform settings
     match /platform/{docId} {
       allow read: if true;
       allow write: if isSuperAdmin();
     }
-    match /enquiries/{enquiryId} {
-      allow read, write: if true;
-    }
+
+    // Inventory
     match /inventory/{itemId} {
       allow read, write: if true;
     }
+
+    // Upgrade requests
     match /upgradeRequests/{requestId} {
       allow read, write: if true;
     }
+
+    // Volunteers
     match /volunteers/{sessionId} {
       allow read, write: if true;
     }
+
+    // Feedback
     match /feedback/{feedbackId} {
+      allow read, write: if true;
+    }
+
+    // Transactions
+    match /transactions/{transactionId} {
+      allow read, write: if true;
+    }
+
+    // Notifications
+    match /notifications/{notificationId} {
+      allow read, write: if true;
+    }
+
+    // Weigh-ins
+    match /weighIns/{weighInId} {
+      allow read, write: if true;
+    }
+
+    // Weight entries subcollection
+    match /members/{memberId}/weightEntries/{entryId} {
       allow read, write: if true;
     }
 
