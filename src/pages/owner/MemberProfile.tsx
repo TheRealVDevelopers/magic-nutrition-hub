@@ -231,9 +231,17 @@ export default function OwnerMemberProfile() {
                             {(member as any).memberType && (
                                 <Badge
                                     className="capitalize"
-                                    style={(member as any).memberType === "visiting" ? { backgroundColor: "#fef3c7", color: "#92400e", border: "1px solid #fcd34d" } : {}}
+                                    style={
+                                        (member as any).memberType === "visiting"
+                                            ? { backgroundColor: "#fef3c7", color: "#92400e", border: "1px solid #fcd34d" }
+                                            : (member as any).memberType === "permanent"
+                                                ? { backgroundColor: "#dcfce7", color: "#166534", border: "1px solid #86efac" }
+                                                : {}
+                                    }
                                 >
-                                    {(member as any).memberType}
+                                    {(member as any).memberType === "visiting" ? "🟡 Visiting Member" :
+                                        (member as any).memberType === "permanent" ? "🟢 Permanent Member" :
+                                            (member as any).memberType}
                                 </Badge>
                             )}
                             {member.membershipTier && <Badge className="capitalize">{member.membershipTier}</Badge>}

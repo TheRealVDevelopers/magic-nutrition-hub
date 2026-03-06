@@ -360,6 +360,20 @@ export function useApproveTopup() {
                 addedBy: resolvedBy, note: "Wallet topup", createdAt: now, balanceAfter: newBalance,
             } as WalletTransaction);
 
+            // 🎯 Business Rule: First wallet top-up → visiting member becomes permanent member
+            const memberSnap = await getDoc(doc(db, `clubs/${club!.id}/members`, req.memberId));
+            if (memberSnap.exists()) {
+                const memberData = memberSnap.data();
+                if (!memberData.isActiveMember || memberData.memberType === "visiting") {
+                    batch.update(doc(db, `clubs/${club!.id}/members`, req.memberId), {
+                        memberType: "permanent",
+                        isActiveMember: true,
+                        activatedAt: now,
+                        updatedAt: now,
+                    });
+                }
+            }
+
             await batch.commit();
         },
         onSuccess: () => qc.invalidateQueries({ queryKey: ["owner"] }),

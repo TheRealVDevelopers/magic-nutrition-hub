@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, collection, getDocs } from "firebase/firestore";
-import { getStorage, ref, uploadString } from "firebase/storage";
+import { getFirestore, collection, getDocs, addDoc, Timestamp } from "firebase/firestore";
+import { getStorage, ref, uploadString, getDownloadURL } from "firebase/storage";
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
@@ -47,20 +47,19 @@ async function migrate() {
     console.log("🚀 Starting landing page migration...");
 
     try {
-        // 1. Read the newly updated template
+        // 1. Read the updated template
         const templatePath = resolve(process.cwd(), "public/landing-template.html");
         const templateHtml = readFileSync(templatePath, "utf-8");
 
-        // 2. Fetch all existing clubs
+        // 2. Fetch all clubs
         const clubsSnap = await getDocs(collection(db, "clubs"));
-        console.log(`Found ${clubsSnap.size} clubs.`);
+        console.log(`Found ${clubsSnap.size} clubs.\n`);
 
-        // 3. Re-upload index.html for each club
         for (const clubDoc of clubsSnap.docs) {
             const clubId = clubDoc.id;
-            console.log(`\n⏳ Migrating club: ${clubId}...`);
+            console.log(`⏳ Migrating club: ${clubId}...`);
 
-            // Replace template variables
+            // 3. Replace template placeholders with real values
             const finalHtml = templateHtml
                 .replace(/\{\{CLUB_ID\}\}/g, clubId)
                 .replace(/\{\{FIREBASE_API_KEY\}\}/g, env.VITE_FIREBASE_API_KEY)
@@ -70,14 +69,43 @@ async function migrate() {
                 .replace(/\{\{FIREBASE_MESSAGING_SENDER_ID\}\}/g, env.VITE_FIREBASE_MESSAGING_SENDER_ID)
                 .replace(/\{\{FIREBASE_APP_ID\}\}/g, env.VITE_FIREBASE_APP_ID);
 
-            // Upload directly as index.html
-            const storagePath = `clubs/${clubId}/landing/index.html`;
-            const fileRef = ref(storage, storagePath);
-            await uploadString(fileRef, finalHtml, "raw", { contentType: "text/html" });
-            console.log(`✅ Uploaded new HTML to ${storagePath}`);
+            // 4. Determine next version number from clubs/{clubId}/landingPages
+            const versionsSnap = await getDocs(collection(db, `clubs/${clubId}/landingPages`));
+            const nextVersion = versionsSnap.size + 1;
+
+            const versionedPath = `clubs/${clubId}/landing/v${nextVersion}.html`;
+            const activePath = `clubs/${clubId}/landing/index.html`;
+
+            // 5. Upload versioned snapshot
+            const versionedRef = ref(storage, versionedPath);
+            await uploadString(versionedRef, finalHtml, "raw", { contentType: "text/html" });
+            const versionedUrl = await getDownloadURL(versionedRef);
+            console.log(`   ✅ Versioned copy: ${versionedPath}`);
+
+            // 6. Overwrite active index.html
+            const activeRef = ref(storage, activePath);
+            await uploadString(activeRef, finalHtml, "raw", { contentType: "text/html" });
+            const activeUrl = await getDownloadURL(activeRef);
+            console.log(`   ✅ Active page updated: ${activePath}`);
+
+            // 7. Write version record to clubs/{clubId}/landingPages/
+            const now = Timestamp.now();
+            await addDoc(collection(db, `clubs/${clubId}/landingPages`), {
+                version: nextVersion,
+                status: "active",
+                storagePath: versionedPath,
+                activeStoragePath: activePath,
+                url: versionedUrl,
+                activeUrl,
+                publishedAt: now,
+                publishedBy: "migration-script",
+                sizeBytes: Buffer.byteLength(finalHtml, "utf-8"),
+                note: "Auto-migrated to nested clubs/{clubId}/enquiries structure",
+            });
+            console.log(`   ✅ Version record saved → clubs/${clubId}/landingPages/v${nextVersion}\n`);
         }
 
-        console.log("\n🎉 Migration complete!");
+        console.log("🎉 Migration complete!");
         process.exit(0);
     } catch (err) {
         console.error("Migration failed:", err);

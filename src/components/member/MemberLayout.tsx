@@ -55,6 +55,15 @@ export default function MemberLayout({ children }: MemberLayoutProps) {
                 </Link>
             </header>
 
+            {/* Visiting Member Banner */}
+            {userProfile?.memberType === "visiting" && (
+                <div className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-50 border-b border-amber-200">
+                    <span>🟡</span>
+                    <span>You are a <strong>Visiting Member</strong> — top up your wallet to become a Permanent Member!</span>
+                    <Link to="/member/wallet" className="ml-auto text-xs underline shrink-0" style={{ color: "#92400e" }}>Top Up →</Link>
+                </div>
+            )}
+
             {/* Scrollable content */}
             <main className="flex-1 overflow-y-auto pb-20">
                 {children}

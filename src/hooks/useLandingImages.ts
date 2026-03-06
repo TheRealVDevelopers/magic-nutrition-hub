@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
-import { doc, updateDoc, arrayUnion, arrayRemove, Timestamp } from "firebase/firestore";
+import {
+    doc, updateDoc, arrayUnion, arrayRemove, Timestamp,
+    collection, addDoc, getDocs, query, orderBy, limit,
+} from "firebase/firestore";
 import { db, storage } from "@/lib/firebase";
 import type { LandingImage } from "@/types/firestore";
 
@@ -85,7 +88,12 @@ export function useDeleteLandingImage(clubId: string) {
     return { deleteImage, deleting, error };
 }
 
-// ─── Upload landing page HTML ───────────────────────────────────────────
+// ─── Upload Landing Page HTML ─────────────────────────────────────────────
+// Every publish:
+//  1. Uploads a versioned copy → clubs/{clubId}/landing/v{N}.html  (preserved forever)
+//  2. Overwrites the active file  → clubs/{clubId}/landing/index.html
+//  3. Writes a version record → clubs/{clubId}/landingPages/{docId}
+//  4. Updates clubs/{clubId}.landingPageUrl + landingPageVersion
 
 export function useUploadLandingHTML(clubId: string) {
     const [uploading, setUploading] = useState(false);
@@ -96,30 +104,61 @@ export function useUploadLandingHTML(clubId: string) {
         setError(null);
 
         try {
-            const blob = new Blob([htmlContent], { type: "text/html" });
-            const storagePath = `clubs/${clubId}/landing/index.html`;
-            const storageRef = ref(storage, storagePath);
-            const uploadTask = uploadBytesResumable(storageRef, blob, {
-                contentType: "text/html",
-            });
+            const now = Timestamp.now();
 
-            const url = await new Promise<string>((resolve, reject) => {
+            // 1. Determine next version number
+            const versionsSnap = await getDocs(
+                query(collection(db, `clubs/${clubId}/landingPages`), orderBy("publishedAt", "desc"), limit(1))
+            );
+            const latestVersion = versionsSnap.empty ? 0 : (versionsSnap.docs[0].data().version ?? 0);
+            const nextVersion = (latestVersion as number) + 1;
+
+            const versionedPath = `clubs/${clubId}/landing/v${nextVersion}.html`;
+            const activePath = `clubs/${clubId}/landing/index.html`;
+            const htmlBlob = new Blob([htmlContent], { type: "text/html" });
+
+            // 2. Upload versioned snapshot to Storage
+            const versionedRef = ref(storage, versionedPath);
+            await new Promise<void>((resolve, reject) => {
+                const task = uploadBytesResumable(versionedRef, htmlBlob, { contentType: "text/html" });
+                task.on("state_changed", null, reject, () => resolve());
+            });
+            const versionedUrl = await getDownloadURL(versionedRef);
+
+            // 3. Overwrite active index.html
+            const activeRef = ref(storage, activePath);
+            const activeBlob = new Blob([htmlContent], { type: "text/html" });
+            const uploadTask = uploadBytesResumable(activeRef, activeBlob, { contentType: "text/html" });
+            const activeUrl = await new Promise<string>((resolve, reject) => {
                 uploadTask.on(
                     "state_changed",
                     null,
                     (err) => reject(err),
-                    async () => {
-                        const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
-                        resolve(downloadUrl);
-                    }
+                    async () => resolve(await getDownloadURL(uploadTask.snapshot.ref))
                 );
             });
 
-            await updateDoc(doc(db, "clubs", clubId), {
-                landingPageUrl: url,
+            // 4. Save version record inside clubs/{clubId}/landingPages/
+            await addDoc(collection(db, `clubs/${clubId}/landingPages`), {
+                version: nextVersion,
+                status: "active",
+                storagePath: versionedPath,
+                activeStoragePath: activePath,
+                url: versionedUrl,         // versioned copy URL (permanent)
+                activeUrl,                  // index.html URL (changes each publish)
+                publishedAt: now,
+                publishedBy: "superadmin",
+                sizeBytes: htmlBlob.size,
             });
 
-            return url;
+            // 5. Update club document pointers
+            await updateDoc(doc(db, "clubs", clubId), {
+                landingPageUrl: activeUrl,
+                landingPageVersion: nextVersion,
+                landingPageUpdatedAt: now,
+            });
+
+            return activeUrl;
         } catch (err: any) {
             setError(err?.message ?? "Upload failed");
             throw err;
@@ -129,4 +168,27 @@ export function useUploadLandingHTML(clubId: string) {
     }
 
     return { uploadHTML, uploading, error };
+}
+
+// ─── useClubLandingPageVersions ───────────────────────────────────────────
+// Fetches the publish history from clubs/{clubId}/landingPages
+
+export function useClubLandingPageVersions(clubId: string | null) {
+    const [versions, setVersions] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    async function fetchVersions() {
+        if (!clubId) return;
+        setLoading(true);
+        try {
+            const snap = await getDocs(
+                query(collection(db, `clubs/${clubId}/landingPages`), orderBy("publishedAt", "desc"))
+            );
+            setVersions(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    return { versions, loading, fetchVersions };
 }

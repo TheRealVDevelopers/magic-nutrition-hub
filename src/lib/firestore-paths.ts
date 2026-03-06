@@ -32,7 +32,21 @@ export const paths = {
     volunteers: (clubId: string) => `clubs/${clubId}/volunteers`,
     feedback: (clubId: string) => `clubs/${clubId}/feedback`,
     topupRequests: (clubId: string) => `clubs/${clubId}/topupRequests`,
+    topupRequest: (clubId: string, id: string) => `clubs/${clubId}/topupRequests/${id}`,
+    memberships: (clubId: string) => `clubs/${clubId}/memberships`,
+    membership: (clubId: string, planId: string) => `clubs/${clubId}/memberships/${planId}`,
+    referrals: (clubId: string) => `clubs/${clubId}/referrals`,
+    referral: (clubId: string, id: string) => `clubs/${clubId}/referrals/${id}`,
     inventory: (clubId: string) => `clubs/${clubId}/inventory`,
+    usageStats: (clubId: string, docId: string) => `clubs/${clubId}/usageStats/${docId}`,
+
+    // Landing page version history — each publish creates a doc here
+    landingPages: (clubId: string) => `clubs/${clubId}/landingPages`,
+    landingPage: (clubId: string, versionId: string) => `clubs/${clubId}/landingPages/${versionId}`,
+
+    // Club-level transaction summary (aggregated across all members)
+    clubTransactions: (clubId: string) => `clubs/${clubId}/transactions`,
+    clubTransaction: (clubId: string, txId: string) => `clubs/${clubId}/transactions/${txId}`,
 };
 
 export const colRef = (path: string) => collection(db, path);

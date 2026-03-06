@@ -19,7 +19,7 @@ import MembershipReceipt, { type MembershipReceiptProps } from "@/components/rec
 import { printReceipt } from "@/utils/printReceipt";
 import BulkWeighIn from "@/components/owner/BulkWeighIn";
 
-type FilterTab = "all" | "active" | "expired" | "expiring";
+type FilterTab = "all" | "active" | "expired" | "expiring" | "visiting" | "permanent";
 
 function getMemberStatus(m: User): "active" | "expired" | "expiring" {
     if (!m.membershipEnd) return "active";
@@ -54,6 +54,8 @@ export default function Members() {
         if (filter === "active") list = list.filter((m) => getMemberStatus(m) === "active");
         else if (filter === "expired") list = list.filter((m) => getMemberStatus(m) === "expired");
         else if (filter === "expiring") list = list.filter((m) => getMemberStatus(m) === "expiring");
+        else if (filter === "visiting") list = list.filter((m) => (m as any).memberType === "visiting");
+        else if (filter === "permanent") list = list.filter((m) => (m as any).memberType === "permanent");
         if (search.trim()) {
             const q = search.toLowerCase();
             list = list.filter((m) => m.name.toLowerCase().includes(q) || m.phone.includes(q));
@@ -145,6 +147,8 @@ export default function Members() {
                 <Tabs value={filter} onValueChange={(v) => setFilter(v as FilterTab)}>
                     <TabsList className="flex-wrap min-h-[48px]">
                         <TabsTrigger value="all">All</TabsTrigger>
+                        <TabsTrigger value="visiting">🟡 Visiting</TabsTrigger>
+                        <TabsTrigger value="permanent">🟢 Permanent</TabsTrigger>
                         <TabsTrigger value="active">Active</TabsTrigger>
                         <TabsTrigger value="expired">Expired</TabsTrigger>
                         <TabsTrigger value="expiring">Expiring Soon</TabsTrigger>
@@ -180,6 +184,17 @@ export default function Members() {
                                         <p className="font-bold truncate">{m.name}</p>
                                         <p className="text-sm text-muted-foreground">{m.phone}</p>
                                         <div className="flex flex-wrap gap-1 mt-2">
+                                            {/* Member Type: Visiting or Permanent */}
+                                            {(m as any).memberType === "visiting" && (
+                                                <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-300">
+                                                    🟡 Visiting
+                                                </Badge>
+                                            )}
+                                            {(m as any).memberType === "permanent" && (
+                                                <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300">
+                                                    🟢 Permanent
+                                                </Badge>
+                                            )}
                                             {m.membershipTier && (
                                                 <Badge variant="outline" className={`text-xs ${tierColor[m.membershipTier] || ""}`}>{m.membershipTier}</Badge>
                                             )}

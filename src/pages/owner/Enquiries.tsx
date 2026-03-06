@@ -274,6 +274,8 @@ function AcceptVisitingModal({ enquiry, onClose, onDone }: AcceptModalProps) {
                 referredBy: enquiry.referredBy ?? null,
                 referredByMemberId: enquiry.referredByMemberId ?? null,
                 memberType: "visiting",
+                isActiveMember: false,   // becomes true after first wallet top-up
+                activatedAt: null,
                 memberId: generatedMemberId,
                 currentWeight: enquiry.currentWeight ?? null,
                 targetWeight: enquiry.targetWeight ?? null,

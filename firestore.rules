@@ -98,16 +98,19 @@ service cloud.firestore {
       match /members/{memberId} {
         // Any authenticated user can read (needed for member lookup/referrals)
         allow read: if isSignedIn();
-        // Owner/superAdmin can create/delete members
+        // Owner/superAdmin can create members, OR a user can self-register (doc ID == their UID)
+        allow create: if isOwnerOrSuperAdmin(clubId)
+                      || (isSignedIn() && memberId == request.auth.uid);
         // Members can ONLY update their own doc (profile edits)
-        allow create: if isOwnerOrSuperAdmin(clubId);
         allow update: if isOwnerOrSuperAdmin(clubId) || isThisMember(clubId, memberId);
         allow delete: if isOwnerOrSuperAdmin(clubId);
 
         // ── Member wallet ──
         match /wallet/{doc} {
           allow read:  if isOwnerOrSuperAdmin(clubId) || isThisMember(clubId, memberId);
-          allow write: if isOwnerOrSuperAdmin(clubId) || isThisMember(clubId, memberId);
+          // Owner/superAdmin or the member themselves can write (self-registration creates wallet)
+          allow write: if isOwnerOrSuperAdmin(clubId) || isThisMember(clubId, memberId)
+                       || (isSignedIn() && memberId == request.auth.uid);
         }
 
         // ── Member transactions ──
@@ -208,6 +211,29 @@ service cloud.firestore {
       match /usageStats/{doc} {
         allow read:  if isOwnerOrSuperAdmin(clubId);
         allow write: if isSignedIn();
+      }
+
+      // Referrals — authenticated users create/read within club scope
+      match /referrals/{referralId} {
+        allow read:  if isOwnerOrSuperAdmin(clubId) || isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if isOwnerOrSuperAdmin(clubId);
+      }
+
+      // Landing Page Version History — owner/superAdmin only
+      // Each doc: { version, status, url, storagePath, publishedAt, publishedBy, sizeBytes }
+      match /landingPages/{versionId} {
+        allow read:  if isOwnerOrSuperAdmin(clubId);
+        allow create: if isOwnerOrSuperAdmin(clubId);
+        allow update, delete: if isSuperAdmin();
+      }
+
+      // Club-level transaction summary — aggregated credit/debit log across all members
+      // Used for club-wide financial reporting (owner dashboard reports)
+      match /transactions/{txId} {
+        allow read:  if isOwnerOrSuperAdmin(clubId);
+        allow create: if isSignedIn();
+        allow update, delete: if isOwnerOrSuperAdmin(clubId);
       }
     }
   }

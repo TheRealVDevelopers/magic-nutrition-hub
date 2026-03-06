@@ -29,7 +29,7 @@ export function useClubMembershipPlans(clubId: string | null) {
         if (!clubId) { setLoading(false); return; }
         const fetch = async () => {
             try {
-                const snap = await getDocs(query(collection(db, "clubs", clubId, "membershipPlans")));
+                const snap = await getDocs(query(collection(db, "clubs", clubId, "memberships")));
                 if (snap.empty) {
                     setPlans(FALLBACK_PLANS);
                 } else {
