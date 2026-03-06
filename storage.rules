@@ -1,18 +1,37 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // SuperAdmin can read/write everything
+
+    // ── Default: deny everything unless a rule below allows it ───────────────
+
+    // SuperAdmin full access — checks /superAdmins/{uid} in Firestore
     match /{allPaths=**} {
       allow read, write: if request.auth != null
-        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'superAdmin';
+        && firestore.exists(
+            /databases/(default)/documents/superAdmins/$(request.auth.uid)
+           );
     }
 
-    // Public can read club landing pages and images
+    // Club owners can upload to their own club's storage folder
+    match /clubs/{clubId}/{allPaths=**} {
+      allow read, write: if request.auth != null
+        && firestore.get(
+            /databases/(default)/documents/clubs/$(clubId)
+           ).data.ownerUserId == request.auth.uid;
+    }
+
+    // Public read — landing pages, images, products
     match /clubs/{clubId}/landing/{fileName} {
       allow read: if true;
+      allow write: if request.auth != null;
     }
     match /clubs/{clubId}/images/{fileName} {
       allow read: if true;
+      allow write: if request.auth != null;
+    }
+    match /clubs/{clubId}/products/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null;
     }
   }
 }

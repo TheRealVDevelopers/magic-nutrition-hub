@@ -1,58 +1,139 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
-    Search, ChevronDown, ChevronUp, UserPlus, UserCheck, X,
-    Download, Star, Filter, AlertTriangle
+    Search, UserCheck, Trash2, Star, ChevronDown, ChevronUp, X,
 } from "lucide-react";
-import { collection, addDoc, getDocs, query, where, Timestamp, updateDoc, doc, deleteField, setDoc } from "firebase/firestore";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import {
+    collection, query, where, orderBy, onSnapshot,
+    updateDoc, deleteDoc, doc, serverTimestamp,
+} from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select";
 import {
     AlertDialog, AlertDialogAction, AlertDialogCancel,
     AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
     AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-    useEnquiries, useUnreadEnquiryCount, useUpdateEnquiryStatus,
-} from "@/hooks/owner/useEnquiries";
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { useClubContext } from "@/lib/clubDetection";
 import { useToast } from "@/hooks/use-toast";
-import { db, auth } from "@/lib/firebase";
-import { generateMemberId, generatePrefixFromName } from "@/utils/generateMemberId";
+import { useAuth } from "@/lib/auth";
+import { db } from "@/lib/firebase";
 import { useClubFeedback } from "@/hooks/useFeedback";
-import type { Enquiry, Feedback } from "@/types/firestore";
 
-type StatusFilter = "all" | Enquiry["status"];
 type TabType = "enquiries" | "feedback";
 
-const STATUS_OPTIONS: { value: Enquiry["status"]; label: string }[] = [
-    { value: "new", label: "New" },
-    { value: "contacted", label: "Contacted" },
-    { value: "converted", label: "Converted" },
-    { value: "rejected", label: "Rejected" },
+// ─── Pending member type (isPermanent: false) ────────────────────────────────
+
+interface PendingMember {
+    id: string;
+    name: string;
+    phone?: string;
+    email?: string;
+    whatsapp?: string;
+    address?: string;
+    dob?: string;
+    currentWeight?: number | null;
+    targetWeight?: number | null;
+    healthConditions?: string | null;
+    referredBy?: string | null;
+    referredByMemberId?: string | null;
+    joinedAt?: any;
+    status?: string;
+    isPermanent: boolean;
+    memberType?: string;
+    clubId?: string;
+}
+
+// ─── Activate Member Modal ───────────────────────────────────────────────────
+
+const MEMBER_TYPES = [
+    { value: "visiting", label: "Visiting" },
+    { value: "bronze", label: "Bronze" },
+    { value: "silver", label: "Silver" },
+    { value: "gold", label: "Gold" },
+    { value: "platinum", label: "Platinum" },
 ];
 
-function StatusBadge({ status }: { status: Enquiry["status"] }) {
-    const map: Record<Enquiry["status"], string> = {
-        new: "bg-blue-100 text-blue-800",
-        contacted: "bg-amber-100 text-amber-800",
-        converted: "bg-green-100 text-green-800",
-        rejected: "bg-red-100 text-red-800",
+interface ActivateModalProps {
+    member: PendingMember;
+    clubId: string;
+    ownerUid: string;
+    onClose: () => void;
+}
+
+function ActivateModal({ member, clubId, ownerUid, onClose }: ActivateModalProps) {
+    const { toast } = useToast();
+    const [selectedType, setSelectedType] = useState("visiting");
+    const [loading, setLoading] = useState(false);
+
+    const handleActivate = async () => {
+        setLoading(true);
+        try {
+            await updateDoc(doc(db, "clubs", clubId, "members", member.id), {
+                isPermanent: true,
+                status: "active",
+                memberType: selectedType,
+                isActiveMember: true,
+                activatedAt: serverTimestamp(),
+                activatedBy: ownerUid,
+                updatedAt: serverTimestamp(),
+            });
+            toast({ title: "Member activated successfully!" });
+            onClose();
+        } catch (err: any) {
+            toast({ title: "Failed to activate", description: err.message, variant: "destructive" });
+        } finally {
+            setLoading(false);
+        }
     };
+
     return (
-        <Badge variant="secondary" className={map[status]}>
-            {status.charAt(0).toUpperCase() + status.slice(1)}
-        </Badge>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4" style={{ fontFamily: "Nunito, sans-serif" }}>
+                <div className="flex justify-between items-start">
+                    <h2 className="text-xl font-black text-gray-800">Activate Member</h2>
+                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
+                </div>
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-1">
+                    <p className="font-bold text-gray-800">{member.name}</p>
+                    {member.phone && <p className="text-sm text-gray-600">📞 {member.phone}</p>}
+                    {member.email && <p className="text-sm text-gray-600">✉️ {member.email}</p>}
+                </div>
+                <div className="space-y-2">
+                    <label className="text-sm font-semibold text-gray-700">Member Type</label>
+                    <Select value={selectedType} onValueChange={setSelectedType}>
+                        <SelectTrigger className="rounded-xl">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {MEMBER_TYPES.map((t) => (
+                                <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="flex gap-2 pt-2">
+                    <Button variant="outline" onClick={onClose} className="flex-1 rounded-xl">Cancel</Button>
+                    <Button
+                        onClick={handleActivate}
+                        disabled={loading}
+                        className="flex-1 rounded-xl text-white"
+                        style={{ backgroundColor: "#2d9653" }}
+                    >
+                        <UserCheck className="w-4 h-4 mr-2" />
+                        {loading ? "Activating..." : "✅ Activate"}
+                    </Button>
+                </div>
+            </div>
+        </div>
     );
 }
 
-// ─── Feedback Tab ────────────────────────────────────────────────────────────
+// ─── Feedback Tab ─────────────────────────────────────────────────────────────
 
 function StarDisplay({ rating }: { rating: number }) {
     return (
@@ -86,27 +167,6 @@ function FeedbackTab() {
         ? (feedbackList.reduce((s, f) => s + f.rating, 0) / feedbackList.length).toFixed(1)
         : null;
 
-    const exportCSV = () => {
-        const rows = [
-            ["Name", "Member ID", "Rating", "Category", "Message", "Date"],
-            ...filtered.map((f) => [
-                f.name ?? "",
-                f.memberId ?? "",
-                f.rating,
-                f.category,
-                f.message ?? "",
-                f.createdAt?.toDate?.()?.toLocaleString() ?? "",
-            ]),
-        ];
-        const csv = rows.map((r) => r.join(",")).join("\n");
-        const blob = new Blob([csv], { type: "text/csv" });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "feedback.csv";
-        a.click();
-    };
-
     if (isLoading) return (
         <div className="space-y-3">
             {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}
@@ -115,7 +175,6 @@ function FeedbackTab() {
 
     return (
         <div className="space-y-5">
-            {/* Summary */}
             <div className="flex flex-wrap gap-3 items-center justify-between">
                 <div className="flex items-center gap-3">
                     {avgRating && (
@@ -149,9 +208,6 @@ function FeedbackTab() {
                             ))}
                         </SelectContent>
                     </Select>
-                    <Button variant="outline" size="sm" onClick={exportCSV} className="rounded-xl">
-                        <Download className="w-4 h-4 mr-1" />CSV
-                    </Button>
                 </div>
             </div>
 
@@ -167,10 +223,10 @@ function FeedbackTab() {
                                 <div className="space-y-1 flex-1">
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <span className="font-bold text-gray-800">
-                                            {f.name || "Anonymous"}
+                                            {(f as any).name || "Anonymous"}
                                         </span>
-                                        {f.memberId && (
-                                            <Badge variant="outline" className="text-xs">{f.memberId}</Badge>
+                                        {(f as any).memberId && (
+                                            <Badge variant="outline" className="text-xs">{(f as any).memberId}</Badge>
                                         )}
                                         <Badge variant="secondary" className="text-xs bg-gray-100">
                                             {f.category}
@@ -193,254 +249,73 @@ function FeedbackTab() {
     );
 }
 
-// ─── Accept as Visiting Member modal ────────────────────────────────────────
-
-interface AcceptModalProps {
-    enquiry: Enquiry;
-    onClose: () => void;
-    onDone: (whatsappUrl: string) => void;
-}
-
-function AcceptVisitingModal({ enquiry, onClose, onDone }: AcceptModalProps) {
-    const { club } = useClubContext();
-    const { toast } = useToast();
-    const updateStatus = useUpdateEnquiryStatus();
-    const [loading, setLoading] = useState(false);
-
-    const handleAccept = useCallback(async () => {
-        if (!club) return;
-        setLoading(true);
-        try {
-            const prefix = club.memberIdPrefix || generatePrefixFromName(club.name);
-            const generatedMemberId = await generateMemberId(club.id, prefix);
-            const newDocId = "member_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
-            const now = Timestamp.now();
-
-            // Build treePath
-            let treePath = newDocId;
-            if (enquiry.referredByMemberId) {
-                const snap = await getDocs(
-                    query(collection(db, `clubs/${club.id}/members`), where("memberId", "==", enquiry.referredByMemberId))
-                );
-                if (!snap.empty) {
-                    const parentData = snap.docs[0].data();
-                    treePath = (parentData.treePath ?? snap.docs[0].id) + "/" + newDocId;
-                }
-            }
-
-            // Create Firebase Auth account if email + password available
-            const enquiryPassword = (enquiry as any).password;
-            if (enquiry.email && enquiryPassword) {
-                try {
-                    await createUserWithEmailAndPassword(auth, enquiry.email, enquiryPassword);
-                } catch (authErr: any) {
-                    // If email already exists in auth, continue with member creation
-                    if (authErr.code !== 'auth/email-already-in-use') {
-                        throw authErr;
-                    }
-                }
-            } else if (!enquiry.email) {
-                toast({
-                    title: "⚠️ No email provided",
-                    description: "Member cannot log in until email is added to their profile.",
-                    variant: "destructive",
-                });
-            }
-
-            // Create user doc with ALL enquiry fields
-            await setDoc(doc(db, `clubs/${club.id}/members`, newDocId), {
-                id: newDocId,
-                name: enquiry.name,
-                phone: enquiry.phone,
-                whatsapp: enquiry.whatsapp ?? "",
-                email: enquiry.email ?? "",
-                address: enquiry.address ?? "",
-                photo: "",
-                role: "member",
-                clubId: club.id,
-                parentUserId: null,
-                treePath,
-                membershipTier: null,
-                membershipStart: null,
-                membershipEnd: null,
-                membershipPlanId: null,
-                status: "active",
-                dob: enquiry.dob ? Timestamp.fromDate(new Date(enquiry.dob)) : null,
-                anniversary: null,
-                qrCode: "",
-                isClubOwner: false,
-                ownedClubId: null,
-                originalClubId: club.id,
-                referredBy: enquiry.referredBy ?? null,
-                referredByMemberId: enquiry.referredByMemberId ?? null,
-                memberType: "visiting",
-                isActiveMember: false,   // becomes true after first wallet top-up
-                activatedAt: null,
-                memberId: generatedMemberId,
-                currentWeight: enquiry.currentWeight ?? null,
-                targetWeight: enquiry.targetWeight ?? null,
-                healthConditions: enquiry.healthConditions ?? "",
-                passwordChanged: false,
-                createdAt: now,
-                updatedAt: now,
-            });
-
-            // Create wallet
-            await setDoc(doc(db, `clubs/${club.id}/members/${newDocId}/wallet`, "data"), {
-                userId: newDocId,
-                clubId: club.id,
-                currencyName: club.currencyName,
-                balance: 0,
-                lastUpdated: now,
-            });
-
-            // Remove password from enquiry doc (don't store password in Firestore)
-            if (enquiryPassword) {
-                try {
-                    await updateDoc(doc(db, `clubs/${club.id}/enquiries`, enquiry.id), {
-                        password: deleteField(),
-                    });
-                } catch {
-                    // Non-critical — continue even if password removal fails
-                }
-            }
-
-            // Update enquiry status
-            await updateStatus.mutateAsync({ clubId: club.id, enquiryId: enquiry.id, status: "converted" });
-
-            // WhatsApp URL
-            const msg = encodeURIComponent(
-                `🌿 Welcome to ${club.name}!\n\nHi ${enquiry.name}, you've been registered as a *Visiting Member*.\n\n*Your Member ID:* ${generatedMemberId}\n\nWe're excited to have you with us! Come visit us soon. 💚`
-            );
-            const phone = (enquiry.whatsapp ?? enquiry.phone ?? "").replace(/\D/g, "");
-            const waUrl = `https://wa.me/${phone}?text=${msg}`;
-            onDone(waUrl);
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    }, [club, enquiry, updateStatus, onDone, toast]);
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4" style={{ fontFamily: "Nunito, sans-serif" }}>
-                <div className="flex justify-between items-start">
-                    <h2 className="text-xl font-black text-gray-800">Accept as Visiting Member</h2>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
-                </div>
-                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-1">
-                    <p className="font-bold text-gray-800">{enquiry.name}</p>
-                    <p className="text-sm text-gray-600">📞 {enquiry.phone}</p>
-                    {enquiry.referredByMemberId && (
-                        <p className="text-sm text-gray-600">🔗 Referred by: <strong>{enquiry.referredByMemberId}</strong></p>
-                    )}
-                </div>
-                <p className="text-sm text-gray-500">
-                    This will create a <strong>Visiting Member</strong> account with an auto-generated Member ID, and open a WhatsApp welcome message.
-                </p>
-                <div className="flex gap-2 pt-2">
-                    <Button variant="outline" onClick={onClose} className="flex-1 rounded-xl">Cancel</Button>
-                    <Button
-                        onClick={handleAccept}
-                        disabled={loading}
-                        className="flex-1 rounded-xl text-white"
-                        style={{ backgroundColor: "#2d9653" }}
-                    >
-                        <UserCheck className="w-4 h-4 mr-2" />
-                        {loading ? "Creating..." : "✅ Accept"}
-                    </Button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-// ─── Main Enquiries Page ─────────────────────────────────────────────────────
+// ─── Main Enquiries Page ──────────────────────────────────────────────────────
 
 export default function Enquiries() {
     const { club } = useClubContext();
     const { toast } = useToast();
-    const { data: enquiries, isLoading } = useEnquiries(club?.id ?? null);
-    const { data: unreadCount } = useUnreadEnquiryCount(club?.id ?? null);
-    const updateStatus = useUpdateEnquiryStatus();
+    const { userProfile } = useAuth();
     const [tab, setTab] = useState<TabType>("enquiries");
-    const [filter, setFilter] = useState<StatusFilter>("all");
     const [search, setSearch] = useState("");
+    const [enquiries, setEnquiries] = useState<PendingMember[]>([]);
+    const [loading, setLoading] = useState(true);
     const [expandedId, setExpandedId] = useState<string | null>(null);
-    const [notesMap, setNotesMap] = useState<Record<string, string>>({});
-    const [acceptingEnquiry, setAcceptingEnquiry] = useState<Enquiry | null>(null);
-    const [rejectingId, setRejectingId] = useState<string | null>(null);
+    const [activatingMember, setActivatingMember] = useState<PendingMember | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+
+    // Live query: members with isPermanent: false
+    useEffect(() => {
+        if (!club?.id) return;
+        setLoading(true);
+        const q = query(
+            collection(db, "clubs", club.id, "members"),
+            where("isPermanent", "==", false),
+            orderBy("joinedAt", "desc")
+        );
+        const unsubscribe = onSnapshot(q, (snap) => {
+            const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as PendingMember));
+            setEnquiries(data);
+            setLoading(false);
+        }, (err) => {
+            console.error("Enquiries query error:", err);
+            setLoading(false);
+        });
+        return () => unsubscribe();
+    }, [club?.id]);
 
     const filtered = useMemo(() => {
-        if (!enquiries) return [];
-        let list = enquiries;
-        if (filter !== "all") list = list.filter((e) => e.status === filter);
-        if (search.trim()) {
-            const q = search.trim().toLowerCase();
-            list = list.filter(
-                (e) => e.name.toLowerCase().includes(q) || e.phone?.toLowerCase().includes(q)
-            );
-        }
-        return list;
-    }, [enquiries, filter, search]);
+        if (!search.trim()) return enquiries;
+        const q = search.toLowerCase();
+        return enquiries.filter(
+            (e) =>
+                e.name?.toLowerCase().includes(q) ||
+                e.phone?.toLowerCase().includes(q) ||
+                e.email?.toLowerCase().includes(q)
+        );
+    }, [enquiries, search]);
 
-    const handleStatusChange = async (enquiryId: string, status: Enquiry["status"], notesOverride?: string) => {
-        const notes = notesOverride ?? notesMap[enquiryId];
+    const handleDelete = async () => {
+        if (!deletingId || !club?.id) return;
         try {
-            await updateStatus.mutateAsync({ clubId: club!.id, enquiryId, status, ...(notes !== undefined && { notes }) });
-            toast({ title: "Status updated" });
-        } catch {
-            toast({ title: "Failed to update", variant: "destructive" });
-        }
-    };
-
-    const handleReject = async () => {
-        if (!rejectingId) return;
-        try {
-            await updateStatus.mutateAsync({ clubId: club!.id, enquiryId: rejectingId, status: "rejected" });
-            toast({ title: "Enquiry rejected" });
-        } catch {
-            toast({ title: "Failed to reject", variant: "destructive" });
+            await deleteDoc(doc(db, "clubs", club.id, "members", deletingId));
+            toast({ title: "Enquiry deleted" });
+        } catch (err: any) {
+            toast({ title: "Failed to delete", description: err.message, variant: "destructive" });
         } finally {
-            setRejectingId(null);
+            setDeletingId(null);
         }
     };
-
-    const handleAcceptDone = (waUrl: string) => {
-        setAcceptingEnquiry(null);
-        toast({ title: "Visiting member created! Opening WhatsApp..." });
-        window.open(waUrl, "_blank");
-    };
-
-    const handleExpand = async (e: Enquiry, isExpanded: boolean) => {
-        setExpandedId(isExpanded ? null : e.id);
-        if (!isExpanded && e.clubId === "{{CLUB_ID}}" && club) {
-            try {
-                // Silently auto-correct bad data
-                await updateDoc(doc(db, `clubs/${club.id}/enquiries`, e.id), { clubId: club.id });
-                updateStatus.mutate({ clubId: club.id, enquiryId: e.id, status: e.status }); // Triggers a cache invalidate
-            } catch (err) {
-                console.error("Auto-fix failed:", err);
-            }
-        }
-    };
-
-    const filters: { value: StatusFilter; label: string }[] = [
-        { value: "all", label: "All" },
-        ...STATUS_OPTIONS,
-    ];
 
     return (
         <div className="px-6 md:px-8 py-8 max-w-[900px] mx-auto" style={{ fontFamily: "'Nunito', sans-serif" }}>
-            {/* Header & tabs */}
+            {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                     <h1 className="text-2xl font-black" style={{ color: "#1a2e1a" }}>
                         {tab === "enquiries" ? "Enquiries" : "Feedback"}
                     </h1>
-                    {tab === "enquiries" && unreadCount != null && unreadCount > 0 && (
-                        <Badge className="bg-blue-500">{unreadCount} new</Badge>
+                    {tab === "enquiries" && enquiries.length > 0 && (
+                        <Badge className="bg-orange-500">{enquiries.length} pending</Badge>
                     )}
                 </div>
             </div>
@@ -451,8 +326,7 @@ export default function Enquiries() {
                     <button
                         key={t.value}
                         onClick={() => setTab(t.value)}
-                        className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${tab === t.value ? "bg-white shadow text-gray-800" : "text-gray-500 hover:text-gray-700"
-                            }`}
+                        className={`px-5 py-2 rounded-xl text-sm font-bold transition-all ${tab === t.value ? "bg-white shadow text-gray-800" : "text-gray-500 hover:text-gray-700"}`}
                     >
                         {t.label}
                     </button>
@@ -463,58 +337,48 @@ export default function Enquiries() {
                 <FeedbackTab />
             ) : (
                 <>
-                    {/* Filters */}
-                    <div className="flex flex-col sm:flex-row gap-3 mb-6">
-                        <div className="relative flex-1">
+                    {/* Search */}
+                    <div className="mb-6">
+                        <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <Input
-                                placeholder="Search by name or phone"
+                                placeholder="Search by name, phone or email"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
                                 className="pl-9 rounded-xl"
                             />
                         </div>
-                        <div className="flex gap-2 flex-wrap">
-                            {filters.map((f) => (
-                                <Button
-                                    key={f.value}
-                                    variant={filter === f.value ? "default" : "outline"}
-                                    size="sm"
-                                    onClick={() => setFilter(f.value)}
-                                    className="rounded-xl"
-                                    style={filter === f.value ? { backgroundColor: "#2d9653" } : undefined}
-                                >
-                                    {f.label}
-                                </Button>
-                            ))}
-                        </div>
                     </div>
 
-                    {isLoading ? (
+                    {loading ? (
                         <div className="space-y-4">
-                            {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+                            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
                         </div>
-                    ) : !filtered.length ? (
+                    ) : filtered.length === 0 ? (
                         <div className="rounded-2xl border bg-gray-50 p-12 text-center">
                             <p className="text-gray-500 font-semibold">
-                                {enquiries?.length ? "No enquiries match your filters" : "No enquiries yet"}
+                                {enquiries.length ? "No enquiries match your search" : "No pending enquiries"}
+                            </p>
+                            <p className="text-gray-400 text-sm mt-2">
+                                New registrations from the landing page will appear here
                             </p>
                         </div>
                     ) : (
                         <div className="space-y-4">
                             {filtered.map((e) => {
                                 const isExpanded = expandedId === e.id;
-                                const notes = notesMap[e.id] ?? (e as Enquiry & { notes?: string }).notes ?? "";
                                 return (
                                     <div key={e.id} className="rounded-2xl border bg-white overflow-hidden">
                                         <div
                                             className="p-4 flex items-center justify-between gap-3 cursor-pointer"
-                                            onClick={() => handleExpand(e, isExpanded)}
+                                            onClick={() => setExpandedId(isExpanded ? null : e.id)}
                                         >
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <span className="font-bold text-gray-900">{e.name}</span>
-                                                    <StatusBadge status={e.status} />
+                                                    <Badge className="bg-orange-100 text-orange-800 border-orange-200">
+                                                        PENDING
+                                                    </Badge>
                                                     {e.referredByMemberId && (
                                                         <Badge variant="outline" className="text-xs text-purple-700 border-purple-300">
                                                             🔗 {e.referredByMemberId}
@@ -523,7 +387,7 @@ export default function Enquiries() {
                                                 </div>
                                                 <p className="text-sm text-gray-600">{e.phone}</p>
                                                 <p className="text-xs text-gray-400 mt-1">
-                                                    {e.createdAt?.toDate?.()?.toLocaleDateString?.() ?? "—"}
+                                                    {e.joinedAt?.toDate?.()?.toLocaleDateString?.() ?? "—"}
                                                     {e.referredBy && ` • Referred by ${e.referredBy}`}
                                                 </p>
                                             </div>
@@ -538,75 +402,47 @@ export default function Enquiries() {
                                             <div className="px-4 pb-4 pt-0 border-t space-y-4" onClick={(ev) => ev.stopPropagation()}>
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm pt-4">
                                                     {e.email && <div><span className="text-gray-500">Email:</span> {e.email}</div>}
+                                                    {e.phone && <div><span className="text-gray-500">Phone:</span> {e.phone}</div>}
                                                     {e.address && <div><span className="text-gray-500">Address:</span> {e.address}</div>}
                                                     {e.dob && <div><span className="text-gray-500">DOB:</span> {e.dob}</div>}
-                                                    {e.currentWeight != null && <div><span className="text-gray-500">Weight:</span> {e.currentWeight} kg</div>}
-                                                    {e.healthConditions && <div className="sm:col-span-2"><span className="text-gray-500">Health:</span> {e.healthConditions}</div>}
-                                                    {e.referredBy && <div><span className="text-gray-500">Referred by:</span> {e.referredBy}</div>}
-                                                    {e.referredByMemberId && <div><span className="text-gray-500">Referrer ID:</span> <strong className="text-purple-700">{e.referredByMemberId}</strong></div>}
+                                                    {e.currentWeight != null && e.targetWeight != null && (
+                                                        <div>
+                                                            <span className="text-gray-500">Weight:</span>{" "}
+                                                            {e.currentWeight} kg → {e.targetWeight} kg
+                                                        </div>
+                                                    )}
+                                                    {e.currentWeight != null && e.targetWeight == null && (
+                                                        <div><span className="text-gray-500">Weight:</span> {e.currentWeight} kg</div>
+                                                    )}
+                                                    {e.healthConditions && (
+                                                        <div className="sm:col-span-2">
+                                                            <span className="text-gray-500">Health conditions:</span> {e.healthConditions}
+                                                        </div>
+                                                    )}
+                                                    {e.referredBy && (
+                                                        <div><span className="text-gray-500">Referred by:</span> {e.referredBy}</div>
+                                                    )}
                                                 </div>
 
-                                                <div>
-                                                    <label className="text-sm font-medium text-gray-700">Notes</label>
-                                                    <Textarea
-                                                        value={notes}
-                                                        onChange={(ev) => setNotesMap((m) => ({ ...m, [e.id]: ev.target.value }))}
-                                                        placeholder="Add notes..."
-                                                        rows={2}
-                                                        className="mt-1 rounded-xl"
-                                                    />
-                                                </div>
-
-                                                <div className="flex flex-wrap gap-2 items-center">
-                                                    <Select
-                                                        value={e.status}
-                                                        onValueChange={(v) => handleStatusChange(e.id, v as Enquiry["status"])}
-                                                    >
-                                                        <SelectTrigger className="w-[140px] rounded-xl">
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {STATUS_OPTIONS.map((o) => (
-                                                                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-
+                                                <div className="flex flex-wrap gap-2 items-center pt-1">
                                                     <Button
                                                         size="sm"
-                                                        variant="outline"
-                                                        onClick={() => handleStatusChange(e.id, e.status, notes)}
-                                                        disabled={updateStatus.isPending}
+                                                        onClick={() => setActivatingMember(e)}
+                                                        className="rounded-xl text-white"
+                                                        style={{ backgroundColor: "#2d9653" }}
+                                                    >
+                                                        <UserCheck className="w-4 h-4 mr-1" />
+                                                        Activate Member
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        variant="destructive"
+                                                        onClick={() => setDeletingId(e.id)}
                                                         className="rounded-xl"
                                                     >
-                                                        Save notes
+                                                        <Trash2 className="w-4 h-4 mr-1" />
+                                                        Delete
                                                     </Button>
-
-                                                    {/* Accept enquiry → creates Visiting Member */}
-                                                    {e.status !== "converted" && e.status !== "rejected" && (
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => setAcceptingEnquiry(e)}
-                                                            className="rounded-xl text-white"
-                                                            style={{ backgroundColor: "#2d9653" }}
-                                                        >
-                                                            <UserCheck className="w-4 h-4 mr-1" />
-                                                            ✅ Accept
-                                                        </Button>
-                                                    )}
-
-                                                    {/* Reject */}
-                                                    {e.status !== "rejected" && e.status !== "converted" && (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="destructive"
-                                                            onClick={() => setRejectingId(e.id)}
-                                                            className="rounded-xl"
-                                                        >
-                                                            <X className="w-4 h-4 mr-1" />
-                                                            ❌ Reject
-                                                        </Button>
-                                                    )}
                                                 </div>
                                             </div>
                                         )}
@@ -618,28 +454,29 @@ export default function Enquiries() {
                 </>
             )}
 
-            {/* Accept Modal */}
-            {acceptingEnquiry && (
-                <AcceptVisitingModal
-                    enquiry={acceptingEnquiry}
-                    onClose={() => setAcceptingEnquiry(null)}
-                    onDone={handleAcceptDone}
+            {/* Activate Modal */}
+            {activatingMember && club && (
+                <ActivateModal
+                    member={activatingMember}
+                    clubId={club.id}
+                    ownerUid={userProfile?.id ?? ""}
+                    onClose={() => setActivatingMember(null)}
                 />
             )}
 
-            {/* Reject confirmation */}
-            <AlertDialog open={!!rejectingId} onOpenChange={(o) => !o && setRejectingId(null)}>
+            {/* Delete confirmation */}
+            <AlertDialog open={!!deletingId} onOpenChange={(o) => !o && setDeletingId(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Reject this enquiry?</AlertDialogTitle>
+                        <AlertDialogTitle>Delete this enquiry?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will mark the enquiry as rejected. You can always change it back later.
+                            This will permanently delete the enquiry and their member account. This cannot be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleReject} className="bg-red-500 hover:bg-red-600">
-                            Reject
+                        <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600">
+                            Delete
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

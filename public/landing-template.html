@@ -551,12 +551,17 @@
     </div>
   </div>
 
-  <!-- ════════ FIREBASE SDK ════════ -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-  <script>
-    // ⚠️ Replace these with your Firebase config
-    firebase.initializeApp({
+  <!-- ════════ FIREBASE SDK (modular v10) ════════ -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import {
+      getFirestore, collection, doc, getDocs, setDoc, query, where, serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import {
+      getAuth, createUserWithEmailAndPassword
+    } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+    const _app = initializeApp({
       apiKey: "{{FIREBASE_API_KEY}}",
       authDomain: "{{FIREBASE_AUTH_DOMAIN}}",
       projectId: "{{FIREBASE_PROJECT_ID}}",
@@ -564,12 +569,14 @@
       messagingSenderId: "{{FIREBASE_MESSAGING_SENDER_ID}}",
       appId: "{{FIREBASE_APP_ID}}"
     });
-    var db = firebase.firestore();
+    const db = getFirestore(_app);
+    const _auth = getAuth(_app);
 
-    function openModal() { document.getElementById('enquiry-modal').classList.add('active'); }
-    function closeModal() { document.getElementById('enquiry-modal').classList.remove('active'); }
+    // Expose modal helpers to inline onclick handlers
+    window.openModal = function () { document.getElementById('enquiry-modal').classList.add('active'); };
+    window.closeModal = function () { document.getElementById('enquiry-modal').classList.remove('active'); };
 
-    async function submitEnquiry() {
+    window.submitEnquiry = async function () {
       var btn = document.getElementById('btn-submit');
       btn.disabled = true;
       btn.textContent = 'Registering...';
@@ -605,136 +612,108 @@
         btn.disabled = false; btn.textContent = 'Join Now 🌿'; return;
       }
 
-      var clubId = '{{CLUB_ID}}';
+      var CLUB_ID = '{{CLUB_ID}}';
 
       try {
         // ── Step 1: Create Firebase Auth account ──
         btn.textContent = 'Creating account...';
-        var userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
-        var uid = userCredential.user.uid;
-
-        // ── Step 2: Generate Member ID ──
-        btn.textContent = 'Generating Member ID...';
-        var membersSnap = await db.collection('clubs').doc(clubId).collection('members').get();
-        var clubSnap = await db.collection('clubs').doc(clubId).get();
-        var clubData = clubSnap.data() || {};
-        var prefix = clubData.memberIdPrefix || clubData.name.split(/\s+/).filter(Boolean).map(function (w) { return w[0].toUpperCase(); }).join('');
-
-        var highestLetter = 'A';
-        var highestNumber = 0;
-        membersSnap.forEach(function (doc) {
-          var mid = doc.data().memberId;
-          if (!mid) return;
-          var parts = mid.split('-');
-          if (parts.length < 3) return;
-          var letter = parts[parts.length - 2];
-          var num = parseInt(parts[parts.length - 1], 10);
-          if (isNaN(num)) return;
-          if (letter > highestLetter || (letter === highestLetter && num > highestNumber)) {
-            highestLetter = letter; highestNumber = num;
+        var uid = null;
+        try {
+          var userCredential = await createUserWithEmailAndPassword(_auth, email, password);
+          uid = userCredential.user.uid;
+        } catch (authError) {
+          if (authError.code === 'auth/email-already-in-use') {
+            alert('⚠️ This email is already registered. Please use a different email or log in to the member portal.');
+            btn.disabled = false; btn.textContent = 'Join Now 🌿'; return;
           }
-        });
-        var nextNum = highestNumber + 1;
-        var nextLetter = highestLetter;
-        if (nextNum > 999) { nextLetter = String.fromCharCode(highestLetter.charCodeAt(0) + 1); nextNum = 1; }
-        var memberId = prefix + '-' + nextLetter + '-' + String(nextNum).padStart(3, '0');
+          throw authError;
+        }
+
+        // ── Step 2: Use Firebase UID as member doc ID ──
+        var memberDocId = uid;
 
         // ── Step 3: Build treePath from referrer ──
-        var treePath = uid;
+        btn.textContent = 'Setting up profile...';
+        var treePath = memberDocId;
         if (referred) {
-          var refSnap = await db.collection('clubs').doc(clubId).collection('members').where('memberId', '==', referred).get();
+          var refQ = query(
+            collection(db, 'clubs', CLUB_ID, 'members'),
+            where('memberId', '==', referred)
+          );
+          var refSnap = await getDocs(refQ);
           if (!refSnap.empty) {
             var refData = refSnap.docs[0].data();
-            treePath = (refData.treePath || refSnap.docs[0].id) + '/' + uid;
+            treePath = (refData.treePath || refSnap.docs[0].id) + '/' + memberDocId;
           }
         }
 
-        // ── Step 4: Create member document at clubs/{clubId}/members/{uid} ──
-        btn.textContent = 'Setting up profile...';
-        var now = firebase.firestore.FieldValue.serverTimestamp();
-        await db.collection('clubs').doc(clubId).collection('members').doc(uid).set({
-          id: uid,
+        // ── Step 4: Save directly to clubs/{clubId}/members/{memberId}
+        //            isPermanent: false = pending / enquiry state ──
+        var now = serverTimestamp();
+        await setDoc(doc(db, 'clubs', CLUB_ID, 'members', memberDocId), {
+          id: memberDocId,
           name: name,
           phone: phone,
           whatsapp: whatsapp || phone,
           email: email,
-          address: address,
+          address: address || null,
           photo: '',
           role: 'member',
-          clubId: clubId,
+          clubId: CLUB_ID,
           parentUserId: null,
           treePath: treePath,
           membershipTier: null,
           membershipStart: null,
           membershipEnd: null,
           membershipPlanId: null,
-          status: 'active',
+          status: 'pending',
           dob: dob || null,
           anniversary: null,
           qrCode: '',
           isClubOwner: false,
           ownedClubId: null,
-          originalClubId: clubId,
+          originalClubId: CLUB_ID,
           referredBy: referred || null,
           referredByMemberId: referred || null,
           memberType: 'visiting',
+          isPermanent: false,
           isActiveMember: false,
           activatedAt: null,
-          memberId: memberId,
+          joinedAt: now,
+          uid: uid,
           currentWeight: weight ? parseFloat(weight) : null,
           targetWeight: target ? parseFloat(target) : null,
           startingWeight: weight ? parseFloat(weight) : null,
-          healthConditions: health,
+          healthConditions: health || null,
           passwordChanged: false,
           badges: [],
           totalWeighIns: 0,
           createdAt: now,
-          updatedAt: now
+          updatedAt: now,
+          createdFrom: 'landingPage'
         });
 
-        // ── Step 5: Create wallet ──
-        await db.collection('clubs').doc(clubId).collection('members').doc(uid).collection('wallet').doc('data').set({
-          userId: uid,
-          clubId: clubId,
-          currencyName: clubData.currencyName || 'Coins',
+        // ── Step 5: Create empty wallet ──
+        await setDoc(doc(db, 'clubs', CLUB_ID, 'members', memberDocId, 'wallet', 'data'), {
+          userId: memberDocId,
+          clubId: CLUB_ID,
+          currencyName: 'Coins',
           balance: 0,
           lastUpdated: now
         });
 
-        // ── Step 6: Also save enquiry record for owner's reference ──
-        await db.collection('clubs').doc(clubId).collection('enquiries').add({
-          clubId: clubId,
-          name: name,
-          phone: phone,
-          whatsapp: whatsapp || phone,
-          email: email,
-          address: address,
-          dob: dob,
-          currentWeight: weight ? parseFloat(weight) : null,
-          targetWeight: target ? parseFloat(target) : null,
-          healthConditions: health,
-          referredByMemberId: referred || null,
-          status: 'converted',
-          autoRegistered: true,
-          memberDocId: uid,
-          memberId: memberId,
-          createdAt: now,
-          source: 'landing-page'
-        });
+        // No separate enquiries collection — member with isPermanent:false IS the enquiry.
 
         // ── Success! ──
-        alert('🎉 Welcome! Your account has been created successfully!\\n\\nYour Member ID: ' + memberId + '\\n\\nYou can now log in to the member portal with your email and password.');
-        closeModal();
-        // Reset form
+        alert('🎉 Welcome! Your registration has been submitted!\n\nPlease visit the club or contact the owner to activate your membership.\n\nYou can already log in to the member portal with your email and password.');
+        window.closeModal();
         ['f-name', 'f-phone', 'f-whatsapp', 'f-email', 'f-address', 'f-dob',
           'f-weight', 'f-target', 'f-health', 'f-referred', 'f-password', 'f-confirm-password']
-          .forEach(function (id) { document.getElementById(id).value = ''; });
+          .forEach(function (id) { var el = document.getElementById(id); if (el) el.value = ''; });
 
       } catch (e) {
         console.error('Registration error:', e);
-        if (e.code === 'auth/email-already-in-use') {
-          alert('⚠️ This email is already registered. Please use a different email or log in to the member portal.');
-        } else if (e.code === 'auth/invalid-email') {
+        if (e.code === 'auth/invalid-email') {
           alert('⚠️ Please enter a valid email address.');
         } else if (e.code === 'auth/weak-password') {
           alert('⚠️ Password is too weak. Please use at least 6 characters.');
@@ -745,7 +724,7 @@
 
       btn.disabled = false;
       btn.textContent = 'Join Now 🌿';
-    }
+    };
   </script>
 </body>
 

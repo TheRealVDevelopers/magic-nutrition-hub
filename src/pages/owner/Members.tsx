@@ -19,7 +19,7 @@ import MembershipReceipt, { type MembershipReceiptProps } from "@/components/rec
 import { printReceipt } from "@/utils/printReceipt";
 import BulkWeighIn from "@/components/owner/BulkWeighIn";
 
-type FilterTab = "all" | "active" | "expired" | "expiring" | "visiting" | "permanent";
+type FilterTab = "all" | "active" | "expired" | "expiring" | "visiting" | "permanent" | "pending";
 
 function getMemberStatus(m: User): "active" | "expired" | "expiring" {
     if (!m.membershipEnd) return "active";
@@ -56,6 +56,7 @@ export default function Members() {
         else if (filter === "expiring") list = list.filter((m) => getMemberStatus(m) === "expiring");
         else if (filter === "visiting") list = list.filter((m) => (m as any).memberType === "visiting");
         else if (filter === "permanent") list = list.filter((m) => (m as any).memberType === "permanent");
+        else if (filter === "pending") list = list.filter((m) => (m as any).isPermanent === false);
         if (search.trim()) {
             const q = search.toLowerCase();
             list = list.filter((m) => m.name.toLowerCase().includes(q) || m.phone.includes(q));

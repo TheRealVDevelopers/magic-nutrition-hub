@@ -72,8 +72,8 @@ import {
 import { useClubPayments, useAddPayment } from "@/hooks/superadmin/useClubPayments";
 import { useEnquiries, useUpdateEnquiryStatus } from "@/hooks/owner/useEnquiries";
 import { useClubCostEstimate } from "@/hooks/superadmin/useFirebaseUsage";
-import { ref, uploadString, getDownloadURL, getBytes } from "firebase/storage";
-import { doc, updateDoc, arrayUnion, Timestamp } from "firebase/firestore";
+import { ref, uploadString, getDownloadURL, getBytes, deleteObject } from "firebase/storage";
+import { doc, updateDoc, arrayUnion, Timestamp, serverTimestamp } from "firebase/firestore";
 import { storage, db } from "@/lib/firebase";
 import type { Club, LandingImage, Enquiry } from "@/types/firestore";
 import { ImageLabelSelect } from "@/components/ui/ImageLabelSelect";
@@ -622,7 +622,13 @@ function LandingPageTab({ clubId, club }: { clubId: string; club: Club }) {
             })
             .catch(() => {
                 if (cancelled) return;
-                toast({ title: "Could not load current HTML", variant: "destructive" });
+                setHtmlContent("");
+                setSavedHtml("");
+                toast({
+                    title: "Landing page file not found",
+                    description: "The file in Storage was deleted or moved. Click Edit, paste your HTML, and Publish to fix.",
+                    variant: "destructive",
+                });
             })
             .finally(() => {
                 if (!cancelled) setFetchingHtml(false);
@@ -650,41 +656,49 @@ function LandingPageTab({ clubId, club }: { clubId: string; club: Club }) {
         setPublishStep(null);
         setPublishing(true);
         try {
-            // a) Save current live URL to history first
+            // a) Replace {{CLUB_ID}} placeholder before uploading
+            const finalHtml = htmlContent.replace(/\{\{CLUB_ID\}\}/g, clubId);
+
+            // b) Fixed storage path — always the same file, always overwritten
+            const STORAGE_PATH = `clubs/${clubId}/landing/landing.html`;
+            const htmlRef = ref(storage, STORAGE_PATH);
+
+            // c) Clean up any old timestamped files (best-effort, non-blocking)
             if (club.landingPageUrl) {
-                const nextVer = (history.length ?? 0) + 1;
-                await updateDoc(doc(db, "clubs", clubId), {
-                    landingPageHistory: arrayUnion({
-                        version: nextVer,
-                        url: club.landingPageUrl,
-                        publishedAt: Timestamp.now(),
-                        publishedBy: userProfile?.name ?? "Unknown",
-                        label: `Version ${nextVer}`,
-                    }),
-                });
+                try {
+                    const match = club.landingPageUrl.match(/\/o\/([^?#]+)/);
+                    if (match) {
+                        const oldPath = decodeURIComponent(match[1]);
+                        if (oldPath !== STORAGE_PATH) {
+                            await deleteObject(ref(storage, oldPath));
+                        }
+                    }
+                } catch {
+                    // Old file may already be deleted — not a blocker
+                }
             }
 
-            // b) Upload with timestamped filename so old files are NOT overwritten
-            const ts = Date.now();
-            const htmlRef = ref(storage, `clubs/${clubId}/landing/landing_${ts}.html`);
-            // Replace {{CLUB_ID}} placeholder with the real club ID before uploading
-            const finalHtml = htmlContent.replace(/\{\{CLUB_ID\}\}/g, clubId);
+            // d) Upload — overwrites the fixed path every time
             await uploadString(htmlRef, finalHtml, "raw", { contentType: "text/html" });
+
+            // e) Get fresh download URL
             const newUrl = await getDownloadURL(htmlRef);
 
-            // c) Update Firestore with new URL
-            await updateDoc(doc(db, "clubs", clubId), { landingPageUrl: newUrl });
+            // f) Update Firestore with new URL, path, and timestamp
+            await updateDoc(doc(db, "clubs", clubId), {
+                landingPageUrl: newUrl,
+                landingPageStoragePath: STORAGE_PATH,
+                landingPageUpdatedAt: serverTimestamp(),
+            });
 
-            // d) Keep textarea content (do NOT clear it)
+            // g) Keep textarea content in sync, exit edit mode
             setSavedHtml(finalHtml);
-
-            // e) Back to read-only
             setEditMode(false);
 
-            toast({ title: "✅ Published successfully" });
+            toast({ title: "🎉 Landing page published successfully!" });
         } catch (err: unknown) {
             toast({
-                title: "Publish failed — your HTML was not cleared",
+                title: "Publish failed",
                 description: err instanceof Error ? err.message : "Unknown error",
                 variant: "destructive",
             });

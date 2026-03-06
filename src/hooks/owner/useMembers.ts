@@ -8,7 +8,12 @@ export function useMembers(clubId: string | null) {
         queryKey: ["owner-members", clubId],
         enabled: !!clubId,
         queryFn: async () => {
-            const q = query(collection(db, `clubs/${clubId}/members`), orderBy("name"));
+            // Only fetch permanent (activated) members — pending ones are in Enquiries tab
+            const q = query(
+                collection(db, `clubs/${clubId}/members`),
+                where("isPermanent", "==", true),
+                orderBy("name")
+            );
             const snap = await getDocs(q);
             return snap.docs.map(d => ({ id: d.id, ...d.data() } as User));
         },
@@ -44,11 +49,15 @@ export function useAddMember() {
                 originalClubId: data.clubId,
                 role: "member" as const,
                 status: "active" as const,
+                isPermanent: true,
+                isActiveMember: true,
+                activatedAt: now,
                 qrCode: memberId,
                 isClubOwner: false,
                 ownedClubId: null,
                 parentUserId: data.member.referredBy || null,
                 treePath: memberId,
+                joinedAt: now,
                 createdAt: now,
                 updatedAt: now,
             };

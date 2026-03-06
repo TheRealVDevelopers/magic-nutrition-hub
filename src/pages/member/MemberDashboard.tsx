@@ -176,6 +176,86 @@ export default function MemberDashboard() {
         );
     }
 
+    // Pending members (isPermanent: false) see a limited activation-pending view
+    if ((userProfile as any).isPermanent === false) {
+        return (
+            <div className="min-h-screen pb-24 px-4 pt-6 font-[Nunito,sans-serif]" style={{ background: BG }}>
+                <div className="max-w-lg mx-auto space-y-6">
+                    <div>
+                        <h1 className="text-2xl font-bold text-slate-800">
+                            Welcome, {firstName}! 🎉
+                        </h1>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <Badge className="bg-amber-500 text-white border-amber-600">
+                                Pending Activation
+                            </Badge>
+                        </div>
+                    </div>
+
+                    <div
+                        className="rounded-2xl border-2 border-dashed p-6 space-y-3 text-center"
+                        style={{ borderColor: "#f59e0b", backgroundColor: "#fffbeb" }}
+                    >
+                        <p className="text-3xl">⏳</p>
+                        <h2 className="text-lg font-black text-amber-800">
+                            Membership Pending Activation
+                        </h2>
+                        <p className="text-sm text-amber-700">
+                            Your registration has been received! Please visit the club or contact the owner to activate your membership.
+                        </p>
+                        <p className="text-xs text-amber-600">
+                            Once activated, you'll have access to your wallet, orders, progress tracking and more.
+                        </p>
+                    </div>
+
+                    <div
+                        className="rounded-2xl border bg-white p-5 space-y-3"
+                        style={{ borderColor: `${GREEN}20` }}
+                    >
+                        <h3 className="font-bold text-slate-800">Your Registration Info</h3>
+                        <div className="space-y-2 text-sm">
+                            <div className="flex justify-between">
+                                <span className="text-slate-500">Name</span>
+                                <span className="font-semibold">{userProfile.name}</span>
+                            </div>
+                            {userProfile.phone && (
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Phone</span>
+                                    <span className="font-semibold">{userProfile.phone}</span>
+                                </div>
+                            )}
+                            {(userProfile as any).email && (
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Email</span>
+                                    <span className="font-semibold">{(userProfile as any).email}</span>
+                                </div>
+                            )}
+                            {club?.name && (
+                                <div className="flex justify-between">
+                                    <span className="text-slate-500">Club</span>
+                                    <span className="font-semibold">{club.name}</span>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <Link to="/member/profile">
+                        <div
+                            className="rounded-2xl border-2 p-4 flex items-center justify-between hover:opacity-90 transition-opacity"
+                            style={{ borderColor: GREEN, backgroundColor: "#f0fdf4" }}
+                        >
+                            <div>
+                                <p className="font-bold text-green-800">Update Your Profile</p>
+                                <p className="text-xs text-green-600">You can update your details while waiting</p>
+                            </div>
+                            <span className="text-green-700 text-xl">→</span>
+                        </div>
+                    </Link>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <>
             <div
