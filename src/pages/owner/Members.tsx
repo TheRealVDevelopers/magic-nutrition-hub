@@ -54,9 +54,10 @@ export default function Members() {
         if (filter === "active") list = list.filter((m) => getMemberStatus(m) === "active");
         else if (filter === "expired") list = list.filter((m) => getMemberStatus(m) === "expired");
         else if (filter === "expiring") list = list.filter((m) => getMemberStatus(m) === "expiring");
-        else if (filter === "visiting") list = list.filter((m) => (m as any).memberType === "visiting");
-        else if (filter === "permanent") list = list.filter((m) => (m as any).memberType === "permanent");
-        else if (filter === "pending") list = list.filter((m) => (m as any).isPermanent === false);
+        // Visiting = not yet done first wallet top-up (isActiveMember false)
+        else if (filter === "visiting") list = list.filter((m) => (m as any).isActiveMember === false);
+        // Permanent = has done at least one wallet top-up (isActiveMember true)
+        else if (filter === "permanent") list = list.filter((m) => (m as any).isActiveMember === true);
         if (search.trim()) {
             const q = search.toLowerCase();
             list = list.filter((m) => m.name.toLowerCase().includes(q) || m.phone.includes(q));
@@ -124,10 +125,10 @@ export default function Members() {
     };
 
     return (
-        <div className="space-y-6 animate-fade-in" style={{ fontFamily: "'Nunito', sans-serif" }}>
+        <div className="px-4 md:px-8 py-8 max-w-6xl mx-auto w-full space-y-6 animate-fade-in" style={{ fontFamily: "'Nunito', sans-serif" }}>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <h1 className="text-2xl font-black" style={{ color: "#2d9653" }}>Members</h1>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                     <Button variant="outline" className="gap-2 min-h-[48px] px-4 border-amber-500 text-amber-600 hover:bg-amber-50" onClick={() => navigate("/owner/leaderboard")}>
                         <Trophy className="w-4 h-4" /> Leaderboard
                     </Button>
@@ -175,7 +176,11 @@ export default function Members() {
                     {filtered.map((m) => {
                         const status = getMemberStatus(m);
                         return (
-                            <div key={m.id} className="p-5 rounded-2xl border bg-white shadow-sm hover:shadow-md transition-shadow">
+                            <div key={m.id} className="p-5 rounded-2xl border shadow-sm hover:shadow-md transition-shadow"
+                                style={{
+                                    backgroundColor: (m as any).isActiveMember === false ? "#fffbeb" : "white",
+                                    borderColor: (m as any).isActiveMember === false ? "#fcd34d" : undefined,
+                                }}>
                                 <div className="flex items-start gap-4">
                                     <Avatar className="h-12 w-12 shrink-0">
                                         {m.photo ? <AvatarImage src={m.photo} /> : null}
@@ -185,13 +190,12 @@ export default function Members() {
                                         <p className="font-bold truncate">{m.name}</p>
                                         <p className="text-sm text-muted-foreground">{m.phone}</p>
                                         <div className="flex flex-wrap gap-1 mt-2">
-                                            {/* Member Type: Visiting or Permanent */}
-                                            {(m as any).memberType === "visiting" && (
+                                            {/* Permanent vs Visiting based on isActiveMember */}
+                                            {(m as any).isActiveMember === false ? (
                                                 <Badge variant="outline" className="text-xs bg-amber-50 text-amber-800 border-amber-300">
                                                     🟡 Visiting
                                                 </Badge>
-                                            )}
-                                            {(m as any).memberType === "permanent" && (
+                                            ) : (
                                                 <Badge variant="outline" className="text-xs bg-emerald-50 text-emerald-800 border-emerald-300">
                                                     🟢 Permanent
                                                 </Badge>

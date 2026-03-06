@@ -121,6 +121,36 @@ async function fetchUserProfile(uid: string, email?: string | null): Promise<Use
             }
         }
 
+        // Step 4: Self-healing — if this is the super admin email but doc is missing, create it
+        if (email === 'superadmin@mnc.com') {
+            console.log('[AUTH] Super admin profile missing — auto-creating...');
+            const { setDoc } = await import('firebase/firestore');
+            await setDoc(doc(db, 'superAdmins', uid), {
+                name: 'Super Admin',
+                email: 'superadmin@mnc.com',
+                role: 'superAdmin',
+                clubId: 'platform',
+                phone: '',
+                photo: '',
+                status: 'active',
+                createdAt: new Date(),
+                createdBy: 'system-auto-heal',
+            });
+            const profile = {
+                id: uid,
+                name: 'Super Admin',
+                email: 'superadmin@mnc.com',
+                role: 'superAdmin',
+                clubId: 'platform',
+                phone: '',
+                photo: '',
+                status: 'active',
+            } as User;
+            _cachedProfile = profile;
+            saveProfileToStorage(profile);
+            return profile;
+        }
+
         return null;
     } catch (error) {
         console.error('fetchUserProfile error:', error);

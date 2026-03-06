@@ -73,16 +73,18 @@ function ActivateModal({ member, clubId, ownerUid, onClose }: ActivateModalProps
     const handleActivate = async () => {
         setLoading(true);
         try {
+            // NOTE: isActiveMember stays false until first wallet top-up
+            // Activating just moves them from 'visiting/pending' to acknowledged visiting member
             await updateDoc(doc(db, "clubs", clubId, "members", member.id), {
-                isPermanent: true,
+                isPermanent: false,          // stays false — wallet top-up makes them permanent
                 status: "active",
-                memberType: selectedType,
-                isActiveMember: true,
-                activatedAt: serverTimestamp(),
+                memberType: selectedType,    // visiting, bronze, silver, gold, platinum
+                isActiveMember: false,       // only true after first wallet recharge
                 activatedBy: ownerUid,
+                activatedAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
             });
-            toast({ title: "Member activated successfully!" });
+            toast({ title: `✅ ${member.name} is now a ${selectedType} visiting member!` });
             onClose();
         } catch (err: any) {
             toast({ title: "Failed to activate", description: err.message, variant: "destructive" });
@@ -263,17 +265,23 @@ export default function Enquiries() {
     const [activatingMember, setActivatingMember] = useState<PendingMember | null>(null);
     const [deletingId, setDeletingId] = useState<string | null>(null);
 
-    // Live query: members with isPermanent: false
+    // Live query: visiting members (isActiveMember == false means not yet wallet-activated)
     useEffect(() => {
         if (!club?.id) return;
         setLoading(true);
+        // Query all members who are not yet permanent (no wallet top-up yet)
         const q = query(
             collection(db, "clubs", club.id, "members"),
-            where("isPermanent", "==", false),
-            orderBy("joinedAt", "desc")
+            where("isActiveMember", "==", false)
         );
         const unsubscribe = onSnapshot(q, (snap) => {
-            const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as PendingMember));
+            const data = snap.docs
+                .map((d) => ({ id: d.id, ...d.data() } as PendingMember))
+                .sort((a, b) => {
+                    const aTime = (a as any).createdAt?.toMillis?.() ?? 0;
+                    const bTime = (b as any).createdAt?.toMillis?.() ?? 0;
+                    return bTime - aTime;
+                });
             setEnquiries(data);
             setLoading(false);
         }, (err) => {
@@ -307,7 +315,7 @@ export default function Enquiries() {
     };
 
     return (
-        <div className="px-6 md:px-8 py-8 max-w-[900px] mx-auto" style={{ fontFamily: "'Nunito', sans-serif" }}>
+        <div className="px-4 md:px-8 py-8 max-w-3xl mx-auto w-full" style={{ fontFamily: "'Nunito', sans-serif" }}>
             {/* Header */}
             <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
@@ -357,10 +365,10 @@ export default function Enquiries() {
                     ) : filtered.length === 0 ? (
                         <div className="rounded-2xl border bg-gray-50 p-12 text-center">
                             <p className="text-gray-500 font-semibold">
-                                {enquiries.length ? "No enquiries match your search" : "No pending enquiries"}
+                                {enquiries.length ? "No enquiries match your search" : "No visiting members yet"}
                             </p>
                             <p className="text-gray-400 text-sm mt-2">
-                                New registrations from the landing page will appear here
+                                Members registered via the landing page appear here until their first wallet recharge.
                             </p>
                         </div>
                     ) : (
