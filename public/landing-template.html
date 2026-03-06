@@ -288,7 +288,7 @@ async function submitEnquiry(){
   }
 
   try{
-    await db.collection('enquiries').add({
+    await db.collection('clubs').doc('{{CLUB_ID}}').collection('enquiries').add({
       clubId: '{{CLUB_ID}}',
       name: name,
       phone: phone,

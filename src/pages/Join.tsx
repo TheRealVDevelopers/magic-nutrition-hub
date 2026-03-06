@@ -33,11 +33,11 @@ function useClubFromParams() {
     });
 }
 
-// Validate that a memberId exists
-async function validateMemberId(clubId: string, memberId: string): Promise<boolean> {
+async function validateMemberId(_clubId: string, memberId: string): Promise<boolean> {
     if (!memberId.trim()) return true; // Empty = valid (optional field)
-    const snap = await getDocs(query(collection(db, `clubs/${clubId}/members`), where("memberId", "==", memberId.trim())));
-    return !snap.empty;
+    // Removed frontend validation query because unauthenticated visitors 
+    // cannot securely query the members collection.
+    return true; 
 }
 
 export default function Join() {

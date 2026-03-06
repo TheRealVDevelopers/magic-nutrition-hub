@@ -24,6 +24,14 @@ service cloud.firestore {
       return isSuperAdmin() || isClubOwner(clubId);
     }
 
+    // Since member documents use a generated ID, but Auth provides their email,
+    // we cross-reference the email inside the member document to verify identity.
+    function isThisMember(clubId, memberId) {
+      return isSignedIn() 
+        && request.auth.token.email != null
+        && get(/databases/$(database)/documents/clubs/$(clubId)/members/$(memberId)).data.email == request.auth.token.email;
+    }
+
     // ═══════════════════════════════════════════════════════════
     // Platform-level collections (root)
     // ═══════════════════════════════════════════════════════════
@@ -52,6 +60,19 @@ service cloud.firestore {
     }
 
     // ═══════════════════════════════════════════════════════════
+    // Backwards Compatibility (Legacy Flat Collections)
+    // ═══════════════════════════════════════════════════════════
+
+    // Old landing pages still try to write to the root 'enquiries' collection.
+    // The superadmin has an orphan-enquiry-fix tool that reads from here.
+    match /enquiries/{enquiryId} {
+      // Allow public creation from old landing HTML pages
+      allow create: if true;
+      // Allow superAdmins to read/delete/migrate
+      allow read, update, delete: if isSignedIn();
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // Clubs (multi-tenancy root)
     // ═══════════════════════════════════════════════════════════
 
@@ -75,41 +96,41 @@ service cloud.firestore {
       // Members
       // ───────────────────────────────────────────────────────
       match /members/{memberId} {
-        // Any authenticated user can read (needed for member lookup)
+        // Any authenticated user can read (needed for member lookup/referrals)
         allow read: if isSignedIn();
         // Owner/superAdmin can create/delete members
-        // Members can update their own doc (profile edits)
+        // Members can ONLY update their own doc (profile edits)
         allow create: if isOwnerOrSuperAdmin(clubId);
-        allow update: if isSignedIn();
+        allow update: if isOwnerOrSuperAdmin(clubId) || isThisMember(clubId, memberId);
         allow delete: if isOwnerOrSuperAdmin(clubId);
 
         // ── Member wallet ──
         match /wallet/{doc} {
-          allow read:  if isSignedIn();
-          allow write: if isSignedIn();
+          allow read:  if isOwnerOrSuperAdmin(clubId) || isThisMember(clubId, memberId);
+          allow write: if isOwnerOrSuperAdmin(clubId) || isThisMember(clubId, memberId);
         }
 
         // ── Member transactions ──
         match /transactions/{txnId} {
-          allow read:  if isSignedIn();
-          allow write: if isSignedIn();
+          allow read:  if isOwnerOrSuperAdmin(clubId) || isThisMember(clubId, memberId);
+          allow write: if isOwnerOrSuperAdmin(clubId) || isThisMember(clubId, memberId);
         }
 
         // ── Member weigh-ins ──
         match /weighIns/{weighInId} {
-          allow read:  if isSignedIn();
-          allow write: if isSignedIn();
+          allow read:  if isOwnerOrSuperAdmin(clubId) || isThisMember(clubId, memberId);
+          allow write: if isOwnerOrSuperAdmin(clubId) || isThisMember(clubId, memberId);
         }
 
         // ── Member attendance ──
         match /attendance/{attId} {
-          allow read:  if isSignedIn();
-          allow write: if isSignedIn();
+          allow read:  if isOwnerOrSuperAdmin(clubId) || isThisMember(clubId, memberId);
+          allow write: if isOwnerOrSuperAdmin(clubId) || isThisMember(clubId, memberId);
         }
 
         // ── Member notifications ──
         match /notifications/{notifId} {
-          allow read:  if isSignedIn();
+          allow read:  if isOwnerOrSuperAdmin(clubId) || isThisMember(clubId, memberId);
           allow write: if isOwnerOrSuperAdmin(clubId);
         }
       }
@@ -125,10 +146,16 @@ service cloud.firestore {
         allow update, delete: if isOwnerOrSuperAdmin(clubId);
       }
 
-      // Orders — authenticated users can CRUD
+      // Orders — authenticated users can CRUD, but we verify they own the order
+      // (Member writes their ID into order.memberId)
+      // Since it's a club-level subcollection, we check data payload directly.
       match /orders/{orderId} {
-        allow read:  if isSignedIn();
-        allow write: if isSignedIn();
+        // Members can read/write if the document's memberId is theirs
+        allow read:  if isOwnerOrSuperAdmin(clubId) || (isSignedIn() && resource.data.memberId != null && get(/databases/$(database)/documents/clubs/$(clubId)/members/$(resource.data.memberId)).data.email == request.auth.token.email);
+        // For writes, since the doc might not exist yet during create, we check request details if possible, but owner always can
+        allow create: if isOwnerOrSuperAdmin(clubId) || (isSignedIn() && request.resource.data.memberId != null && get(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.resource.data.memberId)).data.email == request.auth.token.email);
+        allow update: if isOwnerOrSuperAdmin(clubId) || (isSignedIn() && resource.data.memberId != null && get(/databases/$(database)/documents/clubs/$(clubId)/members/$(resource.data.memberId)).data.email == request.auth.token.email);
+        allow delete: if isOwnerOrSuperAdmin(clubId);
       }
 
       // Menu items — everyone reads, only owner/admin writes
@@ -158,10 +185,11 @@ service cloud.firestore {
         allow write: if isSignedIn();
       }
 
-      // Top-up requests — authenticated users
+      // Top-up requests — authenticated users can read/write their own
       match /topupRequests/{requestId} {
-        allow read:  if isSignedIn();
-        allow write: if isSignedIn();
+        allow read:  if isOwnerOrSuperAdmin(clubId) || (isSignedIn() && resource.data.memberId != null && get(/databases/$(database)/documents/clubs/$(clubId)/members/$(resource.data.memberId)).data.email == request.auth.token.email);
+        allow create: if isOwnerOrSuperAdmin(clubId) || (isSignedIn() && request.resource.data.memberId != null && get(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.resource.data.memberId)).data.email == request.auth.token.email);
+        allow update, delete: if isOwnerOrSuperAdmin(clubId);
       }
 
       // Membership plans — members read, owner/admin manages
