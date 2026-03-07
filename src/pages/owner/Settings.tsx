@@ -155,24 +155,51 @@ export default function Settings() {
             </h1>
 
             <section className="space-y-4">
-                <h2 className="text-lg font-semibold">Club Profile</h2>
+                <div>
+                    <h2 className="text-lg font-semibold">Club Profile</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">This information appears on all printed receipts.</p>
+                </div>
                 <div className="grid gap-4 max-w-md">
-                    <div><Label>Club Name</Label><Input value={clubName} onChange={(e) => setClubName(e.target.value)} /></div>
-                    <div><Label>Address</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} /></div>
-                    <div><Label>Phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
-                    <div><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
                     <div>
-                        <Label>GST Number (optional)</Label>
+                        <Label>Club Name *</Label>
+                        <Input value={clubName} onChange={(e) => setClubName(e.target.value)} placeholder="Magic Nutrition Club" />
+                    </div>
+                    <div>
+                        <Label>Address</Label>
+                        <textarea
+                            className="w-full min-h-[80px] rounded-md border px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-green-500"
+                            value={address}
+                            onChange={(e) => setAddress(e.target.value)}
+                            placeholder={`Shop No. 12, 1st Floor\nKoramangala, Bengaluru - 560034`}
+                            rows={3}
+                        />
+                        <span className="text-xs text-muted-foreground mt-1 block">Printed on all receipts</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div>
+                            <Label>Phone Number</Label>
+                            <Input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+91 98123 90831" />
+                        </div>
+                        <div>
+                            <Label>Email ID</Label>
+                            <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="info@club.com" />
+                        </div>
+                    </div>
+                    <div>
+                        <Label className="flex items-center gap-2">
+                            GST Number
+                            <span className="text-[11px] text-muted-foreground font-normal bg-gray-100 px-2 py-0.5 rounded-full">optional</span>
+                        </Label>
                         <Input
                             value={gstNumber}
                             onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
                             placeholder="e.g. 29ABCDE1234F1Z5"
                             maxLength={15}
                         />
-                        <span className="text-xs text-muted-foreground mt-1 block">Leave blank if not GST registered</span>
+                        <span className="text-xs text-muted-foreground mt-1 block">15-character GST number. Leave blank if not registered.</span>
                     </div>
                     <Button onClick={handleSaveProfile} disabled={profileSaving} style={{ backgroundColor: GREEN }}>
-                        <Save className="w-4 h-4 mr-2" /> {profileSaving ? "Saving…" : "Save"}
+                        <Save className="w-4 h-4 mr-2" /> {profileSaving ? "Saving…" : "💾 Save Profile"}
                     </Button>
                 </div>
             </section>

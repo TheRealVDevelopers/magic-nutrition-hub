@@ -19,6 +19,7 @@ export interface ClubPrintData {
     name: string;
     address?: string;
     phone?: string;
+    email?: string;
     gstNumber?: string;
 }
 
@@ -36,6 +37,7 @@ export const buildHeader = (club: ClubPrintData): string[] => [
     LF,
     ...(club.address ? [club.address] : []),
     ...(club.phone ? [`Ph: ${club.phone}`] : []),
+    ...(club.email ? [`Email: ${club.email}`] : []),
     ...(club.gstNumber ? [`GSTIN: ${club.gstNumber}`] : []),
     DIVIDER,
     ALIGN_LEFT,
@@ -489,6 +491,81 @@ export const buildTierBreakdownReceipt = (data: TierBreakdownData): string[] => 
     twoCol('TOTAL EXPIRED:', String(data.totalExpired)),
     twoCol('TOTAL PENDING:', String(data.totalPending)),
     BOLD_OFF,
+    LF,
+    ...buildFooter(),
+];
+
+// ═══════════════════════════════════════════════
+// 11. EXPIRING MEMBERSHIPS (Dashboard)
+// ═══════════════════════════════════════════════
+
+export interface ExpiringMembersData {
+    club: ClubPrintData;
+    date: string;
+    withinDays: number;
+    members: Array<{ name: string; tier: string; expiresOn: string; daysLeft: number }>;
+}
+
+export const buildExpiringMembersReceipt = (data: ExpiringMembersData): string[] => [
+    ...buildHeader(data.club),
+    LF,
+    ALIGN_CENTER,
+    BOLD_ON,
+    'EXPIRING MEMBERSHIPS',
+    BOLD_OFF,
+    ALIGN_LEFT,
+    twoCol('Date:', data.date),
+    twoCol('Expiring within:', `${data.withinDays} days`),
+    twoCol('Count:', String(data.members.length)),
+    DIVIDER_THIN,
+    BOLD_ON,
+    'No.  Name             Tier   Days',
+    BOLD_OFF,
+    ...data.members.map((m, i) => {
+        const num = String(i + 1).padEnd(3);
+        const name = truncate(m.name, 17).padEnd(18);
+        const tier = truncate(m.tier, 6).padEnd(7);
+        return `${num}. ${name} ${tier} ${m.daysLeft}d`;
+    }),
+    DIVIDER_THIN,
+    'ACTION: Contact members to renew.',
+    LF,
+    ...buildFooter(),
+];
+
+// ═══════════════════════════════════════════════
+// 12. LOW STOCK ALERT (Dashboard)
+// ═══════════════════════════════════════════════
+
+export interface LowStockData {
+    club: ClubPrintData;
+    date: string;
+    time: string;
+    items: Array<{ name: string; stock: number; threshold: number }>;
+}
+
+export const buildLowStockReceipt = (data: LowStockData): string[] => [
+    ...buildHeader(data.club),
+    LF,
+    ALIGN_CENTER,
+    BOLD_ON,
+    'LOW STOCK ALERT',
+    BOLD_OFF,
+    ALIGN_LEFT,
+    twoCol('Date:', data.date),
+    twoCol('Time:', data.time),
+    twoCol('Items affected:', String(data.items.length)),
+    DIVIDER_THIN,
+    BOLD_ON,
+    'Item Name            Stock  Threshold',
+    BOLD_OFF,
+    ...data.items.map(p => {
+        const name = truncate(p.name, 21).padEnd(22);
+        const stock = String(p.stock).padEnd(7);
+        return `${name}${stock}${p.threshold}`;
+    }),
+    DIVIDER_THIN,
+    'ACTION: Restock before next session.',
     LF,
     ...buildFooter(),
 ];

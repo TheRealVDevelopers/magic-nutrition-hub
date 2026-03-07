@@ -20,7 +20,7 @@ import { useMembers } from "@/hooks/owner/useMembers";
 import { useClubContext } from "@/lib/clubDetection";
 import { useToast } from "@/hooks/use-toast";
 import type { Wallet as WalletType, User, TopupRequest } from "@/types/firestore";
-import { printViaRawBT, generateTxnId, formatINR } from "@/utils/printReceipt";
+import { printViaRawBT, generateTxnId } from "@/utils/printReceipt";
 import { buildTopUpReceipt, type ClubPrintData } from "@/utils/receiptBuilder";
 import AutoPrintCountdown from "@/components/AutoPrintCountdown";
 
@@ -122,7 +122,8 @@ export default function WalletPage() {
                 amount: amt, paymentMethod, reference: reference || undefined,
                 balanceBefore, balanceAfter: balanceBefore + amt,
                 clubName: club?.name ?? "Magic Nutrition Club",
-                clubPhone: club?.phone ?? club?.ownerPhone ?? "",
+                clubPhone: club?.phone ?? (club as any)?.ownerPhone ?? "",
+                clubEmail: (club as any)?.ownerEmail ?? "",
                 clubAddress: (club as any)?.address ?? "",
                 clubGst: (club as any)?.gstNumber ?? "",
                 transactionId: generateTxnId(),
@@ -141,6 +142,7 @@ export default function WalletPage() {
             name: successReceipt.clubName,
             address: successReceipt.clubAddress,
             phone: successReceipt.clubPhone,
+            email: successReceipt.clubEmail,
             gstNumber: successReceipt.clubGst,
         };
         const lines = buildTopUpReceipt({
@@ -194,6 +196,7 @@ export default function WalletPage() {
                 balanceAfter: w.balance + result.approvedAmount,
                 clubName: club?.name ?? "Magic Nutrition Club",
                 clubPhone: club?.phone ?? (club as any)?.ownerPhone ?? "",
+                clubEmail: (club as any)?.ownerEmail ?? "",
                 clubAddress: (club as any)?.address ?? "",
                 clubGst: (club as any)?.gstNumber ?? "",
                 transactionId: generateTxnId(),

@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useMembers, useAddMember } from "@/hooks/owner/useMembers";
 import { useClubContext } from "@/lib/clubDetection";
 import type { User } from "@/types/firestore";
-import { printViaRawBT, generateTxnId } from "@/utils/printReceipt";
+import { printViaRawBT } from "@/utils/printReceipt";
 import { buildMembershipReceipt, type ClubPrintData } from "@/utils/receiptBuilder";
 import BulkWeighIn from "@/components/owner/BulkWeighIn";
 

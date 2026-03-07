@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { AlertTriangle, ArrowRight, Clock, Package } from "lucide-react";
+import { AlertTriangle, ArrowRight, Clock, Package, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,6 +14,12 @@ import {
     useRecentOrders,
 } from "@/hooks/useOwner";
 import { useDrasticChanges } from "@/hooks/owner/useWeighIns";
+import { printViaRawBT } from "@/utils/printReceipt";
+import {
+    buildExpiringMembersReceipt,
+    buildLowStockReceipt,
+    type ClubPrintData,
+} from "@/utils/receiptBuilder";
 
 function getGreeting(): string {
     const h = new Date().getHours();
@@ -114,9 +120,39 @@ export default function OwnerDashboard() {
             <div className="grid sm:grid-cols-2 gap-6">
                 {/* Expiring Memberships */}
                 <div className="bg-white rounded-2xl border p-5 space-y-3">
-                    <h3 className="text-sm font-bold flex items-center gap-2">
-                        <Clock className="w-4 h-4 text-orange-500" /> Membership Expiring Soon
-                    </h3>
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-orange-500" /> Membership Expiring Soon
+                        </h3>
+                        {expiring && expiring.length > 0 && (
+                            <button
+                                onClick={() => {
+                                    const clubData: ClubPrintData = {
+                                        name: club?.name ?? "Magic Nutrition Club",
+                                        address: (club as any)?.address ?? "",
+                                        phone: club?.phone ?? (club as any)?.ownerPhone ?? "",
+                                        email: (club as any)?.ownerEmail ?? "",
+                                        gstNumber: (club as any)?.gstNumber ?? "",
+                                    };
+                                    const lines = buildExpiringMembersReceipt({
+                                        club: clubData,
+                                        date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+                                        withinDays: 7,
+                                        members: expiring.map(m => ({
+                                            name: m.name,
+                                            tier: m.membershipTier ?? "—",
+                                            expiresOn: m.membershipEnd!.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }),
+                                            daysLeft: Math.ceil((m.membershipEnd!.toDate().getTime() - Date.now()) / 86400000),
+                                        })),
+                                    });
+                                    printViaRawBT(lines);
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-orange-200 text-orange-600 bg-orange-50 hover:bg-orange-100 transition-colors"
+                            >
+                                <Printer className="w-3.5 h-3.5" /> Print
+                            </button>
+                        )}
+                    </div>
                     {expiringLoading ? (
                         <Skeleton className="h-20" />
                     ) : expiring && expiring.length > 0 ? (
@@ -143,9 +179,39 @@ export default function OwnerDashboard() {
 
                 {/* Low Stock */}
                 <div className="bg-white rounded-2xl border p-5 space-y-3">
-                    <h3 className="text-sm font-bold flex items-center gap-2">
-                        <Package className="w-4 h-4 text-red-500" /> Low Stock Alert
-                    </h3>
+                    <div className="flex items-center justify-between">
+                        <h3 className="text-sm font-bold flex items-center gap-2">
+                            <Package className="w-4 h-4 text-red-500" /> Low Stock Alert
+                        </h3>
+                        {lowStock && lowStock.length > 0 && (
+                            <button
+                                onClick={() => {
+                                    const now = new Date();
+                                    const clubData: ClubPrintData = {
+                                        name: club?.name ?? "Magic Nutrition Club",
+                                        address: (club as any)?.address ?? "",
+                                        phone: club?.phone ?? (club as any)?.ownerPhone ?? "",
+                                        email: (club as any)?.ownerEmail ?? "",
+                                        gstNumber: (club as any)?.gstNumber ?? "",
+                                    };
+                                    const lines = buildLowStockReceipt({
+                                        club: clubData,
+                                        date: now.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+                                        time: now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+                                        items: lowStock.map(p => ({
+                                            name: p.name,
+                                            stock: p.stock,
+                                            threshold: p.lowStockThreshold,
+                                        })),
+                                    });
+                                    printViaRawBT(lines);
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 transition-colors"
+                            >
+                                <Printer className="w-3.5 h-3.5" /> Print
+                            </button>
+                        )}
+                    </div>
                     {lowStockLoading ? (
                         <Skeleton className="h-20" />
                     ) : lowStock && lowStock.length > 0 ? (
