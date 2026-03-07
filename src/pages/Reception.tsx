@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, X, Loader2 } from "lucide-react";
 import type { Product, Announcement, User } from "@/types/firestore";
+import { useTodaysSpecials, getStockBadgeInfo, getTodayStr, type TodaysSpecialItem } from "@/hooks/useTodaysSpecial";
 
 const GREEN = "#2d9653";
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
@@ -92,6 +93,8 @@ function TodaysShakes({ clubId }: { clubId: string }) {
         refetchInterval: 120000,
     });
 
+    const { specials } = useTodaysSpecials(clubId);
+
     return (
         <div className="reception-card">
             <h2 className="reception-card-title">
@@ -106,12 +109,34 @@ function TodaysShakes({ clubId }: { clubId: string }) {
                 </div>
             ) : (
                 <div className="flex flex-col">
-                    {items.map((item) => (
-                        <div key={item.id} className="menu-item-row">
-                            <span className="menu-item-name">• {item.name}</span>
-                            <span className="menu-item-price">₹{item.price}</span>
-                        </div>
-                    ))}
+                    {items.map((item) => {
+                        const special = specials[item.id];
+                        const badge = getStockBadgeInfo(special);
+                        const isSoldOut = special?.stockType === "limited" && (special?.remainingStock ?? 0) <= 0;
+                        return (
+                            <div key={item.id} className="menu-item-row" style={{ opacity: isSoldOut ? 0.5 : 1 }}>
+                                <span className="menu-item-name" style={{ textDecoration: isSoldOut ? "line-through" : "none" }}>
+                                    • {item.name}
+                                </span>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    {badge && (
+                                        <span style={{
+                                            display: "inline-block",
+                                            padding: "2px 8px",
+                                            borderRadius: 99,
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            background: badge.cls === "sold-out" ? "#f0f0f0" : badge.cls === "low-stock" ? "#fde8e8" : "#d8f3dc",
+                                            color: badge.cls === "sold-out" ? "#9ca3af" : badge.cls === "low-stock" ? "#c0392b" : "#2d6a4f",
+                                        }}>
+                                            {badge.label}
+                                        </span>
+                                    )}
+                                    <span className="menu-item-price">₹{item.price}</span>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
         </div>

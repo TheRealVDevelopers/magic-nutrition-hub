@@ -16,6 +16,196 @@ import {
 const CATEGORIES = ["shake", "tea", "drink", "other"] as const;
 const CAT_LABELS: Record<string, string> = { shake: "Shake", tea: "Tea", drink: "Drink", other: "Other" };
 
+// ─── Dual-mode Image Input ─────────────────────────────────────────────────
+
+interface ImageInputProps {
+    value: string;
+    onChange: (url: string) => void;
+    onFileChange: (file: File | null) => void;
+}
+
+function DualImageInput({ value, onChange, onFileChange }: ImageInputProps) {
+    const [mode, setMode] = useState<"upload" | "url">(
+        value?.startsWith("http") ? "url" : "upload"
+    );
+    const [urlInput, setUrlInput] = useState(value || "");
+    const [preview, setPreview] = useState<string | null>(value || null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Sync preview when parent value changes (e.g. on dialog open with existing item)
+    useEffect(() => {
+        if (value) {
+            setPreview(value);
+            setUrlInput(value);
+            setMode(value.startsWith("http") ? "url" : "upload");
+        } else {
+            setPreview(null);
+            setUrlInput("");
+        }
+    }, [value]);
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const localUrl = URL.createObjectURL(file);
+        setPreview(localUrl);
+        onFileChange(file);
+        onChange(""); // Clear any URL-based value
+    };
+
+    const handleUrlBlur = () => {
+        if (urlInput.startsWith("http")) {
+            setPreview(urlInput);
+            onChange(urlInput);
+            onFileChange(null);
+        }
+    };
+
+    return (
+        <div style={{ fontFamily: "'Nunito', sans-serif" }}>
+            {/* Mode selector tabs */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                {([
+                    { key: "upload", label: "📁 Upload from device" },
+                    { key: "url", label: "🔗 Paste image URL" },
+                ] as const).map(({ key, label }) => (
+                    <button
+                        key={key}
+                        type="button"
+                        onClick={() => setMode(key)}
+                        style={{
+                            flex: 1,
+                            padding: "9px 10px",
+                            border: `1.5px solid ${mode === key ? "#2d9653" : "#e0f0e9"}`,
+                            borderRadius: 8,
+                            background: mode === key ? "#f8fffe" : "white",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            color: mode === key ? "#2d9653" : "#6b7280",
+                            fontFamily: "'Nunito', sans-serif",
+                            transition: "all 0.2s",
+                        }}
+                    >
+                        {label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Upload mode */}
+            {mode === "upload" && (
+                <div
+                    onClick={() => fileInputRef.current?.click()}
+                    style={{
+                        border: "2px dashed #d8f3dc",
+                        borderRadius: 12,
+                        cursor: "pointer",
+                        overflow: "hidden",
+                        minHeight: 120,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        transition: "border-color 0.2s",
+                        background: preview ? "transparent" : "#fafafa",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#2d9653")}
+                    onMouseLeave={(e) => (e.currentTarget.style.borderColor = "#d8f3dc")}
+                >
+                    {preview && !urlInput.startsWith("http") ? (
+                        <img
+                            src={preview}
+                            alt="Preview"
+                            style={{ width: "100%", height: 160, objectFit: "cover" }}
+                        />
+                    ) : (
+                        <div style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: 6,
+                            color: "#6b7280",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            padding: 24,
+                        }}>
+                            <span style={{ fontSize: 32 }}>📷</span>
+                            <span>Click to upload image</span>
+                            <span style={{ fontSize: 11, color: "#9ca3af" }}>JPG, PNG, WEBP · Max 2MB</span>
+                        </div>
+                    )}
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: "none" }}
+                        onChange={handleFileChange}
+                    />
+                </div>
+            )}
+
+            {/* URL mode */}
+            {mode === "url" && (
+                <div>
+                    <input
+                        type="url"
+                        placeholder="https://example.com/image.jpg"
+                        value={urlInput}
+                        onChange={(e) => setUrlInput(e.target.value)}
+                        onBlur={handleUrlBlur}
+                        style={{
+                            width: "100%",
+                            padding: "11px 14px",
+                            border: "1.5px solid #e0f0e9",
+                            borderRadius: 10,
+                            fontSize: 13,
+                            marginBottom: 10,
+                            fontFamily: "'Nunito', sans-serif",
+                            outline: "none",
+                            boxSizing: "border-box",
+                        }}
+                        onFocus={(e) => (e.target.style.borderColor = "#2d9653")}
+                    />
+                    {preview && urlInput.startsWith("http") && (
+                        <div style={{ position: "relative" }}>
+                            <img
+                                src={preview}
+                                alt="Preview"
+                                style={{
+                                    width: "100%",
+                                    height: 160,
+                                    objectFit: "cover",
+                                    borderRadius: 10,
+                                    border: "2px solid #d8f3dc",
+                                    display: "block",
+                                }}
+                                onError={() => {
+                                    setPreview(null);
+                                    alert("Could not load image from this URL. Please check the link.");
+                                }}
+                            />
+                            <div style={{
+                                position: "absolute",
+                                top: 8,
+                                right: 8,
+                                background: "#2d9653",
+                                color: "white",
+                                padding: "3px 10px",
+                                borderRadius: 100,
+                                fontSize: 11,
+                                fontWeight: 700,
+                            }}>
+                                ✓ Preview
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ─── Main Dialog ───────────────────────────────────────────────────────────
+
 export function GlobalMenuDialog({
     open,
     onOpenChange,
@@ -40,15 +230,14 @@ export function GlobalMenuDialog({
     const [isActive, setIsActive] = useState(true);
     const [sortOrder, setSortOrder] = useState("99");
     const [imageFile, setImageFile] = useState<File | null>(null);
-    const [imagePreview, setImagePreview] = useState("");
-    const fileRef = useRef<HTMLInputElement>(null);
+    const [imageUrl, setImageUrl] = useState(""); // URL from URL-mode or after upload
 
     const isEdit = !!item;
 
     const reset = () => {
         setName(""); setCategory("shake"); setDescription(""); setNutritionInfo("");
         setIngredients(""); setIsVeg(true); setIsActive(true); setSortOrder("99");
-        setImageFile(null); setImagePreview("");
+        setImageFile(null); setImageUrl("");
     };
 
     useEffect(() => {
@@ -63,7 +252,7 @@ export function GlobalMenuDialog({
                 setIsActive(item.isActive ?? true);
                 setSortOrder(String(item.sortOrder ?? 99));
                 setImageFile(null);
-                setImagePreview(item.imageUrl || "");
+                setImageUrl(item.imageUrl || "");
             } else reset();
         }
     }, [open, item]);
@@ -83,15 +272,17 @@ export function GlobalMenuDialog({
             isActive,
             sortOrder: parseInt(sortOrder) || 99,
             source: "global" as const,
+            // If URL was pasted directly, pass it as imageUrl in payload
+            ...(imageUrl && !imageFile ? { imageUrl } : {}),
         };
 
         if (isEdit && item) {
-            updateItem.mutate({ itemId: item.id, data: payload, imageFile }, {
+            updateItem.mutate({ itemId: item.id, data: payload, imageFile: imageFile ?? null }, {
                 onSuccess: () => { toast({ title: "Item updated" }); onOpenChange(false); },
                 onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
             });
         } else {
-            addItem.mutate({ item: payload, imageFile }, {
+            addItem.mutate({ item: payload, imageFile: imageFile ?? null }, {
                 onSuccess: () => { toast({ title: "Item added" }); onOpenChange(false); reset(); },
                 onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
             });
@@ -105,27 +296,13 @@ export function GlobalMenuDialog({
                     <DialogTitle>{isEdit ? "Edit Global Item" : "Add Global Menu Item"}</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 max-h-[75vh] overflow-y-auto px-1 py-1">
-                    {/* Image Upload */}
-                    <div className="flex flex-col items-center gap-2">
-                        <div
-                            className="w-28 h-28 rounded-2xl border-2 border-dashed overflow-hidden cursor-pointer flex items-center justify-center bg-slate-50 hover:bg-slate-100 transition-colors"
-                            onClick={() => fileRef.current?.click()}
-                        >
-                            {imagePreview ? (
-                                <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                            ) : (
-                                <div className="text-center text-xs text-gray-400">
-                                    <ImageIcon className="w-8 h-8 mx-auto mb-1 text-gray-300" />
-                                    Tap to upload
-                                </div>
-                            )}
-                        </div>
-                        <input
-                            type="file" accept="image/*" ref={fileRef} className="hidden"
-                            onChange={e => {
-                                const f = e.target.files?.[0];
-                                if (f) { setImageFile(f); setImagePreview(URL.createObjectURL(f)); }
-                            }}
+                    {/* Dual Image Input */}
+                    <div>
+                        <Label className="mb-2 block">Item Image</Label>
+                        <DualImageInput
+                            value={imageUrl}
+                            onChange={(url) => setImageUrl(url)}
+                            onFileChange={(file) => { setImageFile(file); if (file) setImageUrl(""); }}
                         />
                     </div>
 

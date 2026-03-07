@@ -9,6 +9,7 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth";
 import { useClubContext } from "@/lib/clubDetection";
 import type { Order, Product, WalletTransaction } from "@/types/firestore";
+import { deductTodaysSpecialStock } from "@/hooks/useTodaysSpecial";
 
 function today() { return new Date().toISOString().slice(0, 10); }
 
@@ -50,7 +51,7 @@ export function useAllClubProducts() {
     });
 }
 
-// ─── usePlaceOrder (batch write: order + wallet debit) ──────────────────
+// ─── usePlaceOrder (batch write: order + wallet debit + stock deduction) ─
 
 export function usePlaceOrder() {
     const qc = useQueryClient();
@@ -121,6 +122,14 @@ export function usePlaceOrder() {
             }
 
             await batch.commit();
+
+            // 5. Deduct today's special limited stock (non-blocking)
+            try {
+                await deductTodaysSpecialStock(club.id, items);
+            } catch {
+                // Don't fail order placement if special stock deduction fails
+            }
+
             return orderId;
         },
         onSuccess: () => {

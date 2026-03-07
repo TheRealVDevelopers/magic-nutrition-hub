@@ -85,8 +85,15 @@ export function usePinAccess(type: PinType): PinAccessResult {
             });
 
         return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [clubId, clubLoading, type]);
+
+    // Synchronize logout across multiple instances of the hook
+    useEffect(() => {
+        const handleLogout = () => setIsVerified(false);
+        window.addEventListener(`mnc-pin-logout-${type}`, handleLogout);
+        return () => window.removeEventListener(`mnc-pin-logout-${type}`, handleLogout);
+    }, [type]);
 
     async function verify(pin: string): Promise<boolean> {
         if (!clubId) return false;
@@ -105,6 +112,7 @@ export function usePinAccess(type: PinType): PinAccessResult {
             localStorage.removeItem(getStorageKey(clubId, type));
         }
         setIsVerified(false);
+        window.dispatchEvent(new Event(`mnc-pin-logout-${type}`));
     }
 
     return {

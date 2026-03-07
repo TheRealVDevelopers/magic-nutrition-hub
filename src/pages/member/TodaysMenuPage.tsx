@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth";
 import { useClubContext } from "@/lib/clubDetection";
 import { useMyWallet } from "@/hooks/useMemberWallet";
 import { useTodaysSpecialProducts, usePlaceOrder, useMyUnratedOrders, useSubmitRating } from "@/hooks/useOrders";
+import { useTodaysSpecials, getStockBadgeInfo } from "@/hooks/useTodaysSpecial";
 import ProductCard from "@/components/orders/ProductCard";
 import RatingModal from "@/components/orders/RatingModal";
 import type { Product, Order } from "@/types/firestore";
@@ -34,6 +35,8 @@ export default function TodaysMenuPage() {
 
     const currencyName = club?.currencyName || "Coins";
     const balance = wallet?.balance ?? 0;
+    const { specials } = useTodaysSpecials(club?.id ?? null);
+
 
     const totalCost = useMemo(() =>
         Object.values(cart).reduce((sum, item) => sum + item.product.price * item.quantity, 0), [cart]);
@@ -126,16 +129,43 @@ export default function TodaysMenuPage() {
                 </div>
             ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {products.map((p) => (
-                        <ProductCard
-                            key={p.id}
-                            product={p}
-                            currencyName={currencyName}
-                            isSelected={!!cart[p.id]}
-                            currentQty={cart[p.id]?.quantity}
-                            onSelect={handleSelect}
-                        />
-                    ))}
+                    {products.map((p) => {
+                        const special = specials[p.id];
+                        const badge = getStockBadgeInfo(special);
+                        const isSoldOut = special?.stockType === "limited" && (special?.remainingStock ?? 0) <= 0;
+                        return (
+                            <div key={p.id} className="relative">
+                                {/* Stock badge overlay */}
+                                {badge && (
+                                    <div style={{
+                                        position: "absolute",
+                                        top: 8,
+                                        right: 8,
+                                        zIndex: 10,
+                                        padding: "3px 9px",
+                                        borderRadius: 99,
+                                        fontSize: 11,
+                                        fontWeight: 700,
+                                        background: badge.cls === "sold-out" ? "rgba(0,0,0,0.6)" : badge.cls === "low-stock" ? "#fde8e8" : "#d8f3dc",
+                                        color: badge.cls === "sold-out" ? "white" : badge.cls === "low-stock" ? "#c0392b" : "#2d6a4f",
+                                        animation: badge.cls === "low-stock" ? "pulse 1.5s infinite" : "none",
+                                        boxShadow: "0 1px 4px rgba(0,0,0,0.12)",
+                                    }}>
+                                        {badge.label}
+                                    </div>
+                                )}
+                                <div style={{ opacity: isSoldOut ? 0.45 : 1, pointerEvents: isSoldOut ? "none" : "auto" }}>
+                                    <ProductCard
+                                        product={p}
+                                        currencyName={currencyName}
+                                        isSelected={!!cart[p.id]}
+                                        currentQty={cart[p.id]?.quantity}
+                                        onSelect={isSoldOut ? undefined : handleSelect}
+                                    />
+                                </div>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 

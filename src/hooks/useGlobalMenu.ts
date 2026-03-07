@@ -78,7 +78,7 @@ export function useAddGlobalMenuItem() {
             const now = Timestamp.now();
             const docRef = await addDoc(collection(db, "globalMenu"), {
                 ...item,
-                imageUrl: null,
+                imageUrl: (item as any).imageUrl ?? null,
                 source: "global",
                 createdAt: now,
                 updatedAt: now,

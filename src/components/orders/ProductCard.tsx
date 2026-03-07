@@ -7,7 +7,7 @@ import type { Product } from "@/types/firestore";
 interface Props {
     product: Product;
     currencyName: string;
-    onSelect: (product: Product, quantity: number) => void;
+    onSelect?: (product: Product, quantity: number) => void;
     isSelected: boolean;
     currentQty?: number;
 }
@@ -19,7 +19,7 @@ export default function ProductCard({ product, currencyName, onSelect, isSelecte
     const handleQtyChange = (delta: number) => {
         const newQty = Math.max(1, Math.min(10, qty + delta));
         setQty(newQty);
-        if (isSelected) onSelect(product, newQty);
+        if (isSelected) onSelect?.(product, newQty);
     };
 
     return (
@@ -68,7 +68,7 @@ export default function ProductCard({ product, currencyName, onSelect, isSelecte
                         size="sm"
                         className="flex-1 text-xs"
                         variant={isSelected ? "outline" : "default"}
-                        onClick={() => onSelect(product, isSelected ? 0 : qty)}
+                        onClick={() => onSelect?.(product, isSelected ? 0 : qty)}
                     >
                         {isSelected ? "Remove" : "Add"}
                     </Button>

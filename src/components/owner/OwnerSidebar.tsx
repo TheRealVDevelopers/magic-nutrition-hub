@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useClubContext } from "@/lib/clubDetection";
 import { usePinAccess } from "@/hooks/usePinAccess";
+import { signOutUser } from "@/lib/auth";
 import { usePendingTopupRequests } from "@/hooks/owner/useWallet";
 import { Button } from "@/components/ui/button";
 
@@ -51,8 +52,13 @@ export default function OwnerSidebar({ base, open, onClose }: OwnerSidebarProps)
     const { logout } = usePinAccess("admin");
     const { count: pendingWalletCount } = usePendingTopupRequests(club?.id ?? null);
 
-    function handleLock() {
-        logout();
+    async function handleLock() {
+        logout(); // Clear admin PIN from localStorage
+        try {
+            await signOutUser(); // Sign out of Firebase Auth
+        } catch {
+            // Ignore sign-out errors — still navigate away
+        }
         navigate("/login", { replace: true });
     }
 
