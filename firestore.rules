@@ -2,7 +2,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Helper functions ───────────────────────────────────────────────────────
+    // ─────────────────────────────────────
+    // HELPER FUNCTIONS
+    // ─────────────────────────────────────
+
     function isSignedIn() {
       return request.auth != null;
     }
@@ -14,186 +17,285 @@ service cloud.firestore {
 
     function isClubOwner(clubId) {
       return isSignedIn() &&
-        get(/databases/$(database)/documents/clubs/$(clubId)).data.ownerUserId == request.auth.uid;
+        exists(/databases/$(database)/documents/clubs/$(clubId)/owner/$(request.auth.uid));
     }
 
-    // ── Super Admins collection ────────────────────────────────────────────────
+    function isClubMember(clubId) {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/clubs/$(clubId)/members/$(request.auth.uid));
+    }
+
+    function isClubOwnerOrMember(clubId) {
+      return isClubOwner(clubId) ||
+             isClubMember(clubId);
+    }
+
+    // ─────────────────────────────────────
+    // SUPER ADMINS
+    // ─────────────────────────────────────
+
     match /superAdmins/{uid} {
+      allow read: if isSignedIn() &&
+        request.auth.uid == uid;
+      allow write: if isSuperAdmin();
+    }
+
+    // ─────────────────────────────────────
+    // GLOBAL MENU
+    // ─────────────────────────────────────
+
+    match /globalMenu/{itemId} {
       allow read: if isSignedIn();
       allow write: if isSuperAdmin();
     }
 
-    // ── Platform-level data ────────────────────────────────────────────────────
-    match /platform/{doc} {
-      allow read: if true;
-      allow write: if isSuperAdmin();
-    }
+    // ─────────────────────────────────────
+    // CLUBS
+    // ─────────────────────────────────────
 
-    // ── Root-level upgrade requests (super admin manages clubs) ───────────────
-    match /upgradeRequests/{reqId} {
-      allow read: if isSuperAdmin();
-      allow write: if isSuperAdmin();
-    }
-
-    // ── Billing prints ─────────────────────────────────────────────────────────
-    match /billingPrints/{printId} {
-      allow read, write: if isSignedIn();
-    }
-
-    // ── Legacy root-level enquiries ────────────────────────────────────────────
-    // Old code path — allow public create so landing pages don't break.
-    match /enquiries/{enquiryId} {
-      allow create: if true;
-      allow read, update, delete: if isSignedIn();
-    }
-
-    // ── Global Menu ────────────────────────────────────────────────────────────
-    // Read: public (kitchen/reception screens show it without login)
-    // Write: any signed-in user (club owners + super admin can add global items)
-    match /globalMenu/{itemId} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-
-    // ── Clubs ──────────────────────────────────────────────────────────────────
     match /clubs/{clubId} {
-      // Club document itself: public read (for join page, landing page, etc.)
-      // Write: super admin (create/edit clubs) or the club owner themselves
-      allow read: if true;
+      // Club document itself
+      allow read: if isSignedIn();
       allow create: if isSuperAdmin();
-      allow update: if isSuperAdmin() || isClubOwner(clubId);
+      allow update: if isSuperAdmin() ||
+                       isClubOwner(clubId);
       allow delete: if isSuperAdmin();
 
-      // ── Members ─────────────────────────────────────────────────────────────
-      // Public create: allows the /join page (self-registration) to write a member doc
-      // even before the auth session is fully propagated. The user just created their
-      // Firebase Auth account so request.auth.uid matches the memberId they're writing to.
+      // ── OWNER SUBCOLLECTION
+      match /owner/{ownerId} {
+        allow read: if isSignedIn() &&
+          (isSuperAdmin() ||
+           request.auth.uid == ownerId);
+        allow write: if isSuperAdmin() ||
+          request.auth.uid == ownerId;
+      }
+
+      // ── MEMBERS SUBCOLLECTION
       match /members/{memberId} {
-        allow read: if true;
-        allow create: if true;       // self-registration on /join page (unauthenticated users register)
-        allow update: if isSignedIn();
-        allow delete: if isSuperAdmin() || isClubOwner(clubId);
-
-        match /wallet/{doc} {
-          allow read, write: if true;  // wallet top-ups, balance reads by kitchen/reception
-        }
-        match /transactions/{txnId} {
-          allow read, write: if isSignedIn();
-        }
-        match /weighIns/{weighInId} {
-          allow read, write: if isSignedIn();
-        }
-        match /attendance/{date} {
-          allow read, write: if isSignedIn();
-        }
-        match /notifications/{notifId} {
-          allow read, write: if isSignedIn();
-        }
-      }
-
-      // ── Enquiries (new members submitting via join page) ───────────────────
-      // Public create: join page creates an enquiry right after Firebase Auth signup
-      match /enquiries/{enquiryId} {
-        allow read: if isSignedIn();
-        allow create: if true;       // public — join page creates this unauthenticated→just-authenticated
-        allow update: if isSignedIn();
-        allow delete: if isSuperAdmin() || isClubOwner(clubId);
-      }
-
-      // ── Club Upgrade Requests (member→club role upgrade) ──────────────────
-      match /upgradeRequests/{requestId} {
-        allow read: if isSignedIn();
+        allow read: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId) ||
+           request.auth.uid == memberId);
         allow create: if isSignedIn();
-        allow update: if isSignedIn();
-        allow delete: if isSuperAdmin() || isClubOwner(clubId);
-      }
+        allow update: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId) ||
+           request.auth.uid == memberId);
+        allow delete: if isSuperAdmin() ||
+                         isClubOwner(clubId);
 
-      // ── Club Owner profile ─────────────────────────────────────────────────
-      match /owner/{doc} {
-        allow read: if isSignedIn();
-        allow write: if isSuperAdmin() || isClubOwner(clubId);
-      }
+        // Member wallet
+        match /wallet/{doc} {
+          allow read: if isSignedIn() &&
+            (isSuperAdmin() ||
+             isClubOwner(clubId) ||
+             request.auth.uid == memberId);
+          allow write: if isSignedIn() &&
+            (isSuperAdmin() ||
+             isClubOwner(clubId));
+        }
 
-      // ── Orders (placed from reception, managed by kitchen) ────────────────
-      // Public read/write: reception screen & kitchen screen may run without login
-      match /orders/{orderId} {
-        allow read, write: if true;
-      }
+        // Member transactions
+        match /transactions/{txnId} {
+          allow read: if isSignedIn() &&
+            (isSuperAdmin() ||
+             isClubOwner(clubId) ||
+             request.auth.uid == memberId);
+          allow write: if isSignedIn() &&
+            (isSuperAdmin() ||
+             isClubOwner(clubId));
+        }
 
-      // ── Menu items (club's own products) ──────────────────────────────────
-      match /menu/{itemId} {
-        allow read: if true;
-        allow write: if isSignedIn();
+        // Member weigh-ins
+        match /weighIns/{weighInId} {
+          allow read: if isSignedIn() &&
+            (isSuperAdmin() ||
+             isClubOwner(clubId) ||
+             request.auth.uid == memberId);
+          allow write: if isSignedIn() &&
+            (isSuperAdmin() ||
+             isClubOwner(clubId));
+        }
 
-        match /restockLog/{logId} {
-          allow read, write: if isSignedIn();
+        // Member attendance
+        match /attendance/{date} {
+          allow read: if isSignedIn() &&
+            (isSuperAdmin() ||
+             isClubOwner(clubId) ||
+             request.auth.uid == memberId);
+          allow write: if isSignedIn() &&
+            (isSuperAdmin() ||
+             isClubOwner(clubId));
+        }
+
+        // Member notifications
+        match /notifications/{notifId} {
+          allow read: if isSignedIn() &&
+            request.auth.uid == memberId;
+          allow write: if isSignedIn() &&
+            (isSuperAdmin() ||
+             isClubOwner(clubId));
         }
       }
 
-      // ── Menu Preferences (per-club global item visibility/availability) ───
+      // ── ENQUIRIES
+      match /enquiries/{enquiryId} {
+        allow read: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+        allow create: if true;
+        allow update: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+        allow delete: if isSuperAdmin() ||
+                         isClubOwner(clubId);
+      }
+
+      // ── ORDERS
+      match /orders/{orderId} {
+        allow read: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId) ||
+           isClubMember(clubId));
+        allow create: if isSignedIn() &&
+          isClubOwnerOrMember(clubId);
+        allow update: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+        allow delete: if isSuperAdmin() ||
+                         isClubOwner(clubId);
+      }
+
+      // ── MENU (club custom items)
+      match /menu/{itemId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+      }
+
+      // ── MENU PREFERENCES
       match /menuPreferences/{itemId} {
-        allow read: if true;
-        allow write: if isSignedIn();
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
       }
 
-      // ── Announcements ──────────────────────────────────────────────────────
+      // ── TODAY'S SPECIAL
+      match /todaysSpecial/{itemId} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+      }
+
+      // ── ANNOUNCEMENTS
       match /announcements/{announcementId} {
-        allow read: if true;   // members, reception, kitchen all read announcements
-        allow write: if isSignedIn();
-      }
-
-      // ── Feedback (members/visitors leave feedback via Reception screen) ────
-      // Public create: the Reception tablet is NOT logged in as any user
-      match /feedback/{feedbackId} {
         allow read: if isSignedIn();
-        allow create: if true;       // reception tablet submits feedback without auth
-        allow update: if isSignedIn();
-        allow delete: if isSuperAdmin() || isClubOwner(clubId);
+        allow write: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
       }
 
-      // ── Volunteers / Check-ins ─────────────────────────────────────────────
-      match /volunteers/{sessionId} {
-        allow read, write: if isSignedIn();
-      }
-
-      // ── Top-up requests (member wallet recharge) ───────────────────────────
+      // ── WALLET TOP-UP REQUESTS
       match /topupRequests/{requestId} {
-        allow read, write: if isSignedIn();
+        allow read: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId) ||
+           isClubMember(clubId));
+        allow create: if isSignedIn() &&
+          isClubMember(clubId);
+        allow update: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+        allow delete: if isSuperAdmin() ||
+                         isClubOwner(clubId);
       }
 
-      // ── Kitchen Inventory (raw ingredient tracking) ────────────────────────
+      // ── VOLUNTEERS
+      match /volunteers/{sessionId} {
+        allow read: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+        allow write: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+      }
+
+      // ── FEEDBACK
+      match /feedback/{feedbackId} {
+        allow read: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+        allow create: if true;
+        allow update, delete: if isSuperAdmin() ||
+                                  isClubOwner(clubId);
+      }
+
+      // ── INVENTORY
       match /inventory/{itemId} {
-        allow read: if true;   // kitchen display reads without owner login
-        allow write: if isSignedIn();
-      }
-
-      // ── Landing pages ──────────────────────────────────────────────────────
-      match /landingPages/{versionId} {
-        allow read: if true;
-        allow write: if isSuperAdmin() || isClubOwner(clubId);
-      }
-
-      // ── Club-level transactions / billing ─────────────────────────────────
-      match /transactions/{txnId} {
-        allow read, write: if isSignedIn();
-      }
-
-      // ── Membership plans ───────────────────────────────────────────────────
-      match /memberships/{planId} {
-        allow read: if true;
-        allow write: if isSuperAdmin() || isClubOwner(clubId);
-      }
-
-      // ── Usage stats ────────────────────────────────────────────────────────
-      match /usageStats/{doc} {
-        allow read, write: if isSignedIn();
-      }
-
-      // ── Referrals ──────────────────────────────────────────────────────────
-      match /referrals/{refId} {
         allow read: if isSignedIn();
-        allow write: if isSignedIn();
+        allow write: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+      }
+
+      // ── REPORTS
+      match /reports/{reportId} {
+        allow read: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+        allow write: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+      }
+
+      // ── SETTINGS
+      match /settings/{doc} {
+        allow read: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+        allow write: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+      }
+
+      // ── CATCH-ALL for any other
+      //    subcollections under clubs
+      match /{subcollection}/{docId} {
+        allow read: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+        allow write: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
       }
     }
+
+    // ─────────────────────────────────────
+    // USERS (if flat users collection exists)
+    // ─────────────────────────────────────
+
+    match /users/{uid} {
+      allow read: if isSignedIn() &&
+        (request.auth.uid == uid ||
+         isSuperAdmin());
+      allow write: if isSignedIn() &&
+        (request.auth.uid == uid ||
+         isSuperAdmin());
+    }
+
+    // ─────────────────────────────────────
+    // ENQUIRIES (root level — legacy)
+    // ─────────────────────────────────────
+
+    match /enquiries/{enquiryId} {
+      allow read: if isSuperAdmin();
+      allow create: if true;
+      allow update, delete: if isSuperAdmin();
+    }
+
   }
 }
+

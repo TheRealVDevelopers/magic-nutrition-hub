@@ -35,6 +35,9 @@ export default function Members() {
     const navigate = useNavigate();
     const { toast } = useToast();
     const { club } = useClubContext();
+
+    if (!club?.id) return <div className="p-8 text-center text-gray-500">Loading...</div>;
+
     const { data: members, isLoading } = useMembers(club?.id ?? null);
     const addMember = useAddMember();
     const [search, setSearch] = useState("");

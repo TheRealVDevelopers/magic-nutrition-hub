@@ -11,26 +11,24 @@ import { CUT } from './escpos';
  * Print an array of ESC/POS lines via RawBT intent.
  * @param lines - Array of ESC/POS formatted strings (including commands).
  */
-export const printViaRawBT = (lines: string[]): void => {
-    const content = lines.join('\n');
+export const printViaRawBT = (lines: string[] | string): void => {
+    try {
+        // Fix: join by empty string because ESC/POS commands shouldn't have newlines inserted between them
+        const content = Array.isArray(lines) ? lines.join('') : lines;
 
-    // Append paper cut command
-    const withCut = content + CUT;
+        // Encode content as URI component
+        const encoded = encodeURIComponent(content);
 
-    // Encode to base64 (handles Unicode correctly)
-    const encoded = btoa(
-        unescape(encodeURIComponent(withCut))
-    );
+        // RawBT intent URL — correct format
+        const intentUrl = 'rawbt:' + encoded;
 
-    // Fire the RawBT Android intent
-    const intentUrl =
-        `intent://print#Intent;` +
-        `scheme=rawbt;` +
-        `package=ru.a402d.rawbtprinter;` +
-        `S.DATA=${encoded};` +
-        `end`;
+        // Open RawBT
+        window.location.href = intentUrl;
 
-    window.location.href = intentUrl;
+    } catch (error) {
+        console.error('Print error:', error);
+        alert('Print failed. Please check RawBT app is installed and printer is connected.');
+    }
 };
 
 /**
@@ -56,6 +54,5 @@ export const formatINR = (amount: number): string => {
 // ── Legacy export for backward compatibility (no-op if called) ──
 /** @deprecated Use printViaRawBT instead */
 export function printReceipt(): void {
-    // No longer triggers window.print(). Kept as a no-op for safety.
     console.warn('printReceipt() is deprecated. Use printViaRawBT() instead.');
 }

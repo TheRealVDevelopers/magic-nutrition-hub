@@ -32,6 +32,9 @@ function getGreeting(): string {
 export default function OwnerDashboard() {
     const navigate = useNavigate();
     const { club } = useClubContext();
+
+    if (!club?.id) return <div className="p-8 text-center text-gray-500">Loading...</div>;
+
     const { requests: pendingTopups } = usePendingTopupRequests();
     const { data: expiring, isLoading: expiringLoading } = useExpiringMembers();
     const { data: lowStock, isLoading: lowStockLoading } = useLowStockProducts();

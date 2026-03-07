@@ -272,7 +272,7 @@ export default function Enquiries() {
         // Query all members who are not yet permanent (no wallet top-up yet)
         const q = query(
             collection(db, "clubs", club.id, "members"),
-            where("isActiveMember", "==", false)
+            where("isPermanent", "==", false)
         );
         const unsubscribe = onSnapshot(q, (snap) => {
             const data = snap.docs

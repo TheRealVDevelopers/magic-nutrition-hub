@@ -9,10 +9,10 @@ export function useMembers(clubId: string | null) {
         enabled: !!clubId,
         queryFn: async () => {
             // Only fetch permanent (activated) members — pending ones are in Enquiries tab
+            const membersRef = collection(db, 'clubs', clubId, 'members');
             const q = query(
-                collection(db, `clubs/${clubId}/members`),
-                where("isPermanent", "==", true),
-                orderBy("name")
+                membersRef,
+                where("isPermanent", "==", true)
             );
             const snap = await getDocs(q);
             return snap.docs.map(d => ({ id: d.id, ...d.data() } as User));
