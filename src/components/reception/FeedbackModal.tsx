@@ -30,15 +30,20 @@ export default function FeedbackModal({ onClose }: Props) {
 
     const handleSubmit = useCallback(async () => {
         if (!club?.id || rating === 0) return;
-        await submitFeedback.mutateAsync({
+
+        const payload: any = {
             clubId: club.id,
-            name: name.trim() || undefined,
-            memberId: memberId.trim() || undefined,
             rating,
             category,
-            message: message.trim() || undefined,
             source: "reception",
-        });
+        };
+
+        if (name.trim()) payload.name = name.trim();
+        if (memberId.trim()) payload.memberId = memberId.trim();
+        if (message.trim()) payload.message = message.trim();
+
+        await submitFeedback.mutateAsync(payload);
+
         setSubmitted(true);
         setTimeout(() => onClose(), 3000);
     }, [club, name, memberId, rating, category, message, submitFeedback, onClose]);

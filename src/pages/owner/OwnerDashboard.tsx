@@ -72,7 +72,7 @@ export default function OwnerDashboard() {
                         size="sm"
                         variant="outline"
                         className="border-amber-300 text-amber-700 flex-shrink-0 bg-white"
-                        onClick={() => navigate("/wallet-approvals")}
+                        onClick={() => navigate("/owner/wallet-approvals")}
                     >
                         Review Now <ArrowRight className="w-4 h-4 ml-1" />
                     </Button>
@@ -246,7 +246,7 @@ function ActiveAnnouncementsWidget({ clubId }: { clubId?: string }) {
                             <div className="flex items-center justify-between gap-2">
                                 <span className="font-bold text-gray-900 truncate">{a.title}</span>
                                 <Badge variant="outline" className={`text-[10px] h-4 px-1 rounded-sm border-0 ${a.priority === 'urgent' ? 'bg-red-100 text-red-700' :
-                                        a.priority === 'important' ? 'bg-yellow-100 text-yellow-700' : 'bg-emerald-100 text-emerald-700'
+                                    a.priority === 'important' ? 'bg-yellow-100 text-yellow-700' : 'bg-emerald-100 text-emerald-700'
                                     }`}>
                                     {a.priority}
                                 </Badge>

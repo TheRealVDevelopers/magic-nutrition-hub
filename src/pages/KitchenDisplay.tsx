@@ -49,8 +49,10 @@ import {
     ChevronRight,
 } from "lucide-react";
 import type { Order, Product } from "@/types/firestore";
-import { useCombinedMenu, useToggleGlobalItem } from "@/hooks/useGlobalMenu";
-import type { CombinedMenuItem } from "@/hooks/useGlobalMenu";
+import { useCombinedMenu, useToggleGlobalItem, useGlobalMenuItems, useAddGlobalMenuItem, useUpdateGlobalMenuItem } from "@/hooks/useGlobalMenu";
+import type { CombinedMenuItem, GlobalMenuItem } from "@/hooks/useGlobalMenu";
+import { GlobalMenuDialog } from "@/components/shared/GlobalMenuDialog";
+import { useToast } from "@/hooks/use-toast";
 
 const GREEN = "#2d9653";
 const FONT = "'Nunito', sans-serif";
@@ -411,72 +413,29 @@ function SpecialsTab() {
 // TAB 3: INVENTORY
 // ═══════════════════════════════════════════════════════════════════════════
 
-function useInventory(clubId: string | null) {
-    const [items, setItems] = useState<InventoryItem[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        if (!clubId) { setLoading(false); return; }
-        const q = query(collection(db, `clubs/${clubId}/inventory`));
-        const unsub = onSnapshot(q, (snap) => {
-            setItems(snap.docs.map((d) => ({ id: d.id, ...d.data() } as InventoryItem)));
-            setLoading(false);
-        }, () => setLoading(false));
-        return () => unsub();
-    }, [clubId]);
-
-    return { items, loading };
-}
-
 function InventoryTab() {
     const { club } = useClubContext();
-    const { items, loading } = useInventory(club?.id ?? null);
-    const [dialogOpen, setDialogOpen] = useState(false);
-    const [editItem, setEditItem] = useState<InventoryItem | null>(null);
-    const [form, setForm] = useState({ name: "", unit: "packets", currentStock: 0, minThreshold: 5, notes: "" });
-    const [saving, setSaving] = useState(false);
+    const { data: globalMenu = [], isLoading } = useGlobalMenuItems();
+    const { toast } = useToast();
 
-    const lowStock = items.filter((i) => i.currentStock <= i.minThreshold && i.currentStock > 0);
-    const outOfStock = items.filter((i) => i.currentStock <= 0);
+    // Global Menu edit state
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [editItem, setEditItem] = useState<GlobalMenuItem | null>(null);
+
+    const addItem = useAddGlobalMenuItem();
+    const updateItem = useUpdateGlobalMenuItem();
 
     const openAdd = () => {
         setEditItem(null);
-        setForm({ name: "", unit: "packets", currentStock: 0, minThreshold: 5, notes: "" });
         setDialogOpen(true);
     };
 
-    const openEdit = (item: InventoryItem) => {
+    const openEdit = (item: GlobalMenuItem) => {
         setEditItem(item);
-        setForm({ name: item.name, unit: item.unit, currentStock: item.currentStock, minThreshold: item.minThreshold, notes: item.notes });
         setDialogOpen(true);
     };
 
-    const handleSave = async () => {
-        if (!club?.id || !form.name.trim()) return;
-        setSaving(true);
-        try {
-            const data = { ...form, name: form.name.trim(), clubId: club.id, lastUpdated: Timestamp.now() };
-            if (editItem) {
-                await updateDoc(doc(db, `clubs/${club.id}/inventory`, editItem.id), data);
-            } else {
-                await addDoc(collection(db, `clubs/${club.id}/inventory`), data);
-            }
-            setDialogOpen(false);
-        } catch { /* ignore */ }
-        setSaving(false);
-    };
-
-    const handleDelete = async (id: string) => {
-        if (!confirm("Delete this item?")) return;
-        await deleteDoc(doc(db, `clubs/${club!.id}/inventory`, id));
-    };
-
-    const adjustStock = async (item: InventoryItem, delta: number) => {
-        const newVal = Math.max(0, item.currentStock + delta);
-        await updateDoc(doc(db, `clubs/${item.clubId}/inventory`, item.id), { currentStock: newVal, lastUpdated: Timestamp.now() });
-    };
-
-    if (loading) {
+    if (isLoading) {
         return (
             <div className="p-4 space-y-3">
                 {[0, 1, 2].map((i) => <Skeleton key={i} className="h-20 rounded-2xl" />)}
@@ -487,100 +446,55 @@ function InventoryTab() {
     return (
         <div className="p-4 space-y-4">
             <div className="flex items-center justify-between">
-                <h2 className="text-lg font-black" style={{ color: GREEN }}>Inventory</h2>
+                <div>
+                    <h2 className="text-lg font-black" style={{ color: GREEN }}>Global Inventory</h2>
+                    <p className="text-xs text-gray-500">Shared product catalog for all clubs</p>
+                </div>
                 <Button size="sm" className="font-bold text-white text-xs" style={{ background: GREEN }} onClick={openAdd}>
                     <Plus className="w-3.5 h-3.5 mr-1" /> Add Item
                 </Button>
             </div>
 
-            {/* Low stock alerts */}
-            {(lowStock.length > 0 || outOfStock.length > 0) && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm">
-                    <div className="flex items-center gap-2 font-bold text-amber-800">
-                        <AlertTriangle className="w-4 h-4" />
-                        {lowStock.length + outOfStock.length} item{lowStock.length + outOfStock.length > 1 ? "s" : ""} need attention
-                    </div>
-                    <p className="text-xs text-amber-600 mt-0.5">
-                        {[...outOfStock.map((i) => `${i.name} (OUT)`), ...lowStock.map((i) => `${i.name} (low)`)].join(", ")}
-                    </p>
-                </div>
-            )}
-
             {/* Items list */}
-            <div className="space-y-3">
-                {items.map((item) => {
-                    const pct = item.minThreshold > 0 ? Math.min(100, Math.round((item.currentStock / (item.minThreshold * 2)) * 100)) : 100;
-                    const isLow = item.currentStock > 0 && item.currentStock <= item.minThreshold;
-                    const isOut = item.currentStock <= 0;
-                    const barColor = isOut ? "#ef4444" : isLow ? "#f59e0b" : GREEN;
-                    return (
-                        <div key={item.id} className="bg-white rounded-2xl border p-4" style={{ borderColor: "#e0f0e9" }}>
-                            <div className="flex items-center justify-between gap-3">
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2">
-                                        <p className="font-bold text-sm text-gray-900 truncate">{item.name}</p>
-                                        {isOut && <Badge className="bg-red-100 text-red-700 text-[10px] font-bold">OUT OF STOCK</Badge>}
-                                        {isLow && !isOut && <Badge className="bg-amber-100 text-amber-700 text-[10px] font-bold">LOW</Badge>}
-                                    </div>
-                                    <p className="text-xs text-gray-400 mt-0.5">{item.currentStock} / {item.minThreshold * 2} {item.unit}</p>
-                                    <div className="w-full h-1.5 rounded-full bg-gray-100 mt-2">
-                                        <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: barColor }} />
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-1 flex-shrink-0">
-                                    <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => adjustStock(item, -1)} disabled={item.currentStock <= 0}>
-                                        <Minus className="w-3.5 h-3.5" />
-                                    </Button>
-                                    <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => adjustStock(item, 1)}>
-                                        <Plus className="w-3.5 h-3.5" />
-                                    </Button>
-                                    <Button size="icon" variant="ghost" className="h-9 w-9 text-gray-400" onClick={() => openEdit(item)}>
-                                        <Pencil className="w-3.5 h-3.5" />
-                                    </Button>
-                                    <Button size="icon" variant="ghost" className="h-9 w-9 text-red-400" onClick={() => handleDelete(item.id)}>
-                                        <Trash2 className="w-3.5 h-3.5" />
-                                    </Button>
-                                </div>
-                            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {globalMenu.map((item) => (
+                    <div key={item.id} className="bg-white rounded-2xl border p-3 flex flex-col items-center text-center shadow-sm">
+                        <div className="w-16 h-16 rounded-xl bg-gray-50 flex items-center justify-center mb-2 overflow-hidden border">
+                            {item.imageUrl ? (
+                                <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover" />
+                            ) : (
+                                <CookingPot className="w-8 h-8 text-gray-300" />
+                            )}
                         </div>
-                    );
-                })}
+                        <h3 className="font-bold text-sm text-gray-800 leading-tight mb-1">{item.name}</h3>
+                        <p className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide bg-gray-100 px-2 py-0.5 rounded-full mb-3">
+                            {item.category}
+                        </p>
+
+                        <div className="mt-auto w-full pt-2 border-t flex justify-center">
+                            <Button size="sm" variant="ghost" className="h-8 w-full text-xs font-bold text-gray-500 hover:text-gray-900" onClick={() => openEdit(item)}>
+                                <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
+                            </Button>
+                        </div>
+                    </div>
+                ))}
             </div>
 
-            {items.length === 0 && (
+            {globalMenu.length === 0 && (
                 <div className="text-center py-12 text-gray-400">
-                    <p className="text-sm font-bold">No inventory items yet</p>
-                    <p className="text-xs mt-1">Tap "Add Item" to track stock</p>
+                    <p className="text-sm font-bold">No global inventory items yet</p>
+                    <p className="text-xs mt-1">Tap "Add Item" to create the first one</p>
                 </div>
             )}
 
-            {/* Add/Edit dialog */}
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="max-w-sm">
-                    <DialogHeader><DialogTitle>{editItem ? "Edit Item" : "Add Item"}</DialogTitle></DialogHeader>
-                    <div className="space-y-3 pt-2">
-                        <div><Label className="text-xs">Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Formula 1 Chocolate" /></div>
-                        <div><Label className="text-xs">Unit</Label>
-                            <Select value={form.unit} onValueChange={(v) => setForm({ ...form, unit: v })}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    {["kg", "L", "packets", "bottles", "scoops", "pieces", "other"].map((u) => (
-                                        <SelectItem key={u} value={u}>{u}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div><Label className="text-xs">Stock</Label><Input type="number" min={0} value={form.currentStock} onChange={(e) => setForm({ ...form, currentStock: Number(e.target.value) || 0 })} /></div>
-                            <div><Label className="text-xs">Min Threshold</Label><Input type="number" min={0} value={form.minThreshold} onChange={(e) => setForm({ ...form, minThreshold: Number(e.target.value) || 0 })} /></div>
-                        </div>
-                        <div><Label className="text-xs">Notes</Label><Input value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Optional notes" /></div>
-                        <Button onClick={handleSave} disabled={saving || !form.name.trim()} className="w-full font-bold text-white" style={{ background: GREEN }}>
-                            {saving ? "Saving…" : editItem ? "Update" : "Add Item"}
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+            <GlobalMenuDialog
+                open={dialogOpen}
+                onOpenChange={setDialogOpen}
+                item={editItem}
+                addItem={addItem}
+                updateItem={updateItem}
+                toast={toast}
+            />
         </div>
     );
 }
