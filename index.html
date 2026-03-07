@@ -3,20 +3,51 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover" />
+
+  <!-- Viewport — critical for PWA rotation support -->
+  <meta name="viewport" content="width=device-width,
+                 initial-scale=1.0,
+                 minimum-scale=1.0,
+                 maximum-scale=1.0,
+                 viewport-fit=cover" />
+
+  <!-- PWA capable -->
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="format-detection" content="telephone=no" />
+
+  <!-- iOS PWA tags -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="MNC" />
+
   <title>Magic Nutrition Club – Usha Prasad Enterprise</title>
   <meta name="description"
     content="Premium health and wellness community transformation. Join Magic Nutrition Club for a journey towards a better life." />
   <meta name="author" content="Usha Prasad Enterprise" />
-  
+
+  <!-- Dynamic PWA Manifest — serve correct manifest per route -->
+  <!-- Kitchen (/kitchen) → landscape manifest -->
+  <!-- Reception (/reception) → landscape manifest -->
+  <!-- Everything else → default any-orientation manifest -->
+  <script>
+    (function () {
+      var path = window.location.pathname;
+      var manifest = '/manifest.webmanifest';
+      if (path.startsWith('/kitchen')) {
+        manifest = '/manifest-kitchen.json';
+      } else if (path.startsWith('/reception')) {
+        manifest = '/manifest-reception.json';
+      }
+      var link = document.createElement('link');
+      link.rel = 'manifest';
+      link.href = manifest;
+      document.head.appendChild(link);
+    })();
+  </script>
+
   <!-- PWA tags -->
-  <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
-  <meta name="theme-color" content="#2d9653"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta name="theme-color" content="#2d9653" />
 
   <!-- Leaf Favicon -->
   <link rel="icon" type="image/svg+xml"
@@ -28,6 +59,47 @@
   <meta property="og:image" content="/og-image.png" />
 
   <meta name="twitter:card" content="summary_large_image" />
+
+  <!-- Landscape CSS for Kitchen and Reception — CSS rotate trick -->
+  <!-- Forces landscape layout when device is physically in portrait -->
+  <style>
+    /* Kitchen and Reception: always fill screen in landscape */
+    .kitchen-landscape-root,
+    .reception-landscape-root {
+      width: 100vw;
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Rotate prompt — shown in portrait on iOS (where CSS rotate is unreliable) */
+    .landscape-rotate-prompt {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #1a3a2a;
+      z-index: 9999;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-family: 'Nunito', sans-serif;
+      text-align: center;
+      padding: 32px;
+    }
+
+    @media (orientation: portrait) {
+      .landscape-rotate-prompt {
+        display: flex !important;
+      }
+    }
+
+    @media (orientation: landscape) {
+      .landscape-rotate-prompt {
+        display: none !important;
+      }
+    }
+  </style>
 </head>
 
 <body>

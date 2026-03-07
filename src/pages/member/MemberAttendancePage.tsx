@@ -168,7 +168,7 @@ export default function MemberAttendancePage() {
 
                 {/* Section 1 - QR Code */}
                 <div className="flex flex-col items-center pt-2">
-                    <div className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
+                    <div className="member-card flex justify-center border-0">
                         <QRCodeSVG
                             ref={qrRef}
                             value={userProfile.id}
@@ -196,7 +196,7 @@ export default function MemberAttendancePage() {
 
                 {/* Section 2 - Stats Row */}
                 <div className="grid grid-cols-3 gap-3">
-                    <Card className="rounded-2xl border-gray-100 shadow-sm overflow-hidden">
+                    <Card className="member-card overflow-hidden !p-0 border-0">
                         <CardHeader className="pb-1 pt-4 px-4">
                             <CardDescription className="text-xs font-medium text-muted-foreground">
                                 This Month
@@ -210,7 +210,7 @@ export default function MemberAttendancePage() {
                             )}
                         </CardHeader>
                     </Card>
-                    <Card className="rounded-2xl border-gray-100 shadow-sm overflow-hidden">
+                    <Card className="member-card overflow-hidden !p-0 border-0">
                         <CardHeader className="pb-1 pt-4 px-4">
                             <CardDescription className="text-xs font-medium text-muted-foreground">
                                 Current Streak
@@ -224,7 +224,7 @@ export default function MemberAttendancePage() {
                             )}
                         </CardHeader>
                     </Card>
-                    <Card className="rounded-2xl border-gray-100 shadow-sm overflow-hidden">
+                    <Card className="member-card overflow-hidden !p-0 border-0">
                         <CardHeader className="pb-1 pt-4 px-4">
                             <CardDescription className="text-xs font-medium text-muted-foreground">
                                 All Time

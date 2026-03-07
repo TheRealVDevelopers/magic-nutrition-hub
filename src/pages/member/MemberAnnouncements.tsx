@@ -48,7 +48,7 @@ function AnnouncementCard({
     return (
         <div
             onClick={onToggle}
-            className={`relative overflow-hidden rounded-2xl border bg-white shadow-sm transition-all cursor-pointer hover:shadow-md ${isUnread ? 'bg-emerald-50/10' : ''}`}
+            className={`member-card relative overflow-hidden transition-all cursor-pointer hover:shadow-md ${isUnread ? 'bg-emerald-50/10' : ''} !p-0`}
         >
             <div className={`absolute left-0 top-0 bottom-0 w-1.5 ${borderColor}`} />
             <div className="p-4 pl-5">
@@ -179,7 +179,7 @@ export default function MemberAnnouncements() {
                 </div>
 
                 {!announcements?.length ? (
-                    <div className="rounded-3xl border border-gray-100 bg-white shadow-sm flex flex-col items-center justify-center py-16 px-6 text-center">
+                    <div className="member-card flex flex-col items-center justify-center !py-16 text-center">
                         <Megaphone className="mb-4 h-12 w-12 text-gray-300" />
                         <h2 className="text-lg font-bold text-gray-900 mb-1">No announcements yet</h2>
                         <p className="text-gray-500 font-medium text-sm">

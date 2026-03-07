@@ -117,7 +117,7 @@ export default function ProgressPage() {
             {/* Ranking & Milestones Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Ranking Card */}
-                <div className="bg-white rounded-3xl border p-5 shadow-sm flex flex-col">
+                <div className="member-card flex flex-col">
                     <div className="flex items-center justify-between mb-4 text-amber-600">
                         <div className="flex items-center gap-2">
                             <Trophy className="w-5 h-5" />
@@ -153,7 +153,7 @@ export default function ProgressPage() {
 
                 {/* Badges Card */}
                 {badges.length > 0 && (
-                    <div className="bg-white rounded-3xl border p-5 shadow-sm">
+                    <div className="member-card">
                         <div className="flex items-center gap-2 mb-4 text-emerald-600">
                             <CheckCircle2 className="w-5 h-5" />
                             <h2 className="font-bold text-slate-900">My Milestones</h2>
@@ -175,13 +175,13 @@ export default function ProgressPage() {
             </div>
 
             {/* Chart */}
-            <div className="bg-white p-4 md:p-6 rounded-3xl border shadow-sm">
+            <div className="member-card">
                 <h2 className="text-sm font-bold text-slate-900 mb-4">Weight History</h2>
                 <WeightChart logs={logs as any} targetWeight={targetWeight} />
             </div>
 
             {/* History Table */}
-            <div className="bg-white rounded-3xl border shadow-sm overflow-hidden">
+            <div className="member-card overflow-hidden !p-0">
                 <div className="p-4 md:p-6 border-b flex items-center gap-2 text-slate-900">
                     <Scale className="w-5 h-5" />
                     <h2 className="text-sm font-bold">Log Entries</h2>

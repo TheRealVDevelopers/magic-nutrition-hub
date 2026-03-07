@@ -24,7 +24,9 @@ export default defineConfig(({ mode }) => ({
         'favicon.ico',
         'apple-touch-icon.png',
         'pwa-192x192.png',
-        'pwa-512x512.png'
+        'pwa-512x512.png',
+        'manifest-kitchen.json',
+        'manifest-reception.json'
       ],
       manifest: {
         name: 'MNC Platform',
@@ -33,7 +35,7 @@ export default defineConfig(({ mode }) => ({
         theme_color: '#2d9653',
         background_color: '#ffffff',
         display: 'standalone',
-        orientation: 'portrait',
+        orientation: 'any',
         scope: '/',
         start_url: '/',
         icons: [

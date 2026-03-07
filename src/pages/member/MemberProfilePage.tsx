@@ -259,7 +259,7 @@ export default function MemberProfilePage() {
                 </div>
 
                 {/* Profile card */}
-                <div className="rounded-2xl bg-white border border-border shadow-soft p-5 space-y-4">
+                <div className="member-card space-y-4">
                     {isEditMode ? (
                         <>
                             <div className="space-y-2">
@@ -426,7 +426,7 @@ export default function MemberProfilePage() {
                 <MembershipStatusCard profile={profile} club={club} toast={toast} />
 
                 {/* Change password */}
-                <div className="rounded-2xl bg-white border border-border shadow-soft p-5 space-y-4">
+                <div className="member-card space-y-4">
                     <h2 className="text-sm font-bold" style={{ color: GREEN }}>
                         Change password
                     </h2>

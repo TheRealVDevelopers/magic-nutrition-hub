@@ -53,8 +53,10 @@ export default function OwnerLayout({ children }: OwnerLayoutProps) {
                 </header>
 
                 {/* Scrollable content area */}
-                <main style={{ flex: 1, overflowY: "auto", background: "#f8fffe" }}>
-                    {children}
+                <main style={{ flex: 1, overflowY: "auto", background: "#f8fafc" }}>
+                    <div className="main-content">
+                        {children}
+                    </div>
                 </main>
             </div>
             <InstallPrompt />

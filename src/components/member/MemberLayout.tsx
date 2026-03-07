@@ -34,7 +34,7 @@ export default function MemberLayout({ children }: MemberLayoutProps) {
     return (
         <div style={{ fontFamily: "'Nunito', sans-serif", minHeight: "100dvh", display: "flex", flexDirection: "column", background: "#f8fffe" }}>
             {/* Top header */}
-            <header className="flex items-center justify-between px-4 py-3 bg-white border-b flex-shrink-0" style={{ borderColor: "#e0f0e9" }}>
+            <header className="member-header flex items-center justify-between px-4 py-3 bg-white border-b flex-shrink-0" style={{ borderColor: "#e0f0e9" }}>
                 <div className="flex items-center gap-2 min-w-0">
                     {club?.logo ? (
                         <img src={club.logo} alt="" className="h-8 w-8 rounded-lg object-cover flex-shrink-0" />
@@ -65,12 +65,12 @@ export default function MemberLayout({ children }: MemberLayoutProps) {
             )}
 
             {/* Scrollable content */}
-            <main className="flex-1 overflow-y-auto pb-20">
+            <main className="member-content flex-1 overflow-y-auto pb-20">
                 {children}
             </main>
 
             {/* Bottom navigation */}
-            <nav className="fixed bottom-0 left-0 right-0 bg-white border-t flex z-40" style={{ borderColor: "#e0f0e9" }}>
+            <nav className="bottom-nav fixed bottom-0 left-0 right-0 bg-white border-t flex z-40" style={{ borderColor: "#e0f0e9" }}>
                 {NAV_ITEMS.map(({ label, path, icon: Icon }) => {
                     const active = pathname === path || pathname.startsWith(path + "/");
                     return (

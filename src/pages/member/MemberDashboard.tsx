@@ -343,16 +343,13 @@ export default function MemberDashboard() {
 
                     {/* 4 Stat Cards */}
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 gap-5">
                         {/* Wallet */}
                         <Link to="/member/wallet" className="block">
                             {walletLoading ? (
                                 <StatCardSkeleton />
                             ) : (
-                                <div
-                                    className="rounded-2xl border border-green-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
-                                    style={{ borderColor: `${GREEN}20` }}
-                                >
+                                <div className="member-card hover:shadow-md transition-shadow">
                                     <div className="flex items-center gap-2 text-slate-600 mb-1">
                                         <Wallet className="w-4 h-4" style={{ color: GREEN }} />
                                         <span className="text-sm font-medium">Wallet</span>
@@ -372,10 +369,7 @@ export default function MemberDashboard() {
                             {attendanceLoading ? (
                                 <StatCardSkeleton />
                             ) : (
-                                <div
-                                    className="rounded-2xl border border-green-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
-                                    style={{ borderColor: `${GREEN}20` }}
-                                >
+                                <div className="member-card hover:shadow-md transition-shadow">
                                     <div className="flex items-center gap-2 text-slate-600 mb-1">
                                         <CalendarCheck className="w-4 h-4" style={{ color: GREEN }} />
                                         <span className="text-sm font-medium">This Month</span>
@@ -393,10 +387,7 @@ export default function MemberDashboard() {
                             {attendanceLoading ? (
                                 <StatCardSkeleton />
                             ) : (
-                                <div
-                                    className="rounded-2xl border border-green-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
-                                    style={{ borderColor: `${GREEN}20` }}
-                                >
+                                <div className="member-card hover:shadow-md transition-shadow">
                                     <div className="flex items-center gap-2 text-slate-600 mb-1">
                                         <Flame className="w-4 h-4" style={{ color: GREEN }} />
                                         <span className="text-sm font-medium">Streak</span>
@@ -414,10 +405,7 @@ export default function MemberDashboard() {
                             {weightLoading ? (
                                 <StatCardSkeleton />
                             ) : (
-                                <div
-                                    className="rounded-2xl border border-green-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
-                                    style={{ borderColor: `${GREEN}20` }}
-                                >
+                                <div className="member-card hover:shadow-md transition-shadow">
                                     <div className="flex items-center gap-2 text-slate-600 mb-1">
                                         <Scale className="w-4 h-4" style={{ color: GREEN }} />
                                         <span className="text-sm font-medium">Weight</span>
@@ -472,11 +460,7 @@ export default function MemberDashboard() {
                                         a.createdAt?.toDate?.() &&
                                         (Date.now() - a.createdAt.toDate().getTime()) / (1000 * 60 * 60 * 24) < 7;
                                     return (
-                                        <div
-                                            key={a.id}
-                                            className="rounded-xl border border-green-100 bg-white p-4 shadow-sm"
-                                            style={{ borderColor: `${GREEN}20` }}
-                                        >
+                                        <div key={a.id} className="member-card">
                                             <div className="flex items-start justify-between gap-2">
                                                 <div>
                                                     <h3 className="font-semibold text-slate-800">{a.title}</h3>
@@ -533,8 +517,7 @@ export default function MemberDashboard() {
                                     <Link
                                         key={o.id}
                                         to="/member/orders"
-                                        className="block rounded-xl border border-green-100 bg-white p-4 shadow-sm hover:shadow-md transition-shadow"
-                                        style={{ borderColor: `${GREEN}20` }}
+                                        className="block member-card hover:shadow-md transition-shadow"
                                     >
                                         <div className="flex items-center justify-between">
                                             <div>

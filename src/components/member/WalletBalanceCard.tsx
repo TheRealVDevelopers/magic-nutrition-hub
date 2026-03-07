@@ -12,12 +12,7 @@ export default function WalletBalanceCard({ wallet, currencyName, primaryColor }
     const timeAgo = lastUpdated ? getTimeAgo(lastUpdated) : "";
 
     return (
-        <div
-            className="relative overflow-hidden rounded-3xl p-6 md:p-8 text-white"
-            style={{
-                background: `linear-gradient(135deg, ${primaryColor || "#8B5CF6"} 0%, ${shiftColor(primaryColor || "#8B5CF6")} 100%)`,
-            }}
-        >
+        <div className="wallet-balance-card">
             {/* Decorative circles */}
             <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-white/10" />
             <div className="absolute -bottom-6 -left-6 w-24 h-24 rounded-full bg-white/5" />
@@ -31,8 +26,8 @@ export default function WalletBalanceCard({ wallet, currencyName, primaryColor }
                 </div>
 
                 <div>
-                    <p className="text-xs uppercase tracking-widest opacity-70 font-medium">Available Balance</p>
-                    <p className="text-5xl md:text-6xl font-black mt-1 tracking-tight">
+                    <p className="wallet-label">Available Balance</p>
+                    <p className="wallet-amount">
                         {Math.max(0, wallet.balance).toLocaleString()}
                     </p>
                 </div>

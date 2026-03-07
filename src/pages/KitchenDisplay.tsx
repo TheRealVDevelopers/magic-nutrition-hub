@@ -49,6 +49,8 @@ import {
     ChevronRight,
 } from "lucide-react";
 import type { Order, Product } from "@/types/firestore";
+import { useCombinedMenu, useToggleGlobalItem } from "@/hooks/useGlobalMenu";
+import type { CombinedMenuItem } from "@/hooks/useGlobalMenu";
 
 const GREEN = "#2d9653";
 const FONT = "'Nunito', sans-serif";
@@ -104,6 +106,17 @@ interface InventoryItem {
 // ENTRY POINT — PIN gate wrapper
 // ═══════════════════════════════════════════════════════════════════════════
 
+// Rotate prompt — shown via CSS when device is in portrait mode
+function RotatePrompt() {
+    return (
+        <div className="landscape-rotate-prompt">
+            <div style={{ fontSize: 72, marginBottom: 24, transform: "rotate(90deg)", display: "inline-block" }}>↻</div>
+            <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Please Rotate Your Device</div>
+            <div style={{ fontSize: 15, opacity: 0.7 }}>Kitchen display works in landscape mode</div>
+        </div>
+    );
+}
+
 export default function KitchenDisplay() {
     const { isVerified, isLoading, clubName, clubLogo, verify, logout } = usePinAccess("kitchen");
 
@@ -119,7 +132,12 @@ export default function KitchenDisplay() {
         return <PinGate type="kitchen" clubName={clubName} clubLogo={clubLogo} pinLength={6} isLoading={false} onVerify={verify} />;
     }
 
-    return <KitchenApp onLock={logout} />;
+    return (
+        <div className="kitchen-landscape-root">
+            <RotatePrompt />
+            <KitchenApp onLock={logout} />
+        </div>
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -138,44 +156,50 @@ function KitchenApp({ onLock }: { onLock: () => void }) {
         return () => clearInterval(t);
     }, []);
 
+    const { orders, loading } = useKitchenOrders();
+    const pendingCount = orders.filter((o) => o.status === "pending" || o.status === "preparing").length;
+
+    const dateStr = clock.toLocaleDateString("en-US", { weekday: "short", day: "2-digit", month: "short", year: "numeric" });
+    const timeStr = clock.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+
     const tabs: { key: Tab; label: string }[] = [
-        { key: "orders", label: "Orders" },
-        { key: "specials", label: "Today's Special" },
-        { key: "inventory", label: "Inventory" },
+        { key: "orders", label: "ORDERS" },
+        { key: "specials", label: "TODAY'S SPECIAL" },
+        { key: "inventory", label: "INV" },
     ];
 
     return (
-        <div className="min-h-screen flex flex-col" style={{ fontFamily: FONT, background: "#f8fffe" }}>
-            {/* Tab bar */}
-            <div className="flex-shrink-0 bg-white border-b" style={{ borderColor: "#e0f0e9" }}>
-                <div className="flex">
+        <div className="min-h-screen flex flex-col font-sans" style={{ minHeight: '100svh' }}>
+            <div className="kitchen-header">
+                <div className="flex items-center gap-3">
+                    <span className="text-3xl">🍳</span>
+                    <div className="kitchen-header-title">{club?.name || "Kitchen"}</div>
+                </div>
+                <div className="kitchen-clock">{timeStr}</div>
+            </div>
+            <div className="kitchen-stats-bar">
+                <div>{dateStr}</div>
+                <div>{pendingCount} pending orders</div>
+            </div>
+
+            <div className="kitchen-body flex-1">
+                <div className="kitchen-tabs">
                     {tabs.map((t) => (
                         <button
                             key={t.key}
                             onClick={() => setTab(t.key)}
-                            className="flex-1 py-3.5 text-center text-sm font-bold transition-colors relative"
-                            style={{
-                                color: tab === t.key ? GREEN : "#9ca3af",
-                                background: tab === t.key ? "#f0faf4" : "transparent",
-                            }}
+                            className={`kitchen-tab ${tab === t.key ? "active" : ""}`}
                         >
                             {t.label}
-                            {tab === t.key && (
-                                <span className="absolute bottom-0 left-0 right-0 h-[3px] rounded-t" style={{ background: GREEN }} />
-                            )}
                         </button>
                     ))}
                 </div>
-            </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto">
-                {tab === "orders" && <OrdersTab clock={clock} clubName={club?.name ?? ""} clubId={club?.id ?? ""} />}
+                {tab === "orders" && <OrdersTab orders={orders} loading={loading} clubId={club?.id ?? ""} />}
                 {tab === "specials" && <SpecialsTab />}
                 {tab === "inventory" && <InventoryTab />}
             </div>
 
-            {/* Lock button */}
             <button
                 onClick={onLock}
                 className="fixed bottom-4 right-4 z-50 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/90 backdrop-blur border text-xs font-bold text-gray-500 hover:text-red-600 hover:border-red-200 transition-colors shadow-sm"
@@ -191,12 +215,8 @@ function KitchenApp({ onLock }: { onLock: () => void }) {
 // TAB 1: ORDERS
 // ═══════════════════════════════════════════════════════════════════════════
 
-function OrdersTab({ clock, clubName, clubId }: { clock: Date; clubName: string; clubId: string }) {
-    const { orders, loading } = useKitchenOrders();
-    const { summary } = useTodayOrdersSummary();
+function OrdersTab({ orders, loading, clubId }: { orders: Order[]; loading: boolean; clubId: string }) {
     const updateStatus = useUpdateOrderStatus();
-    const [summaryOpen, setSummaryOpen] = useState(false);
-    const [recentlyReady, setRecentlyReady] = useState<Set<string>>(new Set());
     const prevCountRef = useRef(orders.length);
 
     // Sound on new order arriving
@@ -207,180 +227,82 @@ function OrdersTab({ clock, clubName, clubId }: { clock: Date; clubName: string;
         prevCountRef.current = orders.length;
     }, [orders.length, loading]);
 
-    const pending = orders.filter((o) => o.status === "pending");
-    const preparing = orders.filter((o) => o.status === "preparing");
-    const completedCount = (summary?.statusCounts?.served ?? 0);
+    // Include both pending and preparing in the main orders list for kitchen workers to mark.
+    const activeOrders = orders.filter((o) => o.status === "pending" || o.status === "preparing");
 
-    const handleStatus = useCallback((orderId: string, newStatus: "preparing" | "served") => {
-        updateStatus.mutate({ clubId, orderId, newStatus });
-        if (newStatus === "served") {
-            playOrderReady();
-            setRecentlyReady((prev) => new Set(prev).add(orderId));
-            setTimeout(() => setRecentlyReady((prev) => { const s = new Set(prev); s.delete(orderId); return s; }), 30000);
-        }
-    }, [updateStatus]);
+    const handleStatus = useCallback((orderId: string, currentStatus: string) => {
+        // If it's pending, jump straight to prepared since they just have one "Mark Ready" button
+        updateStatus.mutate({ clubId, orderId, newStatus: "served" });
+        playOrderReady();
+    }, [updateStatus, clubId]);
 
-    const dateStr = clock.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
-    const timeStr = clock.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-
-    return (
-        <div className="flex flex-col h-full">
-            {/* Top bar */}
-            <div className="flex-shrink-0 flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-white border-b" style={{ borderColor: "#e0f0e9" }}>
-                <div className="min-w-0">
-                    <p className="text-sm font-bold truncate" style={{ color: GREEN }}>{clubName}</p>
-                    <p className="text-xs text-gray-400">{dateStr} &middot; <span className="font-mono">{timeStr}</span></p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="px-4 py-2 rounded-xl" style={{ background: "#f0faf4" }}>
-                        <span className="text-2xl font-black" style={{ color: GREEN }}>{completedCount}</span>
-                        <span className="text-xs font-bold text-gray-500 ml-1.5">shakes today</span>
-                    </div>
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        className="font-bold text-xs"
-                        style={{ borderColor: "#d0e8d8", color: GREEN }}
-                        onClick={() => setSummaryOpen(true)}
-                    >
-                        Summary <ChevronRight className="w-3.5 h-3.5 ml-1" />
-                    </Button>
-                </div>
+    if (loading) {
+        return (
+            <div className="orders-grid">
+                {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-40 rounded-2xl" />)}
             </div>
+        );
+    }
 
-            {/* Orders grid */}
-            {loading ? (
-                <div className="grid grid-cols-2 gap-4 p-4">
-                    {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-40 rounded-2xl" />)}
-                </div>
-            ) : pending.length === 0 && preparing.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
-                    <div className="w-20 h-20 rounded-full flex items-center justify-center mb-4" style={{ background: "#e6f7ed" }}>
-                        <ChefHat className="w-10 h-10" style={{ color: GREEN }} />
-                    </div>
-                    <p className="text-xl font-black text-gray-800">All caught up!</p>
-                    <p className="text-sm text-gray-400 mt-1">No pending orders right now</p>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 flex-1">
-                    {/* Pending column */}
-                    <div>
-                        <div className="flex items-center gap-2 mb-3">
-                            <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-                            <h2 className="text-sm font-black text-amber-700">PENDING ({pending.length})</h2>
-                        </div>
-                        <div className="space-y-3">
-                            {pending.map((o) => (
-                                <OrderCard
-                                    key={o.id}
-                                    order={o}
-                                    onAction={() => handleStatus(o.id, "preparing")}
-                                    actionLabel="Start Preparing"
-                                    isUpdating={updateStatus.isPending}
-                                />
-                            ))}
-                            {pending.length === 0 && <p className="text-xs text-gray-400 text-center py-6">No pending orders</p>}
-                        </div>
-                    </div>
+    if (activeOrders.length === 0) {
+        return (
+            <div className="kitchen-empty">
+                <div className="kitchen-empty-icon">✅</div>
+                <h3>All Caught Up</h3>
+                <p>No pending orders right now</p>
+                <p>Kitchen is ready for next order</p>
+            </div>
+        );
+    }
 
-                    {/* Preparing column */}
-                    <div>
-                        <div className="flex items-center gap-2 mb-3">
-                            <div className="w-2.5 h-2.5 rounded-full bg-blue-400" />
-                            <h2 className="text-sm font-black text-blue-700">PREPARING ({preparing.length})</h2>
-                        </div>
-                        <div className="space-y-3">
-                            {preparing.map((o) => (
-                                <OrderCard
-                                    key={o.id}
-                                    order={o}
-                                    onAction={() => handleStatus(o.id, "served")}
-                                    actionLabel="Mark Ready"
-                                    isUpdating={updateStatus.isPending}
-                                    flash={recentlyReady.has(o.id)}
-                                />
-                            ))}
-                            {preparing.length === 0 && <p className="text-xs text-gray-400 text-center py-6">Nothing preparing</p>}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Summary panel */}
-            <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
-                <DialogContent className="max-w-sm">
-                    <DialogHeader><DialogTitle>Daily Summary</DialogTitle></DialogHeader>
-                    <div className="space-y-3 pt-2">
-                        <Row label="Total Orders" value={String(summary?.totalOrders ?? 0)} />
-                        <Row label="Shakes Done" value={String(completedCount)} />
-                        <Row label="Revenue" value={`₹${summary?.totalRevenue ?? 0}`} />
-                        <Row label="Most Ordered" value={summary?.mostPopular ?? "—"} />
-                    </div>
-                </DialogContent>
-            </Dialog>
-        </div>
-    );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
     return (
-        <div className="flex justify-between items-center py-2 border-b last:border-0" style={{ borderColor: "#e0f0e9" }}>
-            <span className="text-sm text-gray-500 font-medium">{label}</span>
-            <span className="text-sm font-black">{value}</span>
+        <div className="orders-grid">
+            {activeOrders.map((o) => (
+                <OrderCard
+                    key={o.id}
+                    order={o}
+                    onAction={() => handleStatus(o.id, o.status)}
+                    isUpdating={updateStatus.isPending}
+                />
+            ))}
         </div>
     );
 }
 
-function OrderCard({ order, onAction, actionLabel, isUpdating, flash }: {
+function OrderCard({ order, onAction, isUpdating }: {
     order: Order;
     onAction: () => void;
-    actionLabel: string;
     isUpdating: boolean;
-    flash?: boolean;
 }) {
-    const mins = minutesAgo(order.createdAt);
-    const badge = elapsedBadge(mins);
-    const initials = (order.memberName || "?")[0].toUpperCase();
-
+    const timeStr = order.createdAt?.toDate ? order.createdAt.toDate().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }) : "";
     return (
-        <div
-            className={`bg-white rounded-2xl border p-4 space-y-3 transition-all duration-300 ${flash ? "ring-2 ring-green-400 bg-green-50" : ""}`}
-            style={{ borderColor: "#e0f0e9", animation: "slideIn 0.3s ease-out" }}
-        >
-            <div className="flex items-center gap-3">
-                {order.memberPhoto ? (
-                    <img src={order.memberPhoto} alt="" className="w-10 h-10 rounded-full object-cover flex-shrink-0 border" />
-                ) : (
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white font-bold text-sm" style={{ background: GREEN }}>
-                        {initials}
-                    </div>
-                )}
-                <div className="flex-1 min-w-0">
-                    <p className="font-bold text-gray-900 truncate" style={{ fontSize: 16 }}>{order.memberName}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[11px] text-gray-400">#{order.id.slice(-4)}</span>
-                        <Badge className={`text-[10px] px-1.5 py-0 font-bold ${badge.cls}`}>{badge.text}</Badge>
-                    </div>
+        <div className="order-card">
+            <div className="order-card-header">
+                <div>
+                    <div className="order-number">#{order.id.slice(-3).toUpperCase()}</div>
+                    <div className="order-member">{order.memberName}</div>
                 </div>
+                <div className="order-time">{timeStr}</div>
             </div>
 
-            <ul className="space-y-1">
+            <div className="order-items">
                 {order.items.map((item, i) => (
-                    <li key={i} className="flex justify-between text-sm">
-                        <span className="text-gray-700">{item.productName}</span>
-                        <span className="text-gray-400 font-bold">x{item.quantity}</span>
-                    </li>
+                    <div key={i} className="order-item">
+                        <span>• {item.productName}</span>
+                        <span>x{item.quantity}</span>
+                    </div>
                 ))}
-            </ul>
+            </div>
 
-            <Button
-                onClick={onAction}
-                disabled={isUpdating}
-                className="w-full font-bold text-white"
-                style={{ background: GREEN, minHeight: 44 }}
-            >
-                {isUpdating ? "Updating…" : actionLabel}
-            </Button>
+            <div className="order-card-footer">
+                <button
+                    className="btn-mark-ready"
+                    onClick={onAction}
+                    disabled={isUpdating}
+                >
+                    {isUpdating ? "UPDATING…" : "✓ MARK READY"}
+                </button>
+            </div>
         </div>
     );
 }
@@ -389,42 +311,37 @@ function OrderCard({ order, onAction, actionLabel, isUpdating, flash }: {
 // TAB 2: TODAY'S SPECIAL
 // ═══════════════════════════════════════════════════════════════════════════
 
-function useClubProducts() {
-    const { club } = useClubContext();
-    const [products, setProducts] = useState<Product[]>([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        if (!club) return;
-        const q = query(collection(db, `clubs/${club.id}/menu`));
-        const unsub = onSnapshot(q, (snap) => {
-            setProducts(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Product)));
-            setLoading(false);
-        }, () => setLoading(false));
-        return () => unsub();
-    }, [club]);
-
-    return { products, loading };
-}
-
 function SpecialsTab() {
     const { club } = useClubContext();
-    const { products, loading } = useClubProducts();
+    const { data: products = [], isLoading: loading } = useCombinedMenu(club?.id ?? null);
+    const toggleGlobal = useToggleGlobalItem();
     const [togglingId, setTogglingId] = useState<string | null>(null);
 
     const today = new Date().toISOString().split("T")[0];
     const availableCount = products.filter((p) => p.isAvailableToday).length;
 
-    const handleToggle = async (product: Product) => {
+    const handleToggle = async (product: CombinedMenuItem) => {
         setTogglingId(product.id);
         try {
-            await updateDoc(doc(db, `clubs/${club!.id}/menu`, product.id), { isAvailableToday: !product.isAvailableToday });
+            if (product.source === "global") {
+                await toggleGlobal.mutateAsync({ clubId: club!.id, itemId: product.id, isAvailableToday: !product.isAvailableToday });
+            } else {
+                await updateDoc(doc(db, `clubs/${club!.id}/menu`, product.id), { isAvailableToday: !product.isAvailableToday });
+            }
         } catch { /* ignore */ }
         setTogglingId(null);
     };
 
     const handleBulk = async (available: boolean) => {
-        await Promise.all(products.map((p) => updateDoc(doc(db, `clubs/${club!.id}/menu`, p.id), { isAvailableToday: available })));
+        const promises: Promise<any>[] = [];
+        for (const p of products) {
+            if (p.source === "global") {
+                promises.push(toggleGlobal.mutateAsync({ clubId: club!.id, itemId: p.id, isAvailableToday: available }));
+            } else {
+                promises.push(updateDoc(doc(db, `clubs/${club!.id}/menu`, p.id), { isAvailableToday: available }));
+            }
+        }
+        await Promise.allSettled(promises);
     };
 
     if (loading) {
@@ -468,7 +385,7 @@ function SpecialsTab() {
                             <div className="flex items-center justify-between">
                                 <div className="min-w-0">
                                     <p className="font-bold text-sm text-gray-900 truncate">{p.name}</p>
-                                    <p className="text-xs text-gray-400">₹{p.price}</p>
+                                    <p className="text-xs text-gray-400">{p.price ? `₹${p.price}` : "—"}</p>
                                 </div>
                                 <Badge className={`text-[10px] font-bold flex-shrink-0 ${available ? "text-white" : "bg-gray-200 text-gray-500"}`}
                                     style={available ? { background: GREEN } : {}}>

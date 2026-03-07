@@ -13,11 +13,11 @@ const STATUS_COLORS: Record<Order["status"], string> = {
 };
 
 export default function MemberOrdersPage() {
-    const { user } = useAuth();
-    const { data: orders, isLoading } = useMyOrders(user?.uid ?? null);
+    const { firebaseUser } = useAuth();
+    const { data: orders, isLoading } = useMyOrders(firebaseUser?.uid ?? null);
 
     return (
-        <div className="space-y-6 pb-20" style={{ fontFamily: "'Nunito', sans-serif" }}>
+        <div className="space-y-6 px-4 pt-6 pb-24" style={{ fontFamily: "'Nunito', sans-serif" }}>
             <h1 className="text-2xl font-bold" style={{ color: "#2d9653" }}>Order History</h1>
 
             <div className="space-y-4">
@@ -25,7 +25,7 @@ export default function MemberOrdersPage() {
                     [...Array(3)].map((_, i) => <Skeleton key={i} className="h-32 rounded-2xl" />)
                 ) : orders && orders.length > 0 ? (
                     orders.map(order => (
-                        <div key={order.id} className="bg-white p-5 rounded-2xl shadow-sm border">
+                        <div key={order.id} className="member-card">
                             <div className="flex justify-between items-start mb-4">
                                 <div>
                                     <p className="font-bold text-lg flex items-center gap-2">
@@ -71,7 +71,7 @@ export default function MemberOrdersPage() {
                         </div>
                     ))
                 ) : (
-                    <div className="bg-white rounded-3xl p-12 text-center text-muted-foreground shadow-sm border border-dashed">
+                    <div className="member-card text-center !py-12 text-muted-foreground border-dashed">
                         <ShoppingCart className="w-12 h-12 mx-auto mb-3 opacity-30 text-slate-400" />
                         <p className="font-medium">No previous orders.</p>
                         <p className="text-sm text-slate-400">Your future purchases will appear here.</p>

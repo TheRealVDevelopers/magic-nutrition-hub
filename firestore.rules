@@ -2,98 +2,197 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Super Admins ──────────────────────────────────────────────────────────
+    // ── Helper functions ───────────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/superAdmins/$(request.auth.uid));
+    }
+
+    function isClubOwner(clubId) {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/clubs/$(clubId)).data.ownerUserId == request.auth.uid;
+    }
+
+    // ── Super Admins collection ────────────────────────────────────────────────
     match /superAdmins/{uid} {
-      allow read, write: if true;
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
     }
 
-    // ── Platform / Upgrade Requests / Billing Prints ──────────────────────────
+    // ── Platform-level data ────────────────────────────────────────────────────
     match /platform/{doc} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isSuperAdmin();
     }
 
+    // ── Root-level upgrade requests (super admin manages clubs) ───────────────
     match /upgradeRequests/{reqId} {
-      allow read, write: if true;
+      allow read: if isSuperAdmin();
+      allow write: if isSuperAdmin();
     }
 
+    // ── Billing prints ─────────────────────────────────────────────────────────
     match /billingPrints/{printId} {
-      allow read, write: if true;
+      allow read, write: if isSignedIn();
     }
 
-    // ── Legacy root-level enquiries (orphan fix utility) ──────────────────────
-    // Allow public create so landing pages that still use old code don't break.
-    // Signed-in users can read/update/delete (for the orphan-fix superadmin tool).
+    // ── Legacy root-level enquiries ────────────────────────────────────────────
+    // Old code path — allow public create so landing pages don't break.
     match /enquiries/{enquiryId} {
       allow create: if true;
-      allow read, update, delete: if request.auth != null;
+      allow read, update, delete: if isSignedIn();
     }
 
-    // ── Clubs ─────────────────────────────────────────────────────────────────
-    match /clubs/{clubId} {
+    // ── Global Menu ────────────────────────────────────────────────────────────
+    // Read: public (kitchen/reception screens show it without login)
+    // Write: any signed-in user (club owners + super admin can add global items)
+    match /globalMenu/{itemId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if isSignedIn();
+    }
 
-      // Owner profile
-      match /owner/{doc} {
-        allow read, write: if true;
-      }
+    // ── Clubs ──────────────────────────────────────────────────────────────────
+    match /clubs/{clubId} {
+      // Club document itself: public read (for join page, landing page, etc.)
+      // Write: super admin (create/edit clubs) or the club owner themselves
+      allow read: if true;
+      allow create: if isSuperAdmin();
+      allow update: if isSuperAdmin() || isClubOwner(clubId);
+      allow delete: if isSuperAdmin();
 
-      // All members: isPermanent:false = pending/enquiry, isPermanent:true = active member
+      // ── Members ─────────────────────────────────────────────────────────────
+      // Public create: allows the /join page (self-registration) to write a member doc
+      // even before the auth session is fully propagated. The user just created their
+      // Firebase Auth account so request.auth.uid matches the memberId they're writing to.
       match /members/{memberId} {
-        allow read, write: if true;
+        allow read: if true;
+        allow create: if true;       // self-registration on /join page (unauthenticated users register)
+        allow update: if isSignedIn();
+        allow delete: if isSuperAdmin() || isClubOwner(clubId);
 
         match /wallet/{doc} {
-          allow read, write: if true;
+          allow read, write: if true;  // wallet top-ups, balance reads by kitchen/reception
         }
         match /transactions/{txnId} {
-          allow read, write: if true;
+          allow read, write: if isSignedIn();
         }
         match /weighIns/{weighInId} {
-          allow read, write: if true;
+          allow read, write: if isSignedIn();
         }
         match /attendance/{date} {
-          allow read, write: if true;
+          allow read, write: if isSignedIn();
         }
         match /notifications/{notifId} {
-          allow read, write: if true;
+          allow read, write: if isSignedIn();
         }
       }
 
+      // ── Enquiries (new members submitting via join page) ───────────────────
+      // Public create: join page creates an enquiry right after Firebase Auth signup
+      match /enquiries/{enquiryId} {
+        allow read: if isSignedIn();
+        allow create: if true;       // public — join page creates this unauthenticated→just-authenticated
+        allow update: if isSignedIn();
+        allow delete: if isSuperAdmin() || isClubOwner(clubId);
+      }
+
+      // ── Club Upgrade Requests (member→club role upgrade) ──────────────────
+      match /upgradeRequests/{requestId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update: if isSignedIn();
+        allow delete: if isSuperAdmin() || isClubOwner(clubId);
+      }
+
+      // ── Club Owner profile ─────────────────────────────────────────────────
+      match /owner/{doc} {
+        allow read: if isSignedIn();
+        allow write: if isSuperAdmin() || isClubOwner(clubId);
+      }
+
+      // ── Orders (placed from reception, managed by kitchen) ────────────────
+      // Public read/write: reception screen & kitchen screen may run without login
       match /orders/{orderId} {
         allow read, write: if true;
       }
+
+      // ── Menu items (club's own products) ──────────────────────────────────
       match /menu/{itemId} {
-        allow read, write: if true;
+        allow read: if true;
+        allow write: if isSignedIn();
+
+        match /restockLog/{logId} {
+          allow read, write: if isSignedIn();
+        }
       }
+
+      // ── Menu Preferences (per-club global item visibility/availability) ───
+      match /menuPreferences/{itemId} {
+        allow read: if true;
+        allow write: if isSignedIn();
+      }
+
+      // ── Announcements ──────────────────────────────────────────────────────
       match /announcements/{announcementId} {
-        allow read, write: if true;
+        allow read: if true;   // members, reception, kitchen all read announcements
+        allow write: if isSignedIn();
       }
-      match /volunteers/{sessionId} {
-        allow read, write: if true;
-      }
+
+      // ── Feedback (members/visitors leave feedback via Reception screen) ────
+      // Public create: the Reception tablet is NOT logged in as any user
       match /feedback/{feedbackId} {
-        allow read, write: if true;
+        allow read: if isSignedIn();
+        allow create: if true;       // reception tablet submits feedback without auth
+        allow update: if isSignedIn();
+        allow delete: if isSuperAdmin() || isClubOwner(clubId);
       }
+
+      // ── Volunteers / Check-ins ─────────────────────────────────────────────
+      match /volunteers/{sessionId} {
+        allow read, write: if isSignedIn();
+      }
+
+      // ── Top-up requests (member wallet recharge) ───────────────────────────
       match /topupRequests/{requestId} {
-        allow read, write: if true;
+        allow read, write: if isSignedIn();
       }
+
+      // ── Kitchen Inventory (raw ingredient tracking) ────────────────────────
       match /inventory/{itemId} {
-        allow read, write: if true;
+        allow read: if true;   // kitchen display reads without owner login
+        allow write: if isSignedIn();
       }
+
+      // ── Landing pages ──────────────────────────────────────────────────────
       match /landingPages/{versionId} {
-        allow read, write: if true;
+        allow read: if true;
+        allow write: if isSuperAdmin() || isClubOwner(clubId);
       }
+
+      // ── Club-level transactions / billing ─────────────────────────────────
       match /transactions/{txnId} {
-        allow read, write: if true;
+        allow read, write: if isSignedIn();
       }
+
+      // ── Membership plans ───────────────────────────────────────────────────
       match /memberships/{planId} {
-        allow read, write: if true;
+        allow read: if true;
+        allow write: if isSuperAdmin() || isClubOwner(clubId);
       }
+
+      // ── Usage stats ────────────────────────────────────────────────────────
       match /usageStats/{doc} {
-        allow read, write: if true;
+        allow read, write: if isSignedIn();
       }
+
+      // ── Referrals ──────────────────────────────────────────────────────────
       match /referrals/{refId} {
-        allow read, write: if true;
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
       }
     }
   }

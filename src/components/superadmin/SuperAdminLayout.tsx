@@ -11,6 +11,7 @@ import {
     Settings,
     MessageSquare,
     Store,
+    UtensilsCrossed,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
@@ -19,6 +20,7 @@ import { useUnreadClubFeedbackCount } from "@/hooks/superadmin/useEnquiries";
 const baseNavItems = [
     { title: "Dashboard", path: "/superadmin/dashboard", icon: LayoutDashboard },
     { title: "Clubs", path: "/superadmin/clubs", icon: Building2 },
+    { title: "Global Menu", path: "/superadmin/global-menu", icon: UtensilsCrossed },
     { title: "Club Feedback", path: "/superadmin/enquiries", icon: MessageSquare },
     { title: "Platform Tree", path: "/superadmin/tree", icon: GitBranch },
     { title: "Club Requests", path: "/superadmin/upgrade-requests", icon: Store },

@@ -58,7 +58,7 @@ export default function WalletPage() {
     }
 
     return (
-        <div className="space-y-6 animate-fade-in pb-12">
+        <div className="space-y-6 animate-fade-in pb-24 px-4 pt-6">
             {/* Balance Card + Actions */}
             <div className="space-y-4">
                 {wallet ? (
@@ -126,7 +126,7 @@ function StatChip({
     icon: React.ReactNode; label: string; value: number; currencyName: string; bg: string;
 }) {
     return (
-        <div className={`rounded-2xl p-3 border ${bg}`}>
+        <div className={`member-card !p-3 ${bg}`}>
             <div className="flex items-center gap-1.5 mb-1">{icon}</div>
             <p className="text-lg font-bold">{value.toLocaleString()}</p>
             <p className="text-[10px] text-muted-foreground font-medium leading-tight">{label}</p>

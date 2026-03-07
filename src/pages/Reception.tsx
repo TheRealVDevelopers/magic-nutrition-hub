@@ -92,63 +92,29 @@ function TodaysShakes({ clubId }: { clubId: string }) {
         refetchInterval: 120000,
     });
 
-    const gridClass =
-        items.length === 1
-            ? "flex justify-center"
-            : items.length === 2
-                ? "grid grid-cols-2 gap-4"
-                : items.length === 3
-                    ? "grid grid-cols-3 gap-4"
-                    : "grid grid-cols-2 lg:grid-cols-4 gap-4";
-
     return (
-        <section className="px-6 py-5">
-            <h2 className="text-2xl font-black mb-4" style={{ color: GREEN }}>
-                🥤 Today's Special
+        <div className="reception-card">
+            <h2 className="reception-card-title">
+                <div className="reception-card-title-icon">🥤</div>
+                Today's Menu
             </h2>
             {isLoading ? (
-                <div className="text-gray-400 text-center py-8">Loading...</div>
+                <div className="text-gray-400 py-4">Loading...</div>
             ) : items.length === 0 ? (
-                <div className="text-center py-8 text-gray-400 text-lg">
+                <div className="py-4 text-gray-400">
                     Menu not set yet for today
                 </div>
             ) : (
-                <div className={gridClass}>
+                <div className="flex flex-col">
                     {items.map((item) => (
-                        <div
-                            key={item.id}
-                            className="bg-white rounded-3xl border-2 shadow-lg overflow-hidden flex flex-col items-center"
-                            style={{ borderColor: `${GREEN}40` }}
-                        >
-                            {item.photo ? (
-                                <img
-                                    src={item.photo}
-                                    alt={item.name}
-                                    className="w-full object-cover"
-                                    style={{ height: items.length === 1 ? 200 : 140 }}
-                                />
-                            ) : (
-                                <div
-                                    className="w-full flex items-center justify-center bg-green-50"
-                                    style={{
-                                        height: items.length === 1 ? 200 : 140,
-                                        fontSize: items.length === 1 ? 80 : 56,
-                                    }}
-                                >
-                                    🥤
-                                </div>
-                            )}
-                            <div className="p-4 text-center w-full">
-                                <p className="font-black text-gray-800 text-lg leading-tight">{item.name}</p>
-                                <p className="font-bold mt-1" style={{ color: GREEN }}>
-                                    ₹{item.price}
-                                </p>
-                            </div>
+                        <div key={item.id} className="menu-item-row">
+                            <span className="menu-item-name">• {item.name}</span>
+                            <span className="menu-item-price">₹{item.price}</span>
                         </div>
                     ))}
                 </div>
             )}
-        </section>
+        </div>
     );
 }
 
@@ -207,27 +173,23 @@ function WeighInSection({ clubId }: { clubId: string }) {
 
     if (isWeighInDay) {
         return (
-            <section className="px-6 py-4">
-                <div
-                    className="rounded-3xl border-2 p-6"
-                    style={{ backgroundColor: "#f0fdf4", borderColor: `${GREEN}40` }}
-                >
-                    <h3 className="text-xl font-black mb-2" style={{ color: GREEN }}>
-                        ⚖️ Today is Weigh-in Day!
-                    </h3>
-                    <p className="text-gray-600 mb-4">Ask staff to record your weight</p>
-                    <Button
-                        onClick={() => setModalOpen(true)}
-                        className="rounded-xl text-white font-bold px-6"
-                        style={{ backgroundColor: GREEN }}
-                    >
-                        Start Weigh-in
-                    </Button>
+            <div className="weighin-card">
+                <div className="weighin-icon text-white">⚖️</div>
+                <div className="flex-1">
+                    <h3 className="weighin-title">Today is Weigh-in Day!</h3>
+                    <p className="weighin-sub">Ask staff to record your weight</p>
                 </div>
+                <Button
+                    onClick={() => setModalOpen(true)}
+                    className="rounded-xl text-white font-bold px-6"
+                    style={{ backgroundColor: GREEN }}
+                >
+                    Start
+                </Button>
                 {modalOpen && (
                     <WeighInModal clubId={clubId} onClose={() => setModalOpen(false)} />
                 )}
-            </section>
+            </div>
         );
     }
 
@@ -238,25 +200,13 @@ function WeighInSection({ clubId }: { clubId: string }) {
         : "—";
 
     return (
-        <section className="px-6 py-4">
-            <div
-                className="rounded-3xl border-2 p-6 text-center"
-                style={{ backgroundColor: "#f0fdf4", borderColor: `${GREEN}40` }}
-            >
-                <h3 className="text-xl font-black mb-2" style={{ color: GREEN }}>
-                    💪 Keep Going!
-                </h3>
-                <p className="text-gray-600">
-                    Next weigh-in is on
-                </p>
-                <p className="text-lg font-black mt-1" style={{ color: GREEN }}>
-                    {nextDateStr}
-                </p>
-                <p className="text-gray-500 mt-2 text-sm">
-                    Stay consistent — results are coming! 🌟
-                </p>
+        <div className="weighin-card">
+            <div className="weighin-icon text-white">💪</div>
+            <div>
+                <h3 className="weighin-title">Next Weigh-in: {next.dayName}</h3>
+                <p className="weighin-sub">Keep going! Results are coming</p>
             </div>
-        </section>
+        </div>
     );
 }
 
@@ -510,70 +460,91 @@ function VisitorQRModal({ onClose }: { onClose: () => void }) {
 type ModalType = "volunteer" | "visitor" | "feedback" | "about" | null;
 
 const ACTION_BUTTONS = [
-    { id: "volunteer" as ModalType, emoji: "🙋", label: "Volunteer Login/Logout", bg: "#2d9653" },
-    { id: "visitor" as ModalType, emoji: "📝", label: "New Visitor", bg: "#3b82f6" },
-    { id: "feedback" as ModalType, emoji: "💬", label: "Feedback", bg: "#f59e0b" },
-    { id: "about" as ModalType, emoji: "ℹ️", label: "About Club", bg: "#64748b" },
+    { id: "visitor" as ModalType, emoji: "📝", label: "Check In Member", sub: "New Visitor Enrollment" },
+    { id: "volunteer" as ModalType, emoji: "🙋", label: "Volunteer Login", sub: "Staff Attendance" },
+    { id: "feedback" as ModalType, emoji: "💬", label: "Leave Feedback", sub: "Tell us how we did" },
+    { id: "about" as ModalType, emoji: "ℹ️", label: "About Club", sub: "Club Info & Hours" },
 ];
 
 export default function Reception() {
     const { club } = useClubContext();
     const [activeModal, setActiveModal] = useState<ModalType>(null);
+    const [clock, setClock] = useState(new Date());
+
+    useEffect(() => {
+        const t = setInterval(() => setClock(new Date()), 1000);
+        return () => clearInterval(t);
+    }, []);
+
+    const dateStr = clock.toLocaleDateString("en-IN", { weekday: "short", day: "2-digit", month: "short" });
+    const timeStr = clock.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
 
     return (
-        <div
-            className="min-h-screen flex flex-col bg-gradient-to-br from-green-50 to-white"
-            style={{ fontFamily: "Nunito, sans-serif" }}
-        >
-            {/* Announcement banner */}
-            {club?.id && <AnnouncementBanner clubId={club.id} />}
-
-            {/* Club header */}
-            <div className="flex items-center gap-4 px-6 py-4 bg-white border-b shadow-sm">
-                {club?.logo && <img src={club.logo} alt={club.name} className="h-12 object-contain rounded-xl" />}
-                <div>
-                    <h1 className="text-2xl font-black" style={{ color: GREEN }}>{club?.name ?? "Club"}</h1>
-                    <p className="text-sm text-gray-500">Reception Display</p>
-                </div>
+        <div className="reception-landscape-root">
+            {/* Rotate prompt — shown via CSS media query when device is portrait */}
+            <div className="landscape-rotate-prompt">
+                <div style={{ fontSize: 72, marginBottom: 24, transform: "rotate(90deg)", display: "inline-block" }}>&#x21bb;</div>
+                <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>Please Rotate Your Device</div>
+                <div style={{ fontSize: 15, opacity: 0.7 }}>Reception display works in landscape mode</div>
             </div>
 
-            {/* Main content - fills remaining height */}
-            <div className="flex-1 flex flex-col lg:flex-row gap-0 overflow-hidden">
-                {/* Today's Shakes + Weigh-in - left/top */}
-                <div className="flex-1 overflow-y-auto">
-                    {club?.id && <TodaysShakes clubId={club.id} />}
-                    {club?.id && <WeighInSection clubId={club.id} />}
-                </div>
+            <div className="reception-page">
+                {club?.id && <AnnouncementBanner clubId={club.id} />}
 
-                {/* Action buttons - right/bottom */}
-                <div className="lg:w-[340px] p-6 border-l bg-white flex flex-col justify-center">
-                    <h2 className="text-lg font-black text-gray-700 mb-4">Quick Actions</h2>
-                    <div className="grid grid-cols-2 gap-4">
-                        {ACTION_BUTTONS.map((btn) => (
-                            <button
-                                key={btn.id}
-                                onClick={() => setActiveModal(btn.id)}
-                                className="flex flex-col items-center justify-center gap-2 rounded-3xl text-white font-bold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105 active:scale-95"
-                                style={{
-                                    backgroundColor: btn.bg,
-                                    minHeight: 130,
-                                    padding: "1.25rem",
-                                }}
-                            >
-                                <span className="text-4xl">{btn.emoji}</span>
-                                <span className="text-sm text-center leading-tight">{btn.label}</span>
-                            </button>
-                        ))}
+                <div className="reception-header">
+                    <div className="reception-header-left">
+                        <div className="reception-logo">
+                            {club?.logo ? <img src={club.logo} alt={club.name} className="w-full h-full object-cover rounded-xl" /> : "🌿"}
+                        </div>
+                        <div>
+                            <div className="reception-club-name">{club?.name || "Magic Nutrition Club"}</div>
+                            <div className="reception-subtitle">Reception</div>
+                        </div>
+                    </div>
+                    <div className="reception-time">
+                        <div className="reception-clock">{timeStr}</div>
+                        <div className="reception-date">{dateStr}</div>
                     </div>
                 </div>
-            </div>
 
-            {/* Modals */}
-            {activeModal === "volunteer" && <VolunteerModal onClose={() => setActiveModal(null)} />}
-            {activeModal === "visitor" && <VisitorQRModal onClose={() => setActiveModal(null)} />}
-            {activeModal === "feedback" && <FeedbackModal onClose={() => setActiveModal(null)} />}
-            {activeModal === "about" && <AboutModal onClose={() => setActiveModal(null)} />}
+                <div className="reception-body">
+                    <div className="reception-main">
+                        {club?.id && <TodaysShakes clubId={club.id} />}
+                        {club?.id && <WeighInSection clubId={club.id} />}
+                    </div>
+
+                    <div className="reception-sidebar">
+                        <div className="reception-card">
+                            <h2 className="reception-card-title">
+                                <div className="reception-card-title-icon">⚡</div>
+                                Quick Actions
+                            </h2>
+                            {ACTION_BUTTONS.map((btn) => (
+                                <button
+                                    key={btn.id}
+                                    onClick={() => setActiveModal(btn.id)}
+                                    className={`quick-action-btn ${btn.id === 'visitor' ? 'primary' : ''}`}
+                                >
+                                    <div className="quick-action-icon">{btn.emoji}</div>
+                                    <div>
+                                        <div className="quick-action-text">{btn.label}</div>
+                                        <div className="quick-action-sub">{btn.sub}</div>
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Modals */}
+                {activeModal === "volunteer" && <VolunteerModal onClose={() => setActiveModal(null)} />}
+                {activeModal === "visitor" && <VisitorQRModal onClose={() => setActiveModal(null)} />}
+                {activeModal === "feedback" && <FeedbackModal onClose={() => setActiveModal(null)} />}
+                {activeModal === "about" && <AboutModal onClose={() => setActiveModal(null)} />}
+            </div>
         </div>
     );
 }
+
+
 

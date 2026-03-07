@@ -40,6 +40,7 @@ const SuperAdminSettings = lazy(() => import("./pages/superadmin/SuperAdminSetti
 const SuperAdminEnquiries = lazy(() => import("./pages/superadmin/Enquiries"));
 const PlatformSettings = lazy(() => import("./pages/superadmin/PlatformSettings"));
 const UpgradeRequests = lazy(() => import("./pages/superadmin/UpgradeRequests"));
+const GlobalMenuPage = lazy(() => import("./pages/superadmin/GlobalMenu"));
 
 // PIN-gated pages (club domain only)
 const AdminAccess = lazy(() => import("./pages/AdminAccess"));
@@ -208,6 +209,7 @@ const App = () => (
           <Route path="clubs/:clubId/convert" element={<ConvertToClub />} />
           <Route path="tree" element={<PlatformTree />} />
           <Route path="enquiries" element={<SuperAdminEnquiries />} />
+          <Route path="global-menu" element={<GlobalMenuPage />} />
           <Route path="settings" element={<PlatformSettings />} />
           <Route path="upgrade-requests" element={<UpgradeRequests />} />
           <Route path="legacy-settings" element={<SuperAdminSettings />} />
