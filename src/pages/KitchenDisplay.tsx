@@ -49,12 +49,15 @@ import {
     ChevronRight,
     TrendingUp,
     Star,
+    Printer,
 } from "lucide-react";
 import type { Order, Product } from "@/types/firestore";
 import { useCombinedMenu, useToggleGlobalItem, useGlobalMenuItems, useAddGlobalMenuItem, useUpdateGlobalMenuItem } from "@/hooks/useGlobalMenu";
 import type { CombinedMenuItem, GlobalMenuItem } from "@/hooks/useGlobalMenu";
 import { GlobalMenuDialog } from "@/components/shared/GlobalMenuDialog";
 import { useToast } from "@/hooks/use-toast";
+import { printViaRawBT } from "@/utils/printReceipt";
+import { buildKitchenDailyReceipt, type ClubPrintData } from "@/utils/receiptBuilder";
 import {
     useTodaysSpecials,
     useToggleTodaysSpecial,
@@ -233,6 +236,7 @@ function OrdersTab({ orders, loading, clubId }: { orders: Order[]; loading: bool
     const prevCountRef = useRef(orders.length);
     const { summary, orders: allTodayOrders } = useTodayOrdersSummary();
     const { specials } = useTodaysSpecials(clubId || null);
+    const { club } = useClubContext();
 
     // Sound on new order arriving
     useEffect(() => {
@@ -286,6 +290,41 @@ function OrdersTab({ orders, loading, clubId }: { orders: Order[]; loading: bool
                     <span style={{ marginLeft: "auto", fontSize: 12, color: "#6b7280", fontWeight: 600 }}>
                         {new Date().toLocaleDateString("en-US", { weekday: "short", day: "2-digit", month: "short" })}
                     </span>
+                    <button
+                        onClick={() => {
+                            const clubData: ClubPrintData = {
+                                name: club?.name ?? "Magic Nutrition Club",
+                                address: (club as any)?.address ?? "",
+                                phone: club?.phone ?? (club as any)?.ownerPhone ?? "",
+                                gstNumber: (club as any)?.gstNumber ?? "",
+                            };
+                            const lines = buildKitchenDailyReceipt({
+                                club: clubData,
+                                date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+                                totalShakes: summary.totalOrders,
+                                completedOrders: summary.statusCounts.served ?? 0,
+                                pendingOrders: summary.statusCounts.pending ?? 0,
+                                totalRevenue: summary.totalRevenue,
+                                productBreakdown: productRows.map(r => ({ name: r.name, qty: r.sold })),
+                            });
+                            printViaRawBT(lines);
+                        }}
+                        style={{
+                            background: GREEN,
+                            color: "white",
+                            border: "none",
+                            borderRadius: 8,
+                            padding: "4px 12px",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 4,
+                        }}
+                    >
+                        <Printer style={{ width: 14, height: 14 }} /> Print
+                    </button>
                 </div>
 
                 {/* Stats Row */}

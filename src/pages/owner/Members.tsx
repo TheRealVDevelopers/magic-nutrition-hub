@@ -15,8 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useMembers, useAddMember } from "@/hooks/owner/useMembers";
 import { useClubContext } from "@/lib/clubDetection";
 import type { User } from "@/types/firestore";
-import MembershipReceipt, { type MembershipReceiptProps } from "@/components/receipts/MembershipReceipt";
-import { printReceipt } from "@/utils/printReceipt";
+import { printViaRawBT, generateTxnId } from "@/utils/printReceipt";
+import { buildMembershipReceipt, type ClubPrintData } from "@/utils/receiptBuilder";
 import BulkWeighIn from "@/components/owner/BulkWeighIn";
 
 type FilterTab = "all" | "active" | "expired" | "expiring" | "visiting" | "permanent" | "pending";
@@ -46,7 +46,7 @@ export default function Members() {
         currentWeight: "", targetWeight: "", healthConditions: "", membershipTier: "bronze" as "gold" | "silver" | "bronze",
     });
     const [formError, setFormError] = useState("");
-    const [membershipSuccess, setMembershipSuccess] = useState<MembershipReceiptProps | null>(null);
+    const [membershipSuccess, setMembershipSuccess] = useState<any | null>(null);
 
     const filtered = useMemo(() => {
         if (!members) return [];
@@ -104,6 +104,8 @@ export default function Members() {
                 endDate,
                 clubName: club.name,
                 clubPhone: club.phone ?? club.ownerPhone ?? "",
+                clubAddress: (club as any).address ?? "",
+                clubGst: (club as any).gstNumber ?? "",
                 date: now,
                 receiptNumber: `MBR${Date.now().toString().slice(-6)}`,
             });
@@ -301,7 +303,28 @@ export default function Members() {
                             <Button
                                 className="w-full rounded-xl gap-2"
                                 style={{ backgroundColor: "#2d9653" }}
-                                onClick={printReceipt}
+                                onClick={() => {
+                                    if (!membershipSuccess) return;
+                                    const clubData: ClubPrintData = {
+                                        name: membershipSuccess.clubName,
+                                        address: membershipSuccess.clubAddress,
+                                        phone: membershipSuccess.clubPhone,
+                                        gstNumber: membershipSuccess.clubGst,
+                                    };
+                                    const lines = buildMembershipReceipt({
+                                        club: clubData,
+                                        memberName: membershipSuccess.memberName,
+                                        memberId: membershipSuccess.memberId,
+                                        planName: membershipSuccess.planName,
+                                        amount: membershipSuccess.amount,
+                                        paymentMethod: membershipSuccess.paymentMethod,
+                                        startDate: membershipSuccess.startDate,
+                                        endDate: membershipSuccess.endDate,
+                                        timestamp: membershipSuccess.date,
+                                        receiptNumber: membershipSuccess.receiptNumber,
+                                    });
+                                    printViaRawBT(lines);
+                                }}
                             >
                                 <Printer className="w-4 h-4" /> Print Membership Receipt
                             </Button>
@@ -313,10 +336,6 @@ export default function Members() {
                 </DialogContent>
             </Dialog>
 
-            {/* Hidden receipt area */}
-            <div id="receipt-print-area">
-                {membershipSuccess && <MembershipReceipt {...membershipSuccess} />}
-            </div>
 
             <BulkWeighIn open={weighInOpen} onClose={() => setWeighInOpen(false)} />
         </div>

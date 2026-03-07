@@ -25,6 +25,7 @@ export default function Settings() {
     const [address, setAddress] = useState("");
     const [phone, setPhone] = useState("");
     const [email, setEmail] = useState("");
+    const [gstNumber, setGstNumber] = useState("");
     const [lowBalanceThreshold, setLowBalanceThreshold] = useState(100);
     const [weighInDays, setWeighInDays] = useState<number[]>([]);
     const [plans, setPlans] = useState<(MembershipPlan & { id: string })[]>([]);
@@ -44,6 +45,7 @@ export default function Settings() {
             setAddress(club.address || "");
             setPhone(club.ownerPhone || "");
             setEmail(club.ownerEmail || "");
+            setGstNumber((club as any).gstNumber || "");
             setLowBalanceThreshold((club as any).lowBalanceThreshold ?? 100);
             setWeighInDays((club as any).weighInDays ?? []);
         }
@@ -74,6 +76,7 @@ export default function Settings() {
                 address,
                 ownerPhone: phone,
                 ownerEmail: email,
+                gstNumber: gstNumber.trim() || null,
             });
             toast({ title: "Club profile saved!" });
         } catch (e: any) {
@@ -158,6 +161,16 @@ export default function Settings() {
                     <div><Label>Address</Label><Input value={address} onChange={(e) => setAddress(e.target.value)} /></div>
                     <div><Label>Phone</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
                     <div><Label>Email</Label><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></div>
+                    <div>
+                        <Label>GST Number (optional)</Label>
+                        <Input
+                            value={gstNumber}
+                            onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
+                            placeholder="e.g. 29ABCDE1234F1Z5"
+                            maxLength={15}
+                        />
+                        <span className="text-xs text-muted-foreground mt-1 block">Leave blank if not GST registered</span>
+                    </div>
                     <Button onClick={handleSaveProfile} disabled={profileSaving} style={{ backgroundColor: GREEN }}>
                         <Save className="w-4 h-4 mr-2" /> {profileSaving ? "Saving…" : "Save"}
                     </Button>

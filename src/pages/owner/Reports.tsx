@@ -22,8 +22,8 @@ import {
     useMemberReport,
 } from "@/hooks/owner/useReports";
 import { useClubContext } from "@/lib/clubDetection";
-import DailySummaryReceipt from "@/components/receipts/DailySummaryReceipt";
-import { printReceipt } from "@/utils/printReceipt";
+import { printViaRawBT } from "@/utils/printReceipt";
+import { buildDailySalesReceipt, buildTierBreakdownReceipt, type ClubPrintData } from "@/utils/receiptBuilder";
 
 const GREEN = "#2d9653";
 
@@ -147,7 +147,28 @@ export default function Reports() {
                                             variant="outline"
                                             className="gap-1 h-8 text-xs"
                                             disabled={dayRevReport.isLoading || dayAttReport.isLoading}
-                                            onClick={printReceipt}
+                                            onClick={() => {
+                                                const clubData: ClubPrintData = {
+                                                    name: club?.name ?? "Magic Nutrition Club",
+                                                    address: (club as any)?.address ?? "",
+                                                    phone: club?.phone ?? club?.ownerPhone ?? "",
+                                                    gstNumber: (club as any)?.gstNumber ?? "",
+                                                };
+                                                const lines = buildDailySalesReceipt({
+                                                    club: clubData,
+                                                    date: printDate,
+                                                    totalRevenue: dayRevReport.data?.totalRevenue ?? 0,
+                                                    totalOrders: dayRevReport.data?.totalOrders ?? 0,
+                                                    completedOrders: dayRevReport.data?.totalOrders ?? 0,
+                                                    cancelledOrders: 0,
+                                                    topProducts: (dayRevReport.data?.topItems ?? []).map(item => ({
+                                                        name: item.name,
+                                                        count: item.count ?? (item as any).quantity ?? 0,
+                                                    })),
+                                                    topMembers: [],
+                                                });
+                                                printViaRawBT(lines);
+                                            }}
                                         >
                                             <Printer className="w-3.5 h-3.5" /> Print Summary
                                         </Button>
@@ -198,6 +219,36 @@ export default function Reports() {
                                 </div>
                                 <Button size="sm" onClick={handleExportAttendance} disabled={!attReport.data} style={{ backgroundColor: GREEN }}>
                                     <Download className="w-4 h-4 mr-1" /> Export CSV
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1"
+                                    disabled={!attReport.data}
+                                    onClick={() => {
+                                        const clubData: ClubPrintData = {
+                                            name: club?.name ?? "Magic Nutrition Club",
+                                            address: (club as any)?.address ?? "",
+                                            phone: club?.phone ?? club?.ownerPhone ?? "",
+                                            gstNumber: (club as any)?.gstNumber ?? "",
+                                        };
+                                        const lines = buildDailySalesReceipt({
+                                            club: clubData,
+                                            date: `${startDate} to ${endDate}`,
+                                            totalRevenue: 0,
+                                            totalOrders: 0,
+                                            completedOrders: 0,
+                                            cancelledOrders: 0,
+                                            topProducts: [],
+                                            topMembers: (attReport.data?.topMembers ?? []).map(m => ({
+                                                name: m.name,
+                                                count: m.count,
+                                            })),
+                                        });
+                                        printViaRawBT(lines);
+                                    }}
+                                >
+                                    <Printer className="w-4 h-4" /> Print
                                 </Button>
                             </div>
                             <div className="h-64 rounded-xl border bg-white p-4">
@@ -258,29 +309,40 @@ export default function Reports() {
                                 <Button size="sm" onClick={handleExportMembers} disabled={!memReport.data} style={{ backgroundColor: GREEN }}>
                                     <Download className="w-4 h-4 mr-1" /> Export CSV
                                 </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1"
+                                    disabled={!memReport.data}
+                                    onClick={() => {
+                                        const clubData: ClubPrintData = {
+                                            name: club?.name ?? "Magic Nutrition Club",
+                                            address: (club as any)?.address ?? "",
+                                            phone: club?.phone ?? club?.ownerPhone ?? "",
+                                            gstNumber: (club as any)?.gstNumber ?? "",
+                                        };
+                                        const lines = buildTierBreakdownReceipt({
+                                            club: clubData,
+                                            date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+                                            gold: 0,
+                                            silver: 0,
+                                            bronze: 0,
+                                            totalActive: memReport.data?.activeMembers ?? 0,
+                                            totalExpired: (memReport.data?.totalMembers ?? 0) - (memReport.data?.activeMembers ?? 0),
+                                            totalPending: memReport.data?.newThisMonth ?? 0,
+                                        });
+                                        printViaRawBT(lines);
+                                    }}
+                                >
+                                    <Printer className="w-4 h-4" /> Print
+                                </Button>
                             </div>
                         </>
                     )}
                 </div>
             )}
 
-            {/* Hidden daily summary receipt — only visible during window.print() */}
-            <div id="receipt-print-area">
-                <DailySummaryReceipt
-                    date={new Date(printDate + "T00:00:00")}
-                    totalAttendance={dayAttReport.data?.totalRecords ?? 0}
-                    totalOrders={dayRevReport.data?.totalOrders ?? 0}
-                    totalRevenue={dayRevReport.data?.totalRevenue ?? 0}
-                    totalTopUps={0}
-                    topItems={(dayRevReport.data?.topItems ?? []).map((item) => ({
-                        name: item.name,
-                        count: item.count ?? (item as any).quantity ?? 0,
-                    }))}
-                    clubName={club?.name ?? "Magic Nutrition Club"}
-                    clubPhone={club?.phone ?? club?.ownerPhone ?? ""}
-                    receiptNumber={`RPT${printDate.replace(/-/g, "")}`}
-                />
-            </div>
+
         </div>
     );
 }

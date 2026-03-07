@@ -14,8 +14,8 @@ import { auth, db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { useMyWallet } from "@/hooks/useMemberWallet";
 import { useClubMembershipPlans, useRenewMembership } from "@/hooks/member/useMembership";
-import { printReceipt } from "@/utils/printReceipt";
-import MembershipReceipt from "@/components/receipts/MembershipReceipt";
+import { printViaRawBT } from "@/utils/printReceipt";
+import { buildMembershipReceipt, type ClubPrintData } from "@/utils/receiptBuilder";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -716,7 +716,28 @@ function MembershipStatusCard({ profile, club, toast }: { profile: User; club: a
                                 <p className="text-xs text-muted-foreground">Valid until {format(renewResult.endDate, "dd MMM yyyy")}</p>
                             )}
                             <div className="flex gap-2">
-                                <Button variant="outline" className="flex-1 rounded-xl gap-1" onClick={() => printReceipt()}>
+                                <Button variant="outline" className="flex-1 rounded-xl gap-1" onClick={() => {
+                                    if (!renewResult || !selectedPlan) return;
+                                    const clubData: ClubPrintData = {
+                                        name: club?.name ?? "Club",
+                                        address: club?.address ?? "",
+                                        phone: club?.phone ?? "",
+                                        gstNumber: club?.gstNumber ?? "",
+                                    };
+                                    const lines = buildMembershipReceipt({
+                                        club: clubData,
+                                        memberName: profile.name,
+                                        memberId: (profile as any).memberId || profile.id,
+                                        planName: selectedPlan.name,
+                                        amount: selectedPlan.price,
+                                        paymentMethod: "Wallet",
+                                        startDate: renewResult.startDate,
+                                        endDate: renewResult.endDate,
+                                        timestamp: new Date(),
+                                        receiptNumber: `RNW-${Date.now().toString(36).toUpperCase()}`,
+                                    });
+                                    printViaRawBT(lines);
+                                }}>
                                     🖨️ Print Receipt
                                 </Button>
                                 <Button className="flex-1 rounded-xl" style={{ backgroundColor: GREEN }} onClick={() => setRenewOpen(false)}>
@@ -728,24 +749,7 @@ function MembershipStatusCard({ profile, club, toast }: { profile: User; club: a
                 </DialogContent>
             </Dialog>
 
-            {/* Hidden receipt for printing */}
-            <div id="receipt-print-area" ref={receiptRef} style={{ display: "none" }}>
-                {renewResult && selectedPlan && (
-                    <MembershipReceipt
-                        memberName={profile.name}
-                        memberId={(profile as any).memberId || profile.id}
-                        planName={selectedPlan.name}
-                        amount={selectedPlan.price}
-                        paymentMethod="Wallet"
-                        startDate={renewResult.startDate}
-                        endDate={renewResult.endDate}
-                        clubName={club?.name ?? "Club"}
-                        clubPhone={club?.phone ?? ""}
-                        date={new Date()}
-                        receiptNumber={`RNW-${Date.now().toString(36).toUpperCase()}`}
-                    />
-                )}
-            </div>
+
         </>
     );
 }

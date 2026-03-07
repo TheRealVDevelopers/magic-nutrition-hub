@@ -52,6 +52,7 @@ export interface Club {
     landingPageImages: LandingImage[];
     landingPageHistory?: LandingPageVersion[];
     memberIdPrefix?: string;
+    gstNumber?: string;
 }
 
 // ─── Landing page version history ─────────────────────────────────────

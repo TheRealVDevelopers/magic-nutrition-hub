@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import {
     Wallet as WalletIcon, Search, ArrowUpCircle, TrendingUp,
     Printer, CheckCircle, Clock, XCircle, Edit2, AlertTriangle,
@@ -20,8 +20,9 @@ import { useMembers } from "@/hooks/owner/useMembers";
 import { useClubContext } from "@/lib/clubDetection";
 import { useToast } from "@/hooks/use-toast";
 import type { Wallet as WalletType, User, TopupRequest } from "@/types/firestore";
-import TopUpReceipt, { type TopUpReceiptProps } from "@/components/receipts/TopUpReceipt";
-import { printReceipt } from "@/utils/printReceipt";
+import { printViaRawBT, generateTxnId, formatINR } from "@/utils/printReceipt";
+import { buildTopUpReceipt, type ClubPrintData } from "@/utils/receiptBuilder";
+import AutoPrintCountdown from "@/components/AutoPrintCountdown";
 
 const GREEN = "#2d9653";
 
@@ -52,8 +53,8 @@ export default function WalletPage() {
     const [paymentMethod, setPaymentMethod] = useState("Cash");
     const [reference, setReference] = useState("");
     const [notes, setNotes] = useState("");
-    const [successReceipt, setSuccessReceipt] = useState<TopUpReceiptProps | null>(null);
-    const receiptRef = useRef<TopUpReceiptProps | null>(null);
+    const [successReceipt, setSuccessReceipt] = useState<any | null>(null);
+    const [showAutoPrint, setShowAutoPrint] = useState(false);
 
     // ─── Pending tab state ──────────────────────────────
     const [editedAmounts, setEditedAmounts] = useState<Record<string, string>>({});
@@ -99,7 +100,7 @@ export default function WalletPage() {
         setReference("");
         setNotes("");
         setSuccessReceipt(null);
-        receiptRef.current = null;
+        setShowAutoPrint(false);
         setDialogOpen(true);
     };
 
@@ -114,26 +115,51 @@ export default function WalletPage() {
                 reference: reference || undefined, notes: notes || undefined,
                 currentBalance: balanceBefore,
             });
-            const rd: TopUpReceiptProps = {
+            const rd = {
                 memberName: selected.member?.name ?? "Member",
                 memberId: (selected.member as any)?.memberId ?? "",
+                phone: selected.member?.phone ?? "",
                 amount: amt, paymentMethod, reference: reference || undefined,
                 balanceBefore, balanceAfter: balanceBefore + amt,
                 clubName: club?.name ?? "Magic Nutrition Club",
                 clubPhone: club?.phone ?? club?.ownerPhone ?? "",
+                clubAddress: (club as any)?.address ?? "",
+                clubGst: (club as any)?.gstNumber ?? "",
+                transactionId: generateTxnId(),
                 date: new Date(),
-                receiptNumber: `WTU${Date.now().toString().slice(-6)}`,
             };
-            receiptRef.current = rd;
             setSuccessReceipt(rd);
+            setShowAutoPrint(true);
         } catch (err: any) {
             toast({ title: "Error", description: err.message, variant: "destructive" });
         }
     };
 
-    const handlePrint = () => { if (receiptRef.current) printReceipt(); };
+    const handlePrint = () => {
+        if (!successReceipt) return;
+        const clubData: ClubPrintData = {
+            name: successReceipt.clubName,
+            address: successReceipt.clubAddress,
+            phone: successReceipt.clubPhone,
+            gstNumber: successReceipt.clubGst,
+        };
+        const lines = buildTopUpReceipt({
+            club: clubData,
+            memberName: successReceipt.memberName,
+            memberId: successReceipt.memberId,
+            phone: successReceipt.phone,
+            amount: successReceipt.amount,
+            previousBalance: successReceipt.balanceBefore,
+            newBalance: successReceipt.balanceAfter,
+            paymentMethod: successReceipt.paymentMethod,
+            transactionId: successReceipt.transactionId,
+            timestamp: successReceipt.date,
+        });
+        printViaRawBT(lines);
+        setShowAutoPrint(false);
+    };
 
-    const closeDialog = () => { setDialogOpen(false); setSuccessReceipt(null); receiptRef.current = null; };
+    const closeDialog = () => { setDialogOpen(false); setSuccessReceipt(null); setShowAutoPrint(false); };
 
     const currentBalance = selected?.balance ?? 0;
     const amountNum = parseFloat(amount) || 0;
@@ -148,7 +174,7 @@ export default function WalletPage() {
             return;
         }
         try {
-            const w = await getWalletByUserId(req.memberId);
+            const w = await getWalletByUserId(clubId!, req.memberId);
             if (!w) { toast({ title: "Wallet not found", variant: "destructive" }); return; }
             const result = await approve.mutateAsync({
                 request: req, approvedAmount: amt,
@@ -156,6 +182,25 @@ export default function WalletPage() {
             });
             toast({ title: "Approved!", description: `${req.memberName} +₹${result.approvedAmount}` });
             setEditedAmounts((prev) => { const n = { ...prev }; delete n[req.id]; return n; });
+
+            // Auto-print receipt for approved top-up
+            const rd = {
+                memberName: req.memberName ?? "Member",
+                memberId: req.memberId,
+                phone: (req as any).memberPhone ?? "",
+                amount: result.approvedAmount,
+                paymentMethod: req.paymentMethod ?? "Cash",
+                balanceBefore: w.balance,
+                balanceAfter: w.balance + result.approvedAmount,
+                clubName: club?.name ?? "Magic Nutrition Club",
+                clubPhone: club?.phone ?? (club as any)?.ownerPhone ?? "",
+                clubAddress: (club as any)?.address ?? "",
+                clubGst: (club as any)?.gstNumber ?? "",
+                transactionId: generateTxnId(),
+                date: new Date(),
+            };
+            setSuccessReceipt(rd);
+            setShowAutoPrint(true);
         } catch (err: any) {
             toast({ title: "Error", description: err.message, variant: "destructive" });
         }
@@ -164,7 +209,7 @@ export default function WalletPage() {
     const handleReject = async () => {
         if (!rejectDialog) return;
         try {
-            await reject.mutateAsync({ requestId: rejectDialog, reason: rejectReason });
+            await reject.mutateAsync({ clubId: clubId!, requestId: rejectDialog, reason: rejectReason });
             toast({ title: "Rejected" });
             setRejectDialog(null);
             setRejectReason("");
@@ -381,10 +426,13 @@ export default function WalletPage() {
                 </div>
             )}
 
-            {/* Hidden receipt area */}
-            <div id="receipt-print-area">
-                {successReceipt && <TopUpReceipt {...successReceipt} />}
-            </div>
+            {/* Auto-print countdown after top-up */}
+            {showAutoPrint && successReceipt && (
+                <AutoPrintCountdown
+                    onPrint={handlePrint}
+                    onCancel={() => setShowAutoPrint(false)}
+                />
+            )}
 
             {/* Top-up Dialog */}
             <Dialog open={dialogOpen} onOpenChange={closeDialog}>
