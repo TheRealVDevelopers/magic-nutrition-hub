@@ -17,7 +17,7 @@ service cloud.firestore {
 
     function isClubOwner(clubId) {
       return isSignedIn() &&
-        exists(/databases/$(database)/documents/clubs/$(clubId)/owner/$(request.auth.uid));
+        get(/databases/$(database)/documents/clubs/$(clubId)).data.ownerUserId == request.auth.uid;
     }
 
     function isClubMember(clubId) {
@@ -45,7 +45,7 @@ service cloud.firestore {
     // ─────────────────────────────────────
 
     match /globalMenu/{itemId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isSuperAdmin();
     }
 
@@ -55,7 +55,7 @@ service cloud.firestore {
 
     match /clubs/{clubId} {
       // Club document itself
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSuperAdmin();
       allow update: if isSuperAdmin() ||
                        isClubOwner(clubId);
@@ -168,7 +168,7 @@ service cloud.firestore {
 
       // ── MENU (club custom items)
       match /menu/{itemId} {
-        allow read: if isSignedIn();
+        allow read: if true;
         allow write: if isSignedIn() &&
           (isSuperAdmin() ||
            isClubOwner(clubId));
@@ -256,6 +256,14 @@ service cloud.firestore {
         allow read: if isSignedIn() &&
           (isSuperAdmin() ||
            isClubOwner(clubId));
+        allow write: if isSignedIn() &&
+          (isSuperAdmin() ||
+           isClubOwner(clubId));
+      }
+
+      // ── MENU PREFERENCES (club global items toggle)
+      match /menuPreferences/{itemId} {
+        allow read: if true;
         allow write: if isSignedIn() &&
           (isSuperAdmin() ||
            isClubOwner(clubId));
